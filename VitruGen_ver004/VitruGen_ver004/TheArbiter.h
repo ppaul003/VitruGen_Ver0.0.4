@@ -9,9 +9,18 @@ class TheArbiter {
 public:
 
 	enum class WorkspaceDomain {
-		GRID_2D = 0,
+		NONE = 0,
+		GRID_2D,
 		GRID_3D,
 		SIMCAD_4D,
+		COUNT
+	};
+
+	enum class ApplicationLayer {
+		GLOBAL_SHELL = 0,
+		DOMAIN_SELECTION,
+		WORKSPACE_CONFIGURATION,
+		ACTIVE_WORKSPACE,
 		COUNT
 	};
 
@@ -33,7 +42,9 @@ public:
 		NBODY_SIM,
 		FLUID_SIM,
 		CUDA_CAD,
-		SANDBOX_SIM
+		SANDBOX_SIM,
+
+		COUNT
 	};
 
 	enum class WorkspaceAvailability {
@@ -41,6 +52,22 @@ public:
 		EXPERIMENTAL,
 		RESERVED
 	};
+
+	struct WorkspaceDescriptor {
+		WorkspaceId id;
+		WorkspaceDomain domain;
+		WorkspaceAvailability availability;
+		const char* canonicalName;
+	};
+
+	static const WorkspaceDescriptor& describeWorkspace(WorkspaceId workspace);
+	static WorkspaceDomain getWorkspaceDomain(WorkspaceId workspace);
+	static WorkspaceAvailability getWorkspaceAvailability(WorkspaceId workspace);
+	static const char* getWorkspaceName(WorkspaceId workspace);
+	static bool workspaceBelongsToDomain(
+		WorkspaceId workspace,
+		WorkspaceDomain domain
+	);
 
 	enum AppLayer {
 		LAYER_MENU = 0,

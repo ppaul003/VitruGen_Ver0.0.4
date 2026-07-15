@@ -13,6 +13,90 @@
 using namespace std;
 
 namespace {
+	constexpr TheArbiter::WorkspaceDescriptor kWorkspaceCatalog[] = {
+		{
+			TheArbiter::WorkspaceId::NONE,
+			TheArbiter::WorkspaceDomain::NONE,
+			TheArbiter::WorkspaceAvailability::RESERVED,
+			"NONE"
+		},
+		{
+			TheArbiter::WorkspaceId::GRAPH_2D,
+			TheArbiter::WorkspaceDomain::GRID_2D,
+			TheArbiter::WorkspaceAvailability::EXPERIMENTAL,
+			"GRAPH_2D"
+		},
+		{
+			TheArbiter::WorkspaceId::TEXTURE_MAP_2D,
+			TheArbiter::WorkspaceDomain::GRID_2D,
+			TheArbiter::WorkspaceAvailability::RESERVED,
+			"TEXTURE_MAP_2D"
+		},
+		{
+			TheArbiter::WorkspaceId::SPRITE_PROJECTION_2D,
+			TheArbiter::WorkspaceDomain::GRID_2D,
+			TheArbiter::WorkspaceAvailability::RESERVED,
+			"SPRITE_PROJECTION_2D"
+		},
+		{
+			TheArbiter::WorkspaceId::GRAPH_3D,
+			TheArbiter::WorkspaceDomain::GRID_3D,
+			TheArbiter::WorkspaceAvailability::EXPERIMENTAL,
+			"GRAPH_3D"
+		},
+		{
+			TheArbiter::WorkspaceId::SINGLE_PARTICLE_MCAD,
+			TheArbiter::WorkspaceDomain::GRID_3D,
+			TheArbiter::WorkspaceAvailability::AVAILABLE,
+			"SINGLE_PARTICLE_MCAD"
+		},
+		{
+			TheArbiter::WorkspaceId::LINK_PARTICLES_MCAD,
+			TheArbiter::WorkspaceDomain::GRID_3D,
+			TheArbiter::WorkspaceAvailability::RESERVED,
+			"LINK_PARTICLES_MCAD"
+		},
+		{
+			TheArbiter::WorkspaceId::PARTICLE_SIMULATION,
+			TheArbiter::WorkspaceDomain::SIMCAD_4D,
+			TheArbiter::WorkspaceAvailability::AVAILABLE,
+			"PARTICLE_SIMULATION"
+		},
+		{
+			TheArbiter::WorkspaceId::NBODY_SIM,
+			TheArbiter::WorkspaceDomain::SIMCAD_4D,
+			TheArbiter::WorkspaceAvailability::RESERVED,
+			"NBODY_SIM"
+		},
+		{
+			TheArbiter::WorkspaceId::FLUID_SIM,
+			TheArbiter::WorkspaceDomain::SIMCAD_4D,
+			TheArbiter::WorkspaceAvailability::RESERVED,
+			"FLUID_SIM"
+		},
+		{
+			TheArbiter::WorkspaceId::CUDA_CAD,
+			TheArbiter::WorkspaceDomain::SIMCAD_4D,
+			TheArbiter::WorkspaceAvailability::RESERVED,
+			"CUDA_CAD"
+		},
+		{
+			TheArbiter::WorkspaceId::SANDBOX_SIM,
+			TheArbiter::WorkspaceDomain::SIMCAD_4D,
+			TheArbiter::WorkspaceAvailability::RESERVED,
+			"SANDBOX_SIM"
+		}
+	};
+
+	constexpr int kWorkspaceCatalogCount =
+		static_cast<int>(sizeof(kWorkspaceCatalog) /
+			sizeof(kWorkspaceCatalog[0]));
+
+	static_assert(
+		kWorkspaceCatalogCount ==
+			static_cast<int>(TheArbiter::WorkspaceId::COUNT),
+		"Every WorkspaceId must have exactly one catalog entry."
+	);
 
 	constexpr float kOffsetIncrementValues[] = { 
 		0.01f, 0.012f, 0.02f, 0.025f, 0.05f, 
@@ -66,6 +150,37 @@ namespace {
 	constexpr int kInjectionVoxelCycleCount =
 		static_cast<int>(sizeof(kInjectionVoxelCycle) /
 			sizeof(kInjectionVoxelCycle[0]));
+}
+
+const TheArbiter::WorkspaceDescriptor&
+TheArbiter::describeWorkspace(WorkspaceId workspace) {
+	for (int i = 0; i < kWorkspaceCatalogCount; ++i) {
+		if (kWorkspaceCatalog[i].id == workspace) {
+			return kWorkspaceCatalog[i];
+		}
+	}
+
+	return kWorkspaceCatalog[0];
+}
+
+TheArbiter::WorkspaceDomain
+TheArbiter::getWorkspaceDomain(WorkspaceId workspace) {
+	return describeWorkspace(workspace).domain;
+}
+
+TheArbiter::WorkspaceAvailability
+TheArbiter::getWorkspaceAvailability(WorkspaceId workspace) {
+	return describeWorkspace(workspace).availability;
+}
+
+const char* TheArbiter::getWorkspaceName(WorkspaceId workspace) {
+	return describeWorkspace(workspace).canonicalName;
+}
+
+bool TheArbiter::workspaceBelongsToDomain(
+	WorkspaceId workspace,
+	WorkspaceDomain domain) {
+	return getWorkspaceDomain(workspace) == domain;
 }
 
 TheArbiter::TheArbiter() {}
