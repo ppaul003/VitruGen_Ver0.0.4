@@ -109,11 +109,16 @@ Compared with `gate-0`, the Gate 1 branch changes only:
 
 - `VitruGen_ver004/VitruGen_ver004/TheArbiter.h`
 - `VitruGen_ver004/VitruGen_ver004/TheArbiter.cpp`
+- `VitruGen_ver004/VitruGen_ver004/TheTesseract.h`
+- `VitruGen_ver004/VitruGen_ver004/TheTesseract.cpp`
+- `VitruGen_ver004/VitruGen_ver004/EuclidEngine.cpp`
 - `tests/TheArbiterNavigationTests.cpp`
 - Gate 1 checkpoint documentation
 
-No CUDA kernel, renderer, particle-system, Marching Cubes, camera, Tesseract,
-or OBJ-export implementation was changed.
+The Tesseract and EuclidEngine changes only align the symbolic
+`WORKSPACE_SINGLE_PARTICLE_MCAD` name with the accepted MCAD vocabulary. No
+CUDA kernel, renderer, particle-system, Marching Cubes, camera, workspace
+behavior, or OBJ-export implementation was changed.
 
 ## Interactive acceptance checklist
 
