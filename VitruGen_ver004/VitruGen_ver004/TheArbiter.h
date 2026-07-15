@@ -24,6 +24,12 @@ public:
 		COUNT
 	};
 
+	enum class GlobalShellSelection {
+		IDLE = 0,
+		WORKSPACE_DOMAINS,
+		COUNT
+	};
+
 	enum class WorkspaceId {
 		NONE = 0,
 
@@ -58,6 +64,20 @@ public:
 		WorkspaceDomain domain;
 		WorkspaceAvailability availability;
 		const char* canonicalName;
+	};
+
+	struct DomainWorkspaceSelections {
+		WorkspaceId grid2D = WorkspaceId::GRAPH_2D;
+		WorkspaceId grid3D = WorkspaceId::GRAPH_3D;
+		WorkspaceId simcad4D = WorkspaceId::PARTICLE_SIMULATION;
+	};
+
+	struct NavigationState {
+		ApplicationLayer layer = ApplicationLayer::GLOBAL_SHELL;
+		GlobalShellSelection globalShellSelection =
+			GlobalShellSelection::IDLE;
+		WorkspaceDomain selectedDomain = WorkspaceDomain::GRID_3D;
+		DomainWorkspaceSelections workspaceSelections;
 	};
 
 	static const WorkspaceDescriptor& describeWorkspace(WorkspaceId workspace);
@@ -407,9 +427,23 @@ public:
 	ArbiterResult activateMarchingCubesPanelItemFromMenu(MarchingCubesPanelItem item);
 	ArbiterResult trySelectParticleAtCurrentSlice();
 
-	AppLayer getAppLayer() const { return m_appLayer; }
-	EnvironmentSelection getEnvironmentSelection() const { return m_envSelection; }
-	GridSelection getGridSelection() const { return m_gridSelection; }
+	const NavigationState& getNavigationState() const { return m_navigation; }
+	ApplicationLayer getApplicationLayer() const { return m_navigation.layer; }
+	GlobalShellSelection getGlobalShellSelection() const {
+		return m_navigation.globalShellSelection;
+	}
+	WorkspaceDomain getSelectedDomain() const {
+		return m_navigation.selectedDomain;
+	}
+	WorkspaceId getSelectedWorkspace() const;
+	WorkspaceId getWorkspaceSelection(WorkspaceDomain domain) const;
+
+	// Temporary Gate 1 compatibility adapters. These preserve the public
+	// contract used by EuclidEngine and ViewPort while NavigationState becomes
+	// the sole mutable navigation model.
+	AppLayer getAppLayer() const;
+	EnvironmentSelection getEnvironmentSelection() const;
+	GridSelection getGridSelection() const;
 	ParticleColorSelection getParticleColorSelection() const { return m_particleColorSelection; }
 	ParticleResetMode getParticleResetMode() const { return m_particleResetMode; }
 	ParticleConfigList getActiveParticleConfigList() const { return m_activeParticleConfigList; }
@@ -486,17 +520,17 @@ public:
 	int getActiveSubLayerPanelItemCount() const;
 	int getRotationAngleIncrementDeg() const;
 
-	bool isMenuLayer() const { return m_appLayer == LAYER_MENU; }
-	bool isEnvironmentConfigLayer() const { return m_appLayer == LAYER_ENVIRONMENT_CONFIGURATION; }
-	bool isParticleConfigLayer() const { return m_appLayer == LAYER_3D_GRID_MODE_CONFIGURATION; }
-	bool isSimulationRunLayer() const { return m_appLayer == LAYER_SIMULATION_RUN; }
-	bool is3DViewLayer() const { return m_appLayer != LAYER_MENU; }
-	bool isIdleSelected() const { return m_envSelection == ENV_IDLE; }
-	bool is3DGridSelected() const { return m_envSelection == ENV_3D_GRID; }
-	bool is3DVisualizationSelected() const { return m_envSelection == ENV_3D_GRID; }
-	bool isGraphSelected() const { return m_gridSelection == GRID_GRAPH_3D; }
-	bool isSingleParticleSelected() const { return m_gridSelection == GRID_SINGLE_PARTICLE; }
-	bool isParticlesSelected() const { return m_gridSelection == GRID_PARTICLES_3D; }
+	bool isMenuLayer() const { return m_navigation.layer == ApplicationLayer::GLOBAL_SHELL; }
+	bool isEnvironmentConfigLayer() const { return m_navigation.layer == ApplicationLayer::DOMAIN_SELECTION; }
+	bool isParticleConfigLayer() const { return m_navigation.layer == ApplicationLayer::WORKSPACE_CONFIGURATION; }
+	bool isSimulationRunLayer() const { return m_navigation.layer == ApplicationLayer::ACTIVE_WORKSPACE; }
+	bool is3DViewLayer() const { return !isMenuLayer(); }
+	bool isIdleSelected() const { return m_navigation.globalShellSelection == GlobalShellSelection::IDLE; }
+	bool is3DGridSelected() const { return m_navigation.globalShellSelection == GlobalShellSelection::WORKSPACE_DOMAINS; }
+	bool is3DVisualizationSelected() const { return is3DGridSelected(); }
+	bool isGraphSelected() const { return getGridSelection() == GRID_GRAPH_3D; }
+	bool isSingleParticleSelected() const { return getGridSelection() == GRID_SINGLE_PARTICLE; }
+	bool isParticlesSelected() const { return getGridSelection() == GRID_PARTICLES_3D; }
 	bool isWorkParticleSelectSubLayer() const { return isShapeEditSubLayer(); }
 	bool isBaseVolumeSelected() const { return getVolumePrimitiveSelection() == VOLUME_PRIMITIVE_BASE; }
 	bool isVolumeBoundarySensorReady() const { return m_volumeBoundarySensorReady; }
@@ -559,6 +593,15 @@ public:
 	void resetToMenu();
 
 private:
+	void resetNavigationState();
+	void setApplicationLayer(ApplicationLayer layer);
+	void setWorkspaceSelection(
+		WorkspaceDomain domain,
+		WorkspaceId workspace
+	);
+	void setLegacyGridSelection(GridSelection selection);
+	void validateNavigationState() const;
+
 	void toggleEnvironmentSelection();
 	void toggleGridSelection();
 	void toggleParticleColorSelection();
@@ -628,9 +671,7 @@ private:
 	int getParticleConfigListCount() const;
 
 private:
-	AppLayer m_appLayer = LAYER_MENU;
-	EnvironmentSelection m_envSelection = ENV_IDLE;
-	GridSelection m_gridSelection = GRID_GRAPH_3D;
+	NavigationState m_navigation;
 
 	ParticleColorSelection m_particleColorSelection = PARTICLE_COLOR_RED;
 	ParticleResetMode m_particleResetMode = PARTICLE_RESET_DEFAULT;

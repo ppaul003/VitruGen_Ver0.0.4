@@ -6,6 +6,7 @@
 #endif
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 
 #include "TheArbiter.h"
@@ -183,19 +184,188 @@ bool TheArbiter::workspaceBelongsToDomain(
 	return getWorkspaceDomain(workspace) == domain;
 }
 
-TheArbiter::TheArbiter() {}
+TheArbiter::WorkspaceId
+TheArbiter::getWorkspaceSelection(WorkspaceDomain domain) const {
+	switch (domain) {
+	case WorkspaceDomain::GRID_2D:
+		return m_navigation.workspaceSelections.grid2D;
+
+	case WorkspaceDomain::GRID_3D:
+		return m_navigation.workspaceSelections.grid3D;
+
+	case WorkspaceDomain::SIMCAD_4D:
+		return m_navigation.workspaceSelections.simcad4D;
+
+	default:
+	case WorkspaceDomain::NONE:
+	case WorkspaceDomain::COUNT:
+		return WorkspaceId::NONE;
+	}
+}
+
+TheArbiter::WorkspaceId TheArbiter::getSelectedWorkspace() const {
+	return getWorkspaceSelection(m_navigation.selectedDomain);
+}
+
+TheArbiter::AppLayer TheArbiter::getAppLayer() const {
+	switch (m_navigation.layer) {
+	case ApplicationLayer::GLOBAL_SHELL:
+		return LAYER_MENU;
+
+	case ApplicationLayer::DOMAIN_SELECTION:
+		return LAYER_ENVIRONMENT_CONFIGURATION;
+
+	case ApplicationLayer::WORKSPACE_CONFIGURATION:
+		return LAYER_3D_GRID_MODE_CONFIGURATION;
+
+	case ApplicationLayer::ACTIVE_WORKSPACE:
+		return LAYER_SIMULATION_RUN;
+
+	default:
+	case ApplicationLayer::COUNT:
+		return LAYER_MENU;
+	}
+}
+
+TheArbiter::EnvironmentSelection
+TheArbiter::getEnvironmentSelection() const {
+	return isIdleSelected() ? ENV_IDLE : ENV_3D_GRID;
+}
+
+TheArbiter::GridSelection TheArbiter::getGridSelection() const {
+	switch (getSelectedWorkspace()) {
+	case WorkspaceId::SINGLE_PARTICLE_MCAD:
+		return GRID_SINGLE_PARTICLE;
+
+	case WorkspaceId::PARTICLE_SIMULATION:
+		return GRID_PARTICLES_3D;
+
+	default:
+		return GRID_GRAPH_3D;
+	}
+}
+
+void TheArbiter::resetNavigationState() {
+	m_navigation = NavigationState{};
+	validateNavigationState();
+}
+
+void TheArbiter::setApplicationLayer(ApplicationLayer layer) {
+	m_navigation.layer = layer;
+	validateNavigationState();
+}
+
+void TheArbiter::setWorkspaceSelection(
+	WorkspaceDomain domain,
+	WorkspaceId workspace) {
+	const bool validSelection =
+		workspaceBelongsToDomain(workspace, domain);
+
+	assert(validSelection);
+	if (!validSelection) return;
+
+	switch (domain) {
+	case WorkspaceDomain::GRID_2D:
+		m_navigation.workspaceSelections.grid2D = workspace;
+		break;
+
+	case WorkspaceDomain::GRID_3D:
+		m_navigation.workspaceSelections.grid3D = workspace;
+		break;
+
+	case WorkspaceDomain::SIMCAD_4D:
+		m_navigation.workspaceSelections.simcad4D = workspace;
+		break;
+
+	default:
+	case WorkspaceDomain::NONE:
+	case WorkspaceDomain::COUNT:
+		assert(false && "A workspace selection requires a real domain.");
+		return;
+	}
+
+	m_navigation.selectedDomain = domain;
+	validateNavigationState();
+}
+
+void TheArbiter::setLegacyGridSelection(GridSelection selection) {
+	switch (selection) {
+	case GRID_GRAPH_3D:
+		setWorkspaceSelection(
+			WorkspaceDomain::GRID_3D,
+			WorkspaceId::GRAPH_3D
+		);
+		break;
+
+	case GRID_SINGLE_PARTICLE:
+		setWorkspaceSelection(
+			WorkspaceDomain::GRID_3D,
+			WorkspaceId::SINGLE_PARTICLE_MCAD
+		);
+		break;
+
+	case GRID_PARTICLES_3D:
+		setWorkspaceSelection(
+			WorkspaceDomain::SIMCAD_4D,
+			WorkspaceId::PARTICLE_SIMULATION
+		);
+		break;
+
+	default:
+		assert(false && "Unknown legacy grid selection.");
+		break;
+	}
+}
+
+void TheArbiter::validateNavigationState() const {
+#ifndef NDEBUG
+	assert(
+		static_cast<int>(m_navigation.layer) >= 0 &&
+		static_cast<int>(m_navigation.layer) <
+			static_cast<int>(ApplicationLayer::COUNT)
+	);
+	assert(
+		static_cast<int>(m_navigation.globalShellSelection) >= 0 &&
+		static_cast<int>(m_navigation.globalShellSelection) <
+			static_cast<int>(GlobalShellSelection::COUNT)
+	);
+	assert(
+		m_navigation.selectedDomain == WorkspaceDomain::GRID_2D ||
+		m_navigation.selectedDomain == WorkspaceDomain::GRID_3D ||
+		m_navigation.selectedDomain == WorkspaceDomain::SIMCAD_4D
+	);
+	assert(workspaceBelongsToDomain(
+		m_navigation.workspaceSelections.grid2D,
+		WorkspaceDomain::GRID_2D
+	));
+	assert(workspaceBelongsToDomain(
+		m_navigation.workspaceSelections.grid3D,
+		WorkspaceDomain::GRID_3D
+	));
+	assert(workspaceBelongsToDomain(
+		m_navigation.workspaceSelections.simcad4D,
+		WorkspaceDomain::SIMCAD_4D
+	));
+#endif
+}
+
+TheArbiter::TheArbiter() {
+	validateNavigationState();
+}
 TheArbiter::~TheArbiter() {}
 
 void TheArbiter::toggleEnvironmentSelection() {
-	m_envSelection =
-		(m_envSelection == ENV_IDLE)
-		? ENV_3D_GRID
-		: ENV_IDLE;
+	m_navigation.globalShellSelection =
+		isIdleSelected()
+		? GlobalShellSelection::WORKSPACE_DOMAINS
+		: GlobalShellSelection::IDLE;
+
+	validateNavigationState();
 }
 void TheArbiter::toggleGridSelection() {
-	int v = static_cast<int>(m_gridSelection);
+	int v = static_cast<int>(getGridSelection());
 	v = (v + 1) % 3;
-	m_gridSelection = static_cast<GridSelection>(v);
+	setLegacyGridSelection(static_cast<GridSelection>(v));
 }
 void TheArbiter::toggleParticleColorSelection() {
 	switch (m_particleColorSelection) {
@@ -865,7 +1035,7 @@ int TheArbiter::getParticleConfigListCount() const {
 	return PARTICLE_LIST_COUNT;
 }
 void TheArbiter::moveParticleConfigCursorUp() {
-	if (m_gridSelection == GRID_SINGLE_PARTICLE) {
+	if (isSingleParticleSelected()) {
 		int v = static_cast<int>(m_activeParticleConfigList);
 		v = (v + PARTICLE_LIST_COUNT - 1) % PARTICLE_LIST_COUNT;
 		m_activeParticleConfigList = static_cast<ParticleConfigList>(v);
@@ -885,7 +1055,7 @@ void TheArbiter::moveParticleConfigCursorUp() {
 	}
 }
 void TheArbiter::moveParticleConfigCursorDown() {
-	if (m_gridSelection == GRID_SINGLE_PARTICLE) {
+	if (isSingleParticleSelected()) {
 		int v = static_cast<int>(m_activeParticleConfigList);
 		v = (v + 1) % PARTICLE_LIST_COUNT;
 		m_activeParticleConfigList = static_cast<ParticleConfigList>(v);
@@ -906,9 +1076,7 @@ void TheArbiter::moveParticleConfigCursorDown() {
 }
 
 void TheArbiter::resetToMenu() {
-	m_appLayer = LAYER_MENU;
-	m_envSelection = ENV_IDLE;
-	m_gridSelection = GRID_GRAPH_3D;
+	resetNavigationState();
 	m_particleColorSelection = PARTICLE_COLOR_RED;
 	m_particleResetMode = PARTICLE_RESET_DEFAULT;
 	m_particleRenderMode = PARTICLE_RENDER_DEFAULT;
@@ -997,8 +1165,8 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 		return result;
 	}
 
-	switch (m_appLayer) {
-	case LAYER_MENU:
+	switch (m_navigation.layer) {
+	case ApplicationLayer::GLOBAL_SHELL:
 		switch (event.signal) {
 		case KeyboardInput::KEY_A:
 		case KeyboardInput::KEY_D:
@@ -1016,7 +1184,7 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 		}
 		break;
 
-	case LAYER_ENVIRONMENT_CONFIGURATION:
+	case ApplicationLayer::DOMAIN_SELECTION:
 		switch (event.signal) {
 		case KeyboardInput::KEY_A:
 		case KeyboardInput::KEY_D:
@@ -1034,7 +1202,7 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 		}
 		break;
 
-	case LAYER_3D_GRID_MODE_CONFIGURATION:
+	case ApplicationLayer::WORKSPACE_CONFIGURATION:
 		switch (event.signal) {
 		case KeyboardInput::KEY_W:
 			moveParticleConfigCursorUp();
@@ -1065,8 +1233,8 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 		}
 		break;
 
-	case LAYER_SIMULATION_RUN:
-		if (m_gridSelection == GRID_SINGLE_PARTICLE) {
+	case ApplicationLayer::ACTIVE_WORKSPACE:
+		if (isSingleParticleSelected()) {
 			if (event.signal == KeyboardInput::KEY_TAB) {
 				toggleSubLayerPanel(result);
 				break;
@@ -1304,6 +1472,8 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 			break;
 		}
 		break;
+	case ApplicationLayer::COUNT:
+		break;
 	}
 
 	return result;
@@ -1379,25 +1549,26 @@ int TheArbiter::getActiveSubLayerPanelItemCount() const {
 }
 
 const char* TheArbiter::getLayerName() const {
-	switch (m_appLayer) {
-	case LAYER_MENU:
+	switch (m_navigation.layer) {
+	case ApplicationLayer::GLOBAL_SHELL:
 		return "LAYER_0_MENU";
 
-	case LAYER_ENVIRONMENT_CONFIGURATION:
+	case ApplicationLayer::DOMAIN_SELECTION:
 		return "LAYER_1_ENVIRONMENT_CONFIGURATION";
 
-	case LAYER_3D_GRID_MODE_CONFIGURATION:
+	case ApplicationLayer::WORKSPACE_CONFIGURATION:
 		return "LAYER_2_3D_GRID_MODE_CONFIGURATION";
 
-	case LAYER_SIMULATION_RUN:
+	case ApplicationLayer::ACTIVE_WORKSPACE:
 		return "LAYER_3_SIMULATION_RUN";
 
 	default:
+	case ApplicationLayer::COUNT:
 		return "UNKNOWN_LAYER";
 	}
 }
 const char* TheArbiter::getEnvironmentName() const {
-	switch (m_envSelection) {
+	switch (getEnvironmentSelection()) {
 	case ENV_IDLE:
 		return "IDLE";
 
@@ -1409,7 +1580,7 @@ const char* TheArbiter::getEnvironmentName() const {
 	}
 }
 const char* TheArbiter::getGridSelectionName() const {
-	switch (m_gridSelection) {
+	switch (getGridSelection()) {
 	case GRID_GRAPH_3D:
 		return "GRAPH_3D";
 
@@ -1456,7 +1627,7 @@ const char* TheArbiter::getActiveParticleConfigListName() const {
 		return "PARTICLE COLOR";
 
 	case PARTICLE_LIST_RADIUS:
-		return (m_gridSelection == GRID_SINGLE_PARTICLE)
+		return isSingleParticleSelected()
 			? "PARTICLE RADIUS"
 			: "PARTICLE RESET MODE";
 
@@ -1464,7 +1635,7 @@ const char* TheArbiter::getActiveParticleConfigListName() const {
 		return "PARTICLE RENDER MODE";
 
 	case PARTICLE_LIST_RUN:
-		return (m_gridSelection == GRID_SINGLE_PARTICLE)
+		return isSingleParticleSelected()
 			? "RUN SIMULATION LAYER"
 			: "RUN PARTICLES";
 
@@ -2092,40 +2263,40 @@ TheArbiter::activateMarchingCubesPanelItemFromMenu(MarchingCubesPanelItem item) 
 }
 
 void TheArbiter::goBackOneLayer(ArbiterResult& result) {
-	if (m_appLayer == LAYER_MENU) {
+	if (isMenuLayer()) {
 		result.requestRedraw = true;
 		return;
 	}
 
-	if (m_appLayer == LAYER_ENVIRONMENT_CONFIGURATION) {
-		m_appLayer = LAYER_MENU;
+	if (m_navigation.layer == ApplicationLayer::DOMAIN_SELECTION) {
+		setApplicationLayer(ApplicationLayer::GLOBAL_SHELL);
 		result.command = CMD_REDRAW;
 		result.requestRedraw = true;
 		return;
 	}
 
-	if (m_appLayer == LAYER_3D_GRID_MODE_CONFIGURATION) {
-		m_appLayer = LAYER_ENVIRONMENT_CONFIGURATION;
+	if (m_navigation.layer == ApplicationLayer::WORKSPACE_CONFIGURATION) {
+		setApplicationLayer(ApplicationLayer::DOMAIN_SELECTION);
 		result.command = CMD_REDRAW;
 		result.requestRedraw = true;
 		return;
 	}
-	if (m_appLayer == LAYER_SIMULATION_RUN) {
-		if (m_gridSelection == GRID_SINGLE_PARTICLE) {
+	if (m_navigation.layer == ApplicationLayer::ACTIVE_WORKSPACE) {
+		if (isSingleParticleSelected()) {
 			retreatSingleParticleSubLayer(result);
 			return;
 		}
 
-		m_appLayer = LAYER_3D_GRID_MODE_CONFIGURATION;
+		setApplicationLayer(ApplicationLayer::WORKSPACE_CONFIGURATION);
 		result.command = CMD_REDRAW;
 		result.requestRedraw = true;
 		return;
 	}
 }
 void TheArbiter::enterCurrentSelection(ArbiterResult& result) {
-	if (m_appLayer == LAYER_MENU) {
-		if (m_envSelection == ENV_3D_GRID) {
-			m_appLayer = LAYER_ENVIRONMENT_CONFIGURATION;
+	if (isMenuLayer()) {
+		if (is3DGridSelected()) {
+			setApplicationLayer(ApplicationLayer::DOMAIN_SELECTION);
 		}
 
 		result.command = CMD_REDRAW;
@@ -2133,11 +2304,11 @@ void TheArbiter::enterCurrentSelection(ArbiterResult& result) {
 		return;
 	}
 
-	if (m_appLayer == LAYER_ENVIRONMENT_CONFIGURATION) {
-		if (m_gridSelection == GRID_SINGLE_PARTICLE ||
-			m_gridSelection == GRID_PARTICLES_3D) {
+	if (m_navigation.layer == ApplicationLayer::DOMAIN_SELECTION) {
+		if (isSingleParticleSelected() ||
+			isParticlesSelected()) {
 
-			m_appLayer = LAYER_3D_GRID_MODE_CONFIGURATION;
+			setApplicationLayer(ApplicationLayer::WORKSPACE_CONFIGURATION);
 			m_activeParticleConfigList = PARTICLE_LIST_COLOR;
 		}
 
@@ -2147,12 +2318,12 @@ void TheArbiter::enterCurrentSelection(ArbiterResult& result) {
 		return;
 	}
 
-	if (m_appLayer == LAYER_3D_GRID_MODE_CONFIGURATION) {
-		if (m_gridSelection == GRID_SINGLE_PARTICLE) {
+	if (m_navigation.layer == ApplicationLayer::WORKSPACE_CONFIGURATION) {
+		if (isSingleParticleSelected()) {
 			if (m_activeParticleConfigList == PARTICLE_LIST_RUN) {
 				// LIST 4 is the run command for SINGLE_PARTICLE.
 				// Place particle 0 at the origin, then enter Layer 3.
-				m_appLayer = LAYER_SIMULATION_RUN;
+				setApplicationLayer(ApplicationLayer::ACTIVE_WORKSPACE);
 				m_singleParticleSubLayer = SP_SUB_LAYER_REFERENCE;
 
 				m_selectedParticle = false;
@@ -2173,7 +2344,7 @@ void TheArbiter::enterCurrentSelection(ArbiterResult& result) {
 
 		// PARTICLES_3D path.
 		if (m_activeParticleConfigList == PARTICLE_LIST_RUN) {
-			m_appLayer = LAYER_SIMULATION_RUN;
+			setApplicationLayer(ApplicationLayer::ACTIVE_WORKSPACE);
 			result.command = CMD_START_CUDA_SIMULATION;
 		}
 		else {
@@ -2184,8 +2355,8 @@ void TheArbiter::enterCurrentSelection(ArbiterResult& result) {
 		return;
 	}
 
-	if (m_appLayer == LAYER_SIMULATION_RUN) {
-		if (m_gridSelection == GRID_SINGLE_PARTICLE) {
+	if (m_navigation.layer == ApplicationLayer::ACTIVE_WORKSPACE) {
+		if (isSingleParticleSelected()) {
 			advanceSingleParticleSubLayer(result);
 			return;
 		}
@@ -2345,7 +2516,7 @@ void TheArbiter::retreatSingleParticleSubLayer(ArbiterResult& result) {
 	m_subLayerPanelOpen = false;
 	m_activeSubLayerPanelItem = 0;
 	m_volumeAssemblyNode = VOLUME_NODE_PREVIEW;
-	m_appLayer = LAYER_3D_GRID_MODE_CONFIGURATION;
+	setApplicationLayer(ApplicationLayer::WORKSPACE_CONFIGURATION);
 
 	result.command = CMD_REDRAW;
 	result.requestRedraw = true;
@@ -2371,7 +2542,7 @@ void TheArbiter::adjustWorkplaneSlice(int delta, ArbiterResult& result) {
 	result.requestRedraw = true;
 }
 void TheArbiter::handleParticleConfigAdjust(float dir, ArbiterResult& result) {
-	if (m_gridSelection == GRID_SINGLE_PARTICLE) {
+	if (isSingleParticleSelected()) {
 		switch (m_activeParticleConfigList) {
 		case PARTICLE_LIST_COLOR:
 			toggleParticleColorSelection();
