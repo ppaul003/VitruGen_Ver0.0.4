@@ -1385,7 +1385,7 @@ void EuclidEngine::drawTesseractGridAndPlane() {
 
 void EuclidEngine::placeSingleParticleAtOrigin() {
 	m_tesseract.enterWorkspace(
-		Tesseract::WORKSPACE_SINGLE_PARTICLE_CAD
+		Tesseract::WORKSPACE_SINGLE_PARTICLE_MCAD
 	);
 
 	applySelectedParticleColorToSystem();
@@ -1412,7 +1412,7 @@ void EuclidEngine::startSingleParticleConfigPreview() {
 	// before pressing RUN SIMULATION LAYER.
 	// ---------------------------------------------------------
 	m_tesseract.enterWorkspace(
-		Tesseract::WORKSPACE_SINGLE_PARTICLE_CAD
+		Tesseract::WORKSPACE_SINGLE_PARTICLE_MCAD
 	);
 
 	applySelectedParticleColorToSystem();
@@ -1488,7 +1488,7 @@ void EuclidEngine::syncTesseractWorkspaceFromArbiter() {
 	}
 	else if (singleParticleConfigPreviewActive || singleParticleRunActive) {
 		targetWorkspace =
-			Tesseract::WORKSPACE_SINGLE_PARTICLE_CAD;
+			Tesseract::WORKSPACE_SINGLE_PARTICLE_MCAD;
 	}
 
 	if (m_tesseract.getActiveWorkspace() == targetWorkspace) {
@@ -1720,7 +1720,7 @@ void EuclidEngine::onDisplay() {
 
 	const bool singleParticleWorkspaceActive =
 		m_tesseract.getActiveWorkspace() ==
-		Tesseract::WORKSPACE_SINGLE_PARTICLE_CAD;
+		Tesseract::WORKSPACE_SINGLE_PARTICLE_MCAD;
 
 	const bool particleSimulationWorkspaceActive =
 		m_tesseract.getActiveWorkspace() ==

@@ -246,7 +246,7 @@ void Tesseract::enterWorkspace(WorkspaceBranch workspace) {
 		syncParticleSimulationRendering();
 		break;
 
-	case WORKSPACE_SINGLE_PARTICLE_CAD:
+	case WORKSPACE_SINGLE_PARTICLE_MCAD:
 		if (m_SPCadPlaced)
 			syncSPCadRendering();
 		break;
@@ -264,7 +264,7 @@ void Tesseract::exitWorkspace() {
 }
 void Tesseract::updateActiveWorkspace(const WorkspaceUpdateContext& ctx) {
 	switch (m_activeWorkspace) {
-	case WORKSPACE_SINGLE_PARTICLE_CAD:
+	case WORKSPACE_SINGLE_PARTICLE_MCAD:
 		updateSingleParticleCAD(ctx);
 		break;
 
@@ -294,7 +294,7 @@ void Tesseract::updateActiveWorkspace(const WorkspaceUpdateContext& ctx) {
 void Tesseract::renderActiveWorkspace(const WorkspaceRenderContext& ctx) {
 
 	switch (m_activeWorkspace) {
-	case WORKSPACE_SINGLE_PARTICLE_CAD:
+	case WORKSPACE_SINGLE_PARTICLE_MCAD:
 		renderSingleParticleWorkspace(ctx);
 		break;
 
@@ -321,7 +321,7 @@ bool Tesseract::handleWorkspaceMouse(
 	int viewportW,
 	int viewportH) {
 
-	if (m_activeWorkspace != WORKSPACE_SINGLE_PARTICLE_CAD)
+	if (m_activeWorkspace != WORKSPACE_SINGLE_PARTICLE_MCAD)
 		return false;
 
 	if (!arbiter.isWorkplaneParticleSelectSubLayer())
@@ -352,7 +352,7 @@ bool Tesseract::handleWorkspaceMotion(
 	int viewportW,
 	int viewportH) {
 
-	if (m_activeWorkspace != WORKSPACE_SINGLE_PARTICLE_CAD)
+	if (m_activeWorkspace != WORKSPACE_SINGLE_PARTICLE_MCAD)
 		return false;
 
 	if (!arbiter.isWorkplaneParticleSelectSubLayer())
@@ -375,7 +375,7 @@ bool Tesseract::handleWorkspacePassiveMotion(
 	int viewportW,
 	int viewportH) {
 
-	if (m_activeWorkspace != WORKSPACE_SINGLE_PARTICLE_CAD)
+	if (m_activeWorkspace != WORKSPACE_SINGLE_PARTICLE_MCAD)
 		return false;
 
 	if (!arbiter.isWorkplaneParticleSelectSubLayer())

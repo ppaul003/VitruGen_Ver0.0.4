@@ -24,13 +24,13 @@ and workspace identity. Gate 1 must preserve the workflows accepted at Gate 0.
 ## Vocabulary freeze
 
 - `GRID_2D`, `GRID_3D`, and `SIMCAD_4D` are workspace domains.
-- `SINGLE_PARTICLE_MCAD` and `LINK_PARTICLES_MCAD` use MCAD to mean
+- `SINGLE_PARTICLE_MCAD` and `LINKED_PARTICLES_MCAD` use MCAD to mean
   Mesh-CAD.
 - `GRAPH_3D` remains the architectural workspace ID. Presentation code may
   later display a more descriptive label such as `GRAPH_3D SURFACE`.
 - The existing CUDA particle system maps to
   `SIMCAD_4D / PARTICLE_SIMULATION`; it does not map to
-  `LINK_PARTICLES_MCAD`.
+  `LINKED_PARTICLES_MCAD`.
 
 ## Responsibility boundary
 
@@ -162,7 +162,7 @@ Required evidence:
 - The visible three-domain Layer 1 navigation rollout.
 - Domain-specific Layer 2 menus.
 - Reserved-workspace UI and entry rejection.
-- New `GRAPH_2D`, `GRAPH_3D`, or `LINK_PARTICLES_MCAD` behavior.
+- New `GRAPH_2D`, `GRAPH_3D`, or `LINKED_PARTICLES_MCAD` behavior.
 - Persistent workspace-resource containers in `TheTesseract`.
 - Migration of CAD/volume authoring state out of `TheArbiter`.
 - Conversion of every CAD editing enum to `enum class`.

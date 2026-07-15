@@ -41,7 +41,7 @@ public:
 		// GRID_3D
 		GRAPH_3D,
 		SINGLE_PARTICLE_MCAD,
-		LINK_PARTICLES_MCAD,
+		LINKED_PARTICLES_MCAD,
 
 		// SIMCAD_4D
 		PARTICLE_SIMULATION,
@@ -74,8 +74,7 @@ public:
 
 	struct NavigationState {
 		ApplicationLayer layer = ApplicationLayer::GLOBAL_SHELL;
-		GlobalShellSelection globalShellSelection =
-			GlobalShellSelection::IDLE;
+		GlobalShellSelection globalShellSelection = GlobalShellSelection::IDLE;
 		WorkspaceDomain selectedDomain = WorkspaceDomain::GRID_3D;
 		DomainWorkspaceSelections workspaceSelections;
 	};

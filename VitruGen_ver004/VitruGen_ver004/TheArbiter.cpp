@@ -52,10 +52,10 @@ namespace {
 			"SINGLE_PARTICLE_MCAD"
 		},
 		{
-			TheArbiter::WorkspaceId::LINK_PARTICLES_MCAD,
+			TheArbiter::WorkspaceId::LINKED_PARTICLES_MCAD,
 			TheArbiter::WorkspaceDomain::GRID_3D,
 			TheArbiter::WorkspaceAvailability::RESERVED,
-			"LINK_PARTICLES_MCAD"
+			"LINKED_PARTICLES_MCAD"
 		},
 		{
 			TheArbiter::WorkspaceId::PARTICLE_SIMULATION,
