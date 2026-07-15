@@ -1,0 +1,35 @@
+# Visual Studio workspace and user state
+.vs/
+**/.vs/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+
+# Visual Studio and CUDA build directories
+x64/
+**/x64/
+Debug/
+Release/
+**/Debug/
+**/Release/
+
+# Compiler/linker intermediates
+*.pdb
+*.ilk
+*.idb
+*.exp
+*.recipe
+*.tlog
+*.lastbuildstate
+*.cache
+*.log
+
+# Generated application assets
+**/SINGLE_PARTICLE_DATA/
+
+# Windows temporary files
+Thumbs.db
+Desktop.ini
+~$*
+*.tmp
