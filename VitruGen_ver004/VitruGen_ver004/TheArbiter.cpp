@@ -1167,70 +1167,15 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 
 	switch (m_navigation.layer) {
 	case ApplicationLayer::GLOBAL_SHELL:
-		switch (event.signal) {
-		case KeyboardInput::KEY_A:
-		case KeyboardInput::KEY_D:
-			toggleEnvironmentSelection();
-			result.command = CMD_REDRAW;
-			result.requestRedraw = true;
-			break;
-
-		case KeyboardInput::KEY_E:
-			enterCurrentSelection(result);
-			break;
-
-		default:
-			break;
-		}
+		handleGlobalShellKeyboard(event, result);
 		break;
 
 	case ApplicationLayer::DOMAIN_SELECTION:
-		switch (event.signal) {
-		case KeyboardInput::KEY_A:
-		case KeyboardInput::KEY_D:
-			toggleGridSelection();
-			result.command = CMD_REDRAW;
-			result.requestRedraw = true;
-			break;
-
-		case KeyboardInput::KEY_E:
-			enterCurrentSelection(result);
-			break;
-
-		default:
-			break;
-		}
+		handleDomainSelectionKeyboard(event, result);
 		break;
 
 	case ApplicationLayer::WORKSPACE_CONFIGURATION:
-		switch (event.signal) {
-		case KeyboardInput::KEY_W:
-			moveParticleConfigCursorUp();
-			result.command = CMD_REDRAW;
-			result.requestRedraw = true;
-			break;
-
-		case KeyboardInput::KEY_S:
-			moveParticleConfigCursorDown();
-			result.command = CMD_REDRAW;
-			result.requestRedraw = true;
-			break;
-
-		case KeyboardInput::KEY_A:
-			handleParticleConfigAdjust(-1.0f, result);
-			break;
-
-		case KeyboardInput::KEY_D:
-			handleParticleConfigAdjust(+1.0f, result);
-			break;
-
-		case KeyboardInput::KEY_E:
-			enterCurrentSelection(result);
-			break;
-
-		default:
-			break;
-		}
+		handleWorkspaceConfigurationKeyboard(event, result);
 		break;
 
 	case ApplicationLayer::ACTIVE_WORKSPACE:
@@ -1477,6 +1422,79 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 	}
 
 	return result;
+}
+
+void TheArbiter::handleGlobalShellKeyboard(
+	const KeyboardInput::KeyEvent& event,
+	ArbiterResult& result) {
+	switch (event.signal) {
+	case KeyboardInput::KEY_A:
+	case KeyboardInput::KEY_D:
+		toggleEnvironmentSelection();
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		break;
+
+	case KeyboardInput::KEY_E:
+		enterCurrentSelection(result);
+		break;
+
+	default:
+		break;
+	}
+}
+
+void TheArbiter::handleDomainSelectionKeyboard(
+	const KeyboardInput::KeyEvent& event,
+	ArbiterResult& result) {
+	switch (event.signal) {
+	case KeyboardInput::KEY_A:
+	case KeyboardInput::KEY_D:
+		toggleGridSelection();
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		break;
+
+	case KeyboardInput::KEY_E:
+		enterCurrentSelection(result);
+		break;
+
+	default:
+		break;
+	}
+}
+
+void TheArbiter::handleWorkspaceConfigurationKeyboard(
+	const KeyboardInput::KeyEvent& event,
+	ArbiterResult& result) {
+	switch (event.signal) {
+	case KeyboardInput::KEY_W:
+		moveParticleConfigCursorUp();
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		break;
+
+	case KeyboardInput::KEY_S:
+		moveParticleConfigCursorDown();
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		break;
+
+	case KeyboardInput::KEY_A:
+		handleParticleConfigAdjust(-1.0f, result);
+		break;
+
+	case KeyboardInput::KEY_D:
+		handleParticleConfigAdjust(+1.0f, result);
+		break;
+
+	case KeyboardInput::KEY_E:
+		enterCurrentSelection(result);
+		break;
+
+	default:
+		break;
+	}
 }
 
 bool TheArbiter::setVolumeBoundaryStatus(

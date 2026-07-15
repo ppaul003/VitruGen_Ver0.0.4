@@ -601,6 +601,18 @@ private:
 	);
 	void setLegacyGridSelection(GridSelection selection);
 	void validateNavigationState() const;
+	void handleGlobalShellKeyboard(
+		const KeyboardInput::KeyEvent& event,
+		ArbiterResult& result
+	);
+	void handleDomainSelectionKeyboard(
+		const KeyboardInput::KeyEvent& event,
+		ArbiterResult& result
+	);
+	void handleWorkspaceConfigurationKeyboard(
+		const KeyboardInput::KeyEvent& event,
+		ArbiterResult& result
+	);
 
 	void toggleEnvironmentSelection();
 	void toggleGridSelection();
