@@ -2075,7 +2075,7 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 			break;
 		*/
 		// --- NEW BLOCK
-	case TheArbiter::CMD_START_CUDA_SIMULATION:
+	case TheArbiter::CMD_START_PARTICLE_SIMULATION:
 		if (!m_arbiter.isParticlesSelected()) break;
 
 		m_tesseract.enterWorkspace(

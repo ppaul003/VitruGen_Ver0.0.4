@@ -297,7 +297,7 @@ public:
 		CMD_REDRAW,
 		CMD_TOGGLE_PAUSE,
 		CMD_STEP_SIMULATION,
-		CMD_START_CUDA_SIMULATION,
+		CMD_START_PARTICLE_SIMULATION,
 		CMD_PLACE_SINGLE_PARTICLE,
 		CMD_SELECT_PARTICLE,
 		CMD_PARTICLE_CONFIG_CHANGED,
@@ -524,7 +524,6 @@ public:
 	bool isParticleSimulationSelected() const { return getSelectedWorkspace() == WorkspaceId::PARTICLE_SIMULATION; }
 	// Temporary compatibility adapter for existing engine code.
 	bool isParticlesSelected() const { return isParticleSimulationSelected(); }
-
 	bool isWorkParticleSelectSubLayer() const { return isShapeEditSubLayer(); }
 	bool isBaseVolumeSelected() const { return getVolumePrimitiveSelection() == VOLUME_PRIMITIVE_BASE; }
 	bool isVolumeBoundarySensorReady() const { return m_volumeBoundarySensorReady; }

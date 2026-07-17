@@ -99,9 +99,9 @@ namespace {
 		"Every WorkspaceId must have exactly one catalog entry."
 	);
 
-	constexpr float kOffsetIncrementValues[] = { 
-		0.01f, 0.012f, 0.02f, 0.025f, 0.05f, 
-		0.10f, 0.12f, 0.20f, 0.25f, 0.50f 
+	constexpr float kOffsetIncrementValues[] = {
+		0.01f, 0.012f, 0.02f, 0.025f, 0.05f,
+		0.10f, 0.12f, 0.20f, 0.25f, 0.50f
 	};
 
 	constexpr const char* kOffsetIncrementNames[] = {
@@ -110,7 +110,7 @@ namespace {
 	};
 
 	constexpr int kOffsetIncrementCount =
-		static_cast<int>(sizeof(kOffsetIncrementValues) / 
+		static_cast<int>(sizeof(kOffsetIncrementValues) /
 			sizeof(kOffsetIncrementValues[0]));
 
 	constexpr TheArbiter::VolumeInjectionVoxel kInjectionVoxelCycle[] = {
@@ -610,9 +610,9 @@ void TheArbiter::cycleOffsetIncrement(float dir) {
 void TheArbiter::cycleInjectionVoxelSelection(float dir) {
 	int currentIndex = 0;
 	for (int i = 0; i < kInjectionVoxelCycleCount; i++) {
-		
+
 		if (kInjectionVoxelCycle[i] == m_volumeInjectionVoxel) {
-			
+
 			currentIndex = i;
 			break;
 		}
@@ -627,13 +627,13 @@ void TheArbiter::cycleInjectionVoxelSelection(float dir) {
 			kInjectionVoxelCycleCount;
 	}
 
-	m_volumeInjectionVoxel = 
+	m_volumeInjectionVoxel =
 		kInjectionVoxelCycle[currentIndex];
 
 	// Returning to NONE restores the default Node_1 edit target.
 	if (m_volumeInjectionVoxel == INJECTION_VOXEL_NONE) {
 
-		m_volumeEditTarget = 
+		m_volumeEditTarget =
 			VOLUME_EDIT_TARGET_VOXEL_0;
 	}
 
@@ -685,15 +685,15 @@ void TheArbiter::adjustInjectionRail(float dir) {
 		m_injectionRailT = 1.0f;
 	}
 
-	
-	m_injectionRailT = 
+
+	m_injectionRailT =
 		roundf(m_injectionRailT * 1000000.0f) /
 		1000000.0f;
 }
 
 TheArbiter::VolumeObjectState&
 TheArbiter::activeVolumeState() {
-	if (hasInjectionVoxelSelected() && 
+	if (hasInjectionVoxelSelected() &&
 		isEditingInjectionVoxel1())
 		return m_volume1State;
 
@@ -725,7 +725,7 @@ bool TheArbiter::isInjectionBrushBaseSelected() const {
 TheArbiter::VolumePrimitive
 TheArbiter::getResolvedVolumePrimitiveSelection() const {
 
-	const VolumeObjectState& state = 
+	const VolumeObjectState& state =
 		getActiveVolumeState();
 
 	// VOLUME_1 BASE is not the global committed anchor volume.
@@ -787,10 +787,10 @@ void TheArbiter::adjustObjectOffset(float dir) {
 	if (dir == 0.0f) return;
 
 	const float delta =
-		(dir < 0.0f ? -1.0f : 1.0f) * 
+		(dir < 0.0f ? -1.0f : 1.0f) *
 		m_offsetIncrement;
 
-	VolumeObjectState& state = 
+	VolumeObjectState& state =
 		activeVolumeState();
 
 	float* selectedOffset = nullptr;
@@ -824,7 +824,7 @@ void TheArbiter::adjustObjectOffset(float dir) {
 	}
 }
 void TheArbiter::resetObjectOffset() {
-	
+
 	VolumeObjectState& state =
 		activeVolumeState();
 
@@ -1032,7 +1032,7 @@ void TheArbiter::commitObjectRotationToBasis() {
 	// ---------------------------------------------------------
 	VolumeObjectState& state = activeVolumeState();
 
-	const BasisVector localX = 
+	const BasisVector localX =
 		rotateLocalVectorXYZ({ 1.0f, 0.0f, 0.0f },
 			state.pitchDeg,
 			state.yawDeg,
@@ -1057,7 +1057,7 @@ void TheArbiter::commitObjectRotationToBasis() {
 	};
 
 	state.basis = orthonormalizeBasis(committedBasis);
-	
+
 	// Editable rotation delta is now baked into the base
 	state.pitchDeg = 0.0f;
 	state.yawDeg = 0.0f;
@@ -1144,7 +1144,7 @@ void TheArbiter::finalizeVoxelBaseCommit() {
 	resetVolumeState(m_volume0State, VOLUME_PRIMITIVE_BASE);
 	// The next injection brush starts fresh.
 	resetVolumeState(m_volume1State, VOLUME_PRIMITIVE_SPHERE);
-	
+
 }
 
 int TheArbiter::getParticleConfigListCount() const {
@@ -1209,7 +1209,7 @@ void TheArbiter::resetToMenu() {
 	m_objectRotationMode = ROTATE_PITCH;
 	m_objectTransformMode = TRANSFORM_SCALE;
 	m_offsetVectorSelection = OFFSET_VECTOR_X;
-	
+
 	resetObjectScale();
 	resetObjectRotation();
 	resetObjectBasis();
@@ -1226,7 +1226,7 @@ void TheArbiter::resetToMenu() {
 	m_rotationAngleIncrementIndex = 0;
 	m_offsetIncrementIndex = 0;
 
-	m_offsetIncrement = 
+	m_offsetIncrement =
 		kOffsetIncrementValues[m_offsetIncrementIndex];
 
 	m_volumeBoundarySensorReady = false;
@@ -1280,6 +1280,7 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 		goBackOneLayer(result);
 		return result;
 	}
+
 
 	switch (m_navigation.layer) {
 	case ApplicationLayer::GLOBAL_SHELL:
@@ -1347,7 +1348,7 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 
 					adjustWorkplaneSlice(1, result);
 				}
-				else if (m_singleParticleSubLayer == SP_SUB_LAYER_VOLUME_RENDER && 
+				else if (m_singleParticleSubLayer == SP_SUB_LAYER_VOLUME_RENDER &&
 					m_volumeAssemblyNode == VOLUME_NODE_EDIT_OBJECT) {
 
 					increaseVolumePrimitiveScale();
@@ -1518,21 +1519,24 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 			break;
 		}
 
-		switch (event.signal) {
-		case KeyboardInput::KEY_SPACE:
-			result.command = CMD_TOGGLE_PAUSE;
-			result.requestRedraw = true;
-			break;
+		if (isParticleSimulationSelected()) {
+			switch (event.signal) {
+			case KeyboardInput::KEY_SPACE:
+				result.command = CMD_TOGGLE_PAUSE;
+				result.requestRedraw = true;
+				break;
 
-		case KeyboardInput::KEY_ENTER:
-			result.command = CMD_STEP_SIMULATION;
-			result.requestRedraw = true;
-			break;
+			case KeyboardInput::KEY_ENTER:
+				result.command = CMD_STEP_SIMULATION;
+				result.requestRedraw = true;
+				break;
 
-		default:
-			break;
+			default:
+				break;
+			}
 		}
 		break;
+
 	case ApplicationLayer::COUNT:
 		break;
 	}
@@ -1624,7 +1628,7 @@ void TheArbiter::handleWorkspaceConfigurationKeyboard(
 bool TheArbiter::setVolumeBoundaryStatus(
 	bool sensorReady,
 	unsigned int unsafeCount) {
-	
+
 	const bool changed =
 		m_volumeBoundarySensorReady != sensorReady ||
 		m_volumeBoundaryUnsafeCount != unsafeCount;
@@ -1650,7 +1654,7 @@ bool TheArbiter::isSubLayerPanelItemSelectable(int item) const {
 		if (item == OFFSET_LIST_APPLY_TO_BASE)
 			return canApplyVolumeToBase();
 	}
-		
+
 	return true;
 
 }
@@ -1994,7 +1998,7 @@ const char* TheArbiter::getSubLayerPanelListName() const {
 			return "Offset panel item";
 		}
 
-	
+
 	case VOLUME_NODE_APPLY_TO_BASE:
 		switch (m_activeSubLayerPanelItem) {
 		case APPLY_LIST_COMMIT: return "Commit and preview";
@@ -2487,9 +2491,12 @@ void TheArbiter::enterCurrentSelection(ArbiterResult& result) {
 
 	if (m_navigation.layer == ApplicationLayer::DOMAIN_SELECTION) {
 		if (isSingleParticleSelected() ||
-			isParticlesSelected()) {
+			isParticleSimulationSelected()) {
 
-			setApplicationLayer(ApplicationLayer::WORKSPACE_CONFIGURATION);
+			setApplicationLayer(
+				ApplicationLayer::WORKSPACE_CONFIGURATION
+			);
+
 			m_activeParticleConfigList = PARTICLE_LIST_COLOR;
 		}
 
@@ -2523,15 +2530,28 @@ void TheArbiter::enterCurrentSelection(ArbiterResult& result) {
 			return;
 		}
 
-		// PARTICLES_3D path.
-		if (m_activeParticleConfigList == PARTICLE_LIST_RUN) {
-			setApplicationLayer(ApplicationLayer::ACTIVE_WORKSPACE);
-			result.command = CMD_START_CUDA_SIMULATION;
-		}
-		else {
-			result.command = CMD_REDRAW;
+		// PARTICLE_SIM path migrated from the legacy PARTICLES_3D mode.
+		if (isParticleSimulationSelected()) {
+			if (m_activeParticleConfigList ==
+				PARTICLE_LIST_RUN) {
+
+				setApplicationLayer(
+					ApplicationLayer::ACTIVE_WORKSPACE
+				);
+
+				result.command =
+					CMD_START_PARTICLE_SIMULATION;
+			}
+			else {
+
+				result.command = CMD_REDRAW;
+			}
+
+			result.requestRedraw = true;
+			return;
 		}
 
+		result.command = CMD_REDRAW;
 		result.requestRedraw = true;
 		return;
 	}
@@ -2547,6 +2567,7 @@ void TheArbiter::enterCurrentSelection(ArbiterResult& result) {
 		return;
 	}
 }
+
 void TheArbiter::advanceSingleParticleSubLayer(ArbiterResult& result) {
 	if (!isSimulationRunLayer() || !isSingleParticleSelected()) {
 		result.command = CMD_REDRAW;
@@ -2576,7 +2597,7 @@ void TheArbiter::advanceSingleParticleSubLayer(ArbiterResult& result) {
 
 				return;
 			}
-			
+
 			m_volumeAssemblyNode = VOLUME_NODE_APPLY_TO_BASE;
 
 			break;
@@ -2641,7 +2662,6 @@ void TheArbiter::advanceSingleParticleSubLayer(ArbiterResult& result) {
 	result.requestRedraw = true;
 	result.rebuildMenu = true;
 }
-
 void TheArbiter::retreatSingleParticleSubLayer(ArbiterResult& result) {
 	if (!isSimulationRunLayer() || !isSingleParticleSelected()) {
 		result.command = CMD_REDRAW;
@@ -3087,14 +3107,14 @@ void TheArbiter::activateSubLayerPanelItem(ArbiterResult& result) {
 				result.regenerateVolume = true;
 				result.rebuildMenu = true;
 			}
-			else if (isEditingInjectionVoxel0() && 
+			else if (isEditingInjectionVoxel0() &&
 				m_activeSubLayerPanelItem == INJECTION_EDIT_LIST_OFFSET_OBJECT) {
 
 				m_volumeAssemblyNode = VOLUME_NODE_OFFSET_OBJECT;
 				m_activeSubLayerPanelItem = OFFSET_LIST_VECTOR;
 				result.rebuildMenu = true;
 			}
-			else if (isEditingInjectionVoxel0() && 
+			else if (isEditingInjectionVoxel0() &&
 				m_activeSubLayerPanelItem == INJECTION_EDIT_LIST_PREVIEW_OBJECT) {
 
 				m_volumeAssemblyNode = VOLUME_NODE_PREVIEW;
@@ -3102,7 +3122,7 @@ void TheArbiter::activateSubLayerPanelItem(ArbiterResult& result) {
 				result.regenerateVolume = true;
 				result.rebuildMenu = true;
 			}
-			else if (isEditingInjectionVoxel1() && 
+			else if (isEditingInjectionVoxel1() &&
 				m_activeSubLayerPanelItem == INJECTION_EDIT_LIST_COMMIT_BASE) {
 
 				// Commit Brush Base:
@@ -3125,7 +3145,7 @@ void TheArbiter::activateSubLayerPanelItem(ArbiterResult& result) {
 				result.regenerateVolume = true;
 				result.rebuildMenu = true;
 			}
-			else if (isEditingInjectionVoxel1() && 
+			else if (isEditingInjectionVoxel1() &&
 				m_activeSubLayerPanelItem == INJECTION_EDIT_LIST_MIRROR) {
 
 				// Placeholder for a later checkpoint.
@@ -3274,7 +3294,7 @@ TheArbiter::BasisVector
 TheArbiter::normalizeBasisVector(const BasisVector& v) const {
 	const float lengthSquared = dotBasisVector(v, v);
 
-	if (lengthSquared <= 1.0e-12f) 
+	if (lengthSquared <= 1.0e-12f)
 		return { 0.0f, 0.0f, 0.0f };
 
 	const float inverseLength =  1.0f / sqrt(lengthSquared);
@@ -3284,7 +3304,7 @@ TheArbiter::normalizeBasisVector(const BasisVector& v) const {
 
 TheArbiter::BasisVector
 TheArbiter::transformByBasis(
-	const ObjectBasis& basis, 
+	const ObjectBasis& basis,
 	const BasisVector& localVector) const {
 
 	return {
@@ -3304,9 +3324,9 @@ TheArbiter::transformByBasis(
 
 TheArbiter::BasisVector
 TheArbiter::rotateLocalVectorXYZ(
-	const BasisVector& vector, 
-	float pitchDeg, 
-	float yawDeg, 
+	const BasisVector& vector,
+	float pitchDeg,
+	float yawDeg,
 	float rollDeg) const {
 
 	constexpr float kDegToRad =
@@ -3382,7 +3402,7 @@ TheArbiter::orthonormalizeBasis(const ObjectBasis& basis) const {
 bool TheArbiter::canApplyVolumeToBase() const {
 	// CUT cannot expand the anchor volume, so it is allowed
 	// through the panel once the injection pipeline is active.
-	if (hasInjectionVoxelSelected() && 
+	if (hasInjectionVoxelSelected() &&
 		m_volumeInjectionMode == VOLUME_CUT) {
 
 		return true;
