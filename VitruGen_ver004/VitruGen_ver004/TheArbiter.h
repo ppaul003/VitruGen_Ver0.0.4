@@ -7,15 +7,6 @@
 
 class TheArbiter {
 public:
-
-	enum class WorkspaceDomain {
-		NONE = 0,
-		GRID_2D,
-		GRID_3D,
-		SIMCAD_4D,
-		COUNT
-	};
-
 	enum class ApplicationLayer {
 		GLOBAL_SHELL = 0,
 		DOMAIN_SELECTION,
@@ -23,13 +14,18 @@ public:
 		ACTIVE_WORKSPACE,
 		COUNT
 	};
-
 	enum class GlobalShellSelection {
 		IDLE = 0,
 		WORKSPACE_DOMAINS,
 		COUNT
 	};
-
+	enum class WorkspaceDomain {
+		NONE = 0,
+		GRID_2D,
+		GRID_3D,
+		SIMCAD_4D,
+		COUNT
+	};
 	enum class WorkspaceId {
 		NONE = 0,
 
@@ -65,13 +61,11 @@ public:
 		WorkspaceAvailability availability;
 		const char* canonicalName;
 	};
-
 	struct DomainWorkspaceSelections {
 		WorkspaceId grid2D = WorkspaceId::GRAPH_2D;
 		WorkspaceId grid3D = WorkspaceId::GRAPH_3D;
 		WorkspaceId simcad4D = WorkspaceId::PARTICLE_SIMULATION;
 	};
-
 	struct NavigationState {
 		ApplicationLayer layer = ApplicationLayer::GLOBAL_SHELL;
 		GlobalShellSelection globalShellSelection = GlobalShellSelection::IDLE;
@@ -428,12 +422,8 @@ public:
 
 	const NavigationState& getNavigationState() const { return m_navigation; }
 	ApplicationLayer getApplicationLayer() const { return m_navigation.layer; }
-	GlobalShellSelection getGlobalShellSelection() const {
-		return m_navigation.globalShellSelection;
-	}
-	WorkspaceDomain getSelectedDomain() const {
-		return m_navigation.selectedDomain;
-	}
+	GlobalShellSelection getGlobalShellSelection() const {return m_navigation.globalShellSelection; }
+	WorkspaceDomain getSelectedDomain() const { return m_navigation.selectedDomain; }
 	WorkspaceId getSelectedWorkspace() const;
 	WorkspaceId getWorkspaceSelection(WorkspaceDomain domain) const;
 
@@ -527,9 +517,14 @@ public:
 	bool isIdleSelected() const { return m_navigation.globalShellSelection == GlobalShellSelection::IDLE; }
 	bool is3DGridSelected() const { return m_navigation.globalShellSelection == GlobalShellSelection::WORKSPACE_DOMAINS; }
 	bool is3DVisualizationSelected() const { return is3DGridSelected(); }
-	bool isGraphSelected() const { return getGridSelection() == GRID_GRAPH_3D; }
-	bool isSingleParticleSelected() const { return getGridSelection() == GRID_SINGLE_PARTICLE; }
-	bool isParticlesSelected() const { return getGridSelection() == GRID_PARTICLES_3D; }
+
+	bool isGraph3DSelected() const { return getSelectedWorkspace() == WorkspaceId::GRAPH_3D; }
+	bool isSingleParticleSelected() const { return getSelectedWorkspace() == WorkspaceId::SINGLE_PARTICLE_MCAD;}
+	bool isLinkedParticlesSelected() const { return getSelectedWorkspace() == WorkspaceId::LINKED_PARTICLES_MCAD; }
+	bool isParticleSimulationSelected() const { return getSelectedWorkspace() == WorkspaceId::PARTICLE_SIMULATION; }
+	// Temporary compatibility adapter for existing engine code.
+	bool isParticlesSelected() const { return isParticleSimulationSelected(); }
+
 	bool isWorkParticleSelectSubLayer() const { return isShapeEditSubLayer(); }
 	bool isBaseVolumeSelected() const { return getVolumePrimitiveSelection() == VOLUME_PRIMITIVE_BASE; }
 	bool isVolumeBoundarySensorReady() const { return m_volumeBoundarySensorReady; }
@@ -567,7 +562,9 @@ public:
 
 	const char* getLayerName() const;
 	const char* getEnvironmentName() const;
-	const char* getGridSelectionName() const;
+	const char* getSelectedWorkspaceDisplayName() const;
+	const char* getGridSelectionName() const { return getSelectedWorkspaceDisplayName(); }
+
 	const char* getParticleColorName() const;
 	const char* getParticleResetModeName() const;
 	const char* getActiveParticleConfigListName() const;
@@ -614,7 +611,7 @@ private:
 	);
 
 	void cycleEnvironmentSelection(int dir);
-	void toggleGridSelection();
+	void cycleWorkspaceSelection(int dir);
 	void toggleParticleColorSelection();
 	void toggleParticleResetMode();
 

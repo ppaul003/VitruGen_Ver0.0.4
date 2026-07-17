@@ -1323,12 +1323,11 @@ void ViewPort::drawLayer0Menu(const TheArbiter& arbiter) {
 		switch (arbiter.getSelectedDomain()) {
 		case TheArbiter::WorkspaceDomain::GRID_2D:
 			statusText =
-				"GRID_2D selected: workspace modes are not available yet.";
+				"GRID_2D selected: press E to configure.";
 
-			// Amber warning for the currently unavailable domain.
-			statusR = 1.0f;
-			statusG = 0.75f;
-			statusB = 0.20f;
+			statusR = 0.45f;
+			statusG = 1.0f;
+			statusB = 0.65f;
 			break;
 
 		case TheArbiter::WorkspaceDomain::GRID_3D:
@@ -1368,35 +1367,79 @@ void ViewPort::drawLayer0Menu(const TheArbiter& arbiter) {
 	drawWorkspaceFrame(0.30f);
 }
 void ViewPort::drawLayer1EnvironmentConfig(const TheArbiter& arbiter) {
-	drawPanelBackground();
 
+	drawPanelBackground();
 	glColor4f(1.0f, 1.0f, 1.0f, m_panelSlide);
-	drawText2D(panelX(95.0f), 180.0f, "LAYER 1 -> ENVIRONMENT CONFIGURATION", GLUT_BITMAP_HELVETICA_18);
+	drawText2D(
+		panelX(95.0f),
+		180.0f,
+		"LAYER 1 -> WORKSPACE SELECTION",
+		GLUT_BITMAP_HELVETICA_18);
 
 	char line[256];
 	snprintf(
 		line,
 		sizeof(line),
-		"[1]: 3D_GRID SELECTION { %s }",
-		arbiter.getGridSelectionName()
+		"[1]: %s SELECTION { %s }",
+		arbiter.getEnvironmentName(),
+		arbiter.getSelectedWorkspaceDisplayName()
 	);
 
 	drawSelectableLine(95.0f, 245.0f, true, line);
 
-	if (arbiter.isGraphSelected()) {
-		glColor4f(1.0f, 0.82f, 0.45f, m_panelSlide);
-		drawText2D(panelX(95.0f), 310.0f, "GRAPH_3D is reserved for the next pass.", GLUT_BITMAP_HELVETICA_18);
-	}
-	else if (arbiter.isSingleParticleSelected()) {
-		glColor4f(0.45f, 1.0f, 0.65f, m_panelSlide);
-		drawText2D(panelX(95.0f), 310.0f, "SINGLE_PARTICLE selected: press E to configure.", GLUT_BITMAP_HELVETICA_18);
+	const TheArbiter::WorkspaceId selectedWorkspace =
+		arbiter.getSelectedWorkspace();
+
+	const bool workspaceAvailable =
+		TheArbiter::getWorkspaceAvailability(selectedWorkspace) ==
+		TheArbiter::WorkspaceAvailability::AVAILABLE;
+
+	char statusLine[256];
+	if (workspaceAvailable) {
+		snprintf(
+			statusLine,
+			sizeof(statusLine),
+			"%s selected: press E to configure.",
+			arbiter.getSelectedWorkspaceDisplayName()
+		);
+
+		// Green: workspace is available.
+		glColor4f(
+			0.45f,
+			1.0f,
+			0.65f,
+			m_panelSlide
+		);
 	}
 	else {
-		glColor4f(0.45f, 1.0f, 0.65f, m_panelSlide);
-		drawText2D(panelX(95.0f), 310.0f, "PARTICLES_3D selected: press E to configure.", GLUT_BITMAP_HELVETICA_18);
+		snprintf(
+			statusLine,
+			sizeof(statusLine),
+			"%s is reserved for the next pass.",
+			arbiter.getSelectedWorkspaceDisplayName()
+		);
+
+		// Amber: workspace is visible but unavailable.
+		glColor4f(
+			1.0f,
+			0.82f,
+			0.45f,
+			m_panelSlide
+		);
 	}
 
-	drawHelpFooter("A / D: Change selection     E: Enter", "Q: Back one layer     ESC: Exit");
+	drawText2D(
+		panelX(95.0f),
+		310.0f,
+		statusLine,
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	drawHelpFooter(
+		"A / D: Change selection     E: Enter",
+		"Q: Back one layer     ESC: Exit"
+	);
+
 	drawWorkspaceFrame(0.20f, nullptr);
 }
 void ViewPort::drawLayer2ParticleConfig(const TheArbiter& arbiter, bool meshAvailable) {

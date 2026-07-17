@@ -413,10 +413,75 @@ void TheArbiter::cycleEnvironmentSelection(int dir) {
 	}
 	validateNavigationState();
 }
-void TheArbiter::toggleGridSelection() {
-	int v = static_cast<int>(getGridSelection());
-	v = (v + 1) % 3;
-	setLegacyGridSelection(static_cast<GridSelection>(v));
+void TheArbiter::cycleWorkspaceSelection(int dir) {
+	if (dir == 0) return;
+
+	static const WorkspaceId grid3DWorkspaces[] = {
+		WorkspaceId::GRAPH_3D,
+		WorkspaceId::SINGLE_PARTICLE_MCAD,
+		WorkspaceId::LINKED_PARTICLES_MCAD
+	};
+
+	static const WorkspaceId grid2DWorkspaces[] = {
+		WorkspaceId::GRAPH_2D,
+		WorkspaceId::TEXTURE_MAP_2D,
+		WorkspaceId::SPRITE_PROJECTION_2D
+	};
+
+	static const WorkspaceId simcad4DWorkspaces[] = {
+		WorkspaceId::PARTICLE_SIMULATION,
+		WorkspaceId::NBODY_SIM,
+		WorkspaceId::SANDBOX_SIM,
+		WorkspaceId::CUDA_CAD
+	};
+
+	const WorkspaceId* workspaceCycle = nullptr;
+	int workspaceCount = 0;
+
+	switch (m_navigation.selectedDomain) {
+	case WorkspaceDomain::GRID_3D:
+		workspaceCycle = grid3DWorkspaces;
+		workspaceCount = 3;
+		break;
+
+	case WorkspaceDomain::GRID_2D:
+		workspaceCycle = grid2DWorkspaces;
+		workspaceCount = 3;
+		break;
+
+	case WorkspaceDomain::SIMCAD_4D:
+		workspaceCycle = simcad4DWorkspaces;
+		workspaceCount = 4;
+		break;
+
+		// GRID_2D receives its own workspace cycle later.
+
+	default:
+	case WorkspaceDomain::NONE:
+	case WorkspaceDomain::COUNT:
+		return;
+	}
+
+	const WorkspaceId currentWorkspace =
+		getSelectedWorkspace();
+
+	int currIndex = 0;
+	for (int index = 0; index < workspaceCount; index++) {
+		if (workspaceCycle[index] == currentWorkspace) {
+			currIndex = index;
+			break;
+		}
+	}
+
+	const int step = dir < 0 ? -1 : 1;
+	const int nextIndex =
+		(currIndex + step + workspaceCount) %
+		workspaceCount;
+
+	setWorkspaceSelection(
+		m_navigation.selectedDomain,
+		workspaceCycle[nextIndex]
+	);
 }
 void TheArbiter::toggleParticleColorSelection() {
 	switch (m_particleColorSelection) {
@@ -1504,8 +1569,12 @@ void TheArbiter::handleDomainSelectionKeyboard(
 	ArbiterResult& result) {
 	switch (event.signal) {
 	case KeyboardInput::KEY_A:
+		cycleWorkspaceSelection(-1);
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		break;
 	case KeyboardInput::KEY_D:
-		toggleGridSelection();
+		cycleWorkspaceSelection(+1);
 		result.command = CMD_REDRAW;
 		result.requestRedraw = true;
 		break;
@@ -1661,21 +1730,51 @@ const char* TheArbiter::getEnvironmentName() const {
 		return "UNKNOWN_ENVIRONMENT";
 	}
 }
-const char* TheArbiter::getGridSelectionName() const {
-	switch (getGridSelection()) {
-	case GRID_GRAPH_3D:
+const char* TheArbiter::getSelectedWorkspaceDisplayName() const {
+	switch (getSelectedWorkspace()) {
+		// GRID_2D
+	case WorkspaceId::GRAPH_2D:
+		return "GRAPH_2D";
+
+	case WorkspaceId::TEXTURE_MAP_2D:
+		return "TEXTURE_MAP_2D";
+
+	case WorkspaceId::SPRITE_PROJECTION_2D:
+		return "SPRITE_PROJECTION_2D";
+
+		// GRID_3D
+	case WorkspaceId::GRAPH_3D:
 		return "GRAPH_3D";
 
-	case GRID_SINGLE_PARTICLE:
+	case WorkspaceId::SINGLE_PARTICLE_MCAD:
 		return "SINGLE_PARTICLE";
 
-	case GRID_PARTICLES_3D:
-		return "PARTICLES_3D";
+	case WorkspaceId::LINKED_PARTICLES_MCAD:
+		return "LINK_PARTICLES";
+
+		// SIMCAD_4D
+	case WorkspaceId::PARTICLE_SIMULATION:
+		return "PARTICLE_SIM";
+
+	case WorkspaceId::NBODY_SIM:
+		return "NBODY_SIM";
+
+	case WorkspaceId::FLUID_SIM:
+		return "FLUID_SIM";
+
+	case WorkspaceId::SANDBOX_SIM:
+		return "SANDBOX_SIM";
+
+	case WorkspaceId::CUDA_CAD:
+		return "CUDA_CAD";
 
 	default:
-		return "UNKNOWN_GRID_SELECTION";
+	case WorkspaceId::NONE:
+	case WorkspaceId::COUNT:
+		return "UNKNOWN_WORKSPACE";
 	}
 }
+
 const char* TheArbiter::getParticleColorName() const {
 	switch (m_particleColorSelection) {
 	case PARTICLE_COLOR_RED:
