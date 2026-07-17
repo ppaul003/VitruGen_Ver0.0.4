@@ -1310,15 +1310,59 @@ void ViewPort::drawLayer0Menu(const TheArbiter& arbiter) {
 	);
 
 	drawSelectableLine(95.0f, 245.0f, true, line);
+	const char* statusText = "UNKNOWN ENVIORNMENT";
+	float statusR = 1.0f;
+	float statusG = 0.45f;
+	float statusB = 0.45f;
 
 	if (arbiter.isIdleSelected()) {
-		glColor4f(1.0f, 0.45f, 0.45f, m_panelSlide);
-		drawText2D(panelX(95.0f), 310.0f, "IDLE selected: E is locked.", GLUT_BITMAP_HELVETICA_18);
+		statusText =
+			"IDLE selected: E is locked.";
 	}
 	else {
-		glColor4f(0.45f, 1.0f, 0.65f, m_panelSlide);
-		drawText2D(panelX(95.0f), 310.0f, "3D_GRID selected: press E to configure.", GLUT_BITMAP_HELVETICA_18);
+		switch (arbiter.getSelectedDomain()) {
+		case TheArbiter::WorkspaceDomain::GRID_2D:
+			statusText =
+				"GRID_2D selected: workspace modes are not available yet.";
+
+			// Amber warning for the currently unavailable domain.
+			statusR = 1.0f;
+			statusG = 0.75f;
+			statusB = 0.20f;
+			break;
+
+		case TheArbiter::WorkspaceDomain::GRID_3D:
+			statusText =
+				"GRID_3D selected: press E to configure.";
+
+			statusR = 0.45f;
+			statusG = 1.0f;
+			statusB = 0.65f;
+			break;
+
+		case TheArbiter::WorkspaceDomain::SIMCAD_4D:
+			statusText =
+				"SIMCAD_4D selected: press E to configure.";
+
+			statusR = 0.45f;
+			statusG = 1.0f;
+			statusB = 0.65f;
+			break;
+
+		default:
+		case TheArbiter::WorkspaceDomain::NONE:
+		case TheArbiter::WorkspaceDomain::COUNT:
+			break;
+		}
 	}
+
+	glColor4f(statusR, statusG, statusB, m_panelSlide);
+	drawText2D(
+		panelX(95.0f),
+		310.0f,
+		statusText,
+		GLUT_BITMAP_HELVETICA_18
+	);
 
 	drawHelpFooter("A / D: Change selection     E: Enter", "ESC: Exit");
 	drawWorkspaceFrame(0.30f);

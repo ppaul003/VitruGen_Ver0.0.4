@@ -231,8 +231,12 @@ void EuclidEngine::initParticleSystem(uint numParticles, uint3 gridSize) {
 	m_renderer->setRadius(m_rad.data(), m_psystem->getNumParticles());
 
 	const int visualGridDim = 16;
-	const float visualCellSize = kSimBox / (float)visualGridDim;
-	const float halfBox = kSimBox * 0.5f;
+
+	const float simBoxSize =
+		m_tesseract.getPSConfig().simulationBoxSize;
+
+	const float visualCellSize = simBoxSize / (float)visualGridDim;
+	const float halfBox = simBoxSize * 0.5f;
 
 	m_renderer->setGrid(
 		ivec3(visualGridDim, visualGridDim, visualGridDim),
@@ -242,7 +246,7 @@ void EuclidEngine::initParticleSystem(uint numParticles, uint3 gridSize) {
 
 	m_renderer->setGridStyle(4, false);
 
-	m_tesseract.bindParticleSimulationResources(
+	m_tesseract.bindSharedParticleResources(
 		m_psystem,
 		m_renderer,
 		&m_rad
@@ -1306,11 +1310,8 @@ void EuclidEngine::regenerateVolumeField() {
 void EuclidEngine::applySingleParticleConfigToSystem() {
 	applySelectedParticleColorToSystem();
 
-	m_tesseract.applySPCadConfig(
-		m_arbiter.getParticleRadius()
-	);
-
-	m_singleParticlePlaced = m_tesseract.isSPCadPlaced();
+	m_tesseract.applySPConfig(m_arbiter.getParticleRadius());
+	m_singleParticlePlaced = m_tesseract.isPlacedSP();
 }
 void EuclidEngine::applySelectedParticleColorToSystem() {
 	if (!m_psystem) return;
@@ -1337,9 +1338,10 @@ void EuclidEngine::applyParticleSelectionsToSystem() {
 	if (m_arbiter.getParticleResetMode() == TheArbiter::PARTICLE_RESET_RANDOM)
 		config = ParticleSystem::CNFG_RANDOM_RESTART;
 
-	m_psystem->reset(config);
-	applySelectedParticleColorToSystem();
+	if (!m_tesseract.resetPSWorkspace(config))
+		return;
 
+	applySelectedParticleColorToSystem();
 	syncRenderingWithParticleSystem();
 }
 
@@ -1385,13 +1387,13 @@ void EuclidEngine::drawTesseractGridAndPlane() {
 
 void EuclidEngine::placeSingleParticleAtOrigin() {
 	m_tesseract.enterWorkspace(
-		Tesseract::WORKSPACE_SINGLE_PARTICLE_MCAD
+		TheArbiter::WorkspaceId::SINGLE_PARTICLE_MCAD
 	);
 
 	applySelectedParticleColorToSystem();
 
 	m_singleParticlePlaced =
-		m_tesseract.placeSPCadAnchor(
+		m_tesseract.placeSPAnchor(
 			m_arbiter.getParticleRadius()
 		);
 }
@@ -1411,27 +1413,19 @@ void EuclidEngine::startSingleParticleConfigPreview() {
 	//
 	// before pressing RUN SIMULATION LAYER.
 	// ---------------------------------------------------------
-	m_tesseract.enterWorkspace(
-		Tesseract::WORKSPACE_SINGLE_PARTICLE_MCAD
-	);
-
+	m_tesseract.enterWorkspace(TheArbiter::WorkspaceId::SINGLE_PARTICLE_MCAD);
 	applySelectedParticleColorToSystem();
 
-	if (!m_tesseract.isSPCadPlaced()) {
+	if (!m_tesseract.isPlacedSP()) {
+
 		m_singleParticlePlaced =
-			m_tesseract.placeSPCadAnchor(
-				m_arbiter.getParticleRadius()
-			);
+			m_tesseract.placeSPAnchor(m_arbiter.getParticleRadius());
 	}
 	else {
-		m_tesseract.applySPCadConfig(
-			m_arbiter.getParticleRadius()
-		);
 
+		m_tesseract.applySPConfig(m_arbiter.getParticleRadius());
 		m_singleParticlePlaced = true;
 	}
-
-	m_bPause = true;
 
 	if (m_renderer) {
 		m_renderer->setGridMode3D();
@@ -1463,16 +1457,16 @@ void EuclidEngine::applyVoxelBaseCommit() {
 }
 
 void EuclidEngine::syncRenderingWithParticleSystem() {
-	m_tesseract.syncParticleSimulationRendering();
+	m_tesseract.syncPSRendering();
 }
 void EuclidEngine::syncTesseractWorkspaceFromArbiter() {
-	Tesseract::WorkspaceBranch targetWorkspace =
-		Tesseract::WORKSPACE_NONE;
+	TheArbiter::WorkspaceId targetWorkspace =
+		TheArbiter::WorkspaceId::NONE;
 
 	const bool singleParticleConfigPreviewActive =
 		m_arbiter.isParticleConfigLayer() &&
 		m_arbiter.isSingleParticleSelected() &&
-		m_tesseract.isSPCadPlaced();
+		m_tesseract.isPlacedSP();
 
 	const bool singleParticleRunActive =
 		m_arbiter.isSimulationRunLayer() &&
@@ -1484,18 +1478,18 @@ void EuclidEngine::syncTesseractWorkspaceFromArbiter() {
 
 	if (particleSimulationRunActive) {
 		targetWorkspace =
-			Tesseract::WORKSPACE_PARTICLE_SIMULATION;
+			TheArbiter::WorkspaceId::PARTICLE_SIMULATION;
 	}
 	else if (singleParticleConfigPreviewActive || singleParticleRunActive) {
 		targetWorkspace =
-			Tesseract::WORKSPACE_SINGLE_PARTICLE_MCAD;
+			TheArbiter::WorkspaceId::SINGLE_PARTICLE_MCAD;
 	}
 
 	if (m_tesseract.getActiveWorkspace() == targetWorkspace) {
 		return;
 	}
 
-	if (targetWorkspace == Tesseract::WORKSPACE_NONE) {
+	if (targetWorkspace == TheArbiter::WorkspaceId::NONE) {
 		m_tesseract.exitWorkspace();
 	}
 	else {
@@ -1657,18 +1651,7 @@ void EuclidEngine::onDisplay() {
 
 	// 1. Sync active workspace and update runtime behavior.
 	syncTesseractWorkspaceFromArbiter();
-
-	Tesseract::WorkspaceUpdateContext updateCtx;
-	updateCtx.paused = m_bPause;
-	updateCtx.timestep = m_timestep;
-	updateCtx.iterations = m_iterations;
-	updateCtx.damping = m_damping;
-	updateCtx.gravity = m_gravity;
-	updateCtx.collideSpring = m_collideSpring;
-	updateCtx.collideAttraction = m_collideAttraction;
-	updateCtx.simBox = kSimBox;
-	updateCtx.simTime = &m_simTime;
-
+	Tesseract::WorkspaceUpdateContext updateCtx{};
 	m_tesseract.updateActiveWorkspace(updateCtx);
 
 	// 2. Prepare display monitor / viewport.
@@ -1720,11 +1703,11 @@ void EuclidEngine::onDisplay() {
 
 	const bool singleParticleWorkspaceActive =
 		m_tesseract.getActiveWorkspace() ==
-		Tesseract::WORKSPACE_SINGLE_PARTICLE_MCAD;
+		TheArbiter::WorkspaceId::SINGLE_PARTICLE_MCAD;
 
 	const bool particleSimulationWorkspaceActive =
 		m_tesseract.getActiveWorkspace() ==
-		Tesseract::WORKSPACE_PARTICLE_SIMULATION;
+		TheArbiter::WorkspaceId::PARTICLE_SIMULATION;
 
 	// Draw global production Tesseract grid unless SINGLE_PARTICLE owns
 	// its local CAD/volume/marching-cubes workspace.
@@ -1732,7 +1715,8 @@ void EuclidEngine::onDisplay() {
 		drawTesseractGridAndPlane();
 	}
 
-	if (particleSimulationWorkspaceActive || singleParticleWorkspaceActive) {
+	if (particleSimulationWorkspaceActive ||
+		singleParticleWorkspaceActive) {
 		Tesseract::WorkspaceRenderContext renderCtx;
 
 		renderCtx.arbiter = &m_arbiter;
@@ -1812,7 +1796,7 @@ void EuclidEngine::onDisplay() {
 		m_arbiter, 
 		mcPanelDataPtr,
 		exportPanelDataPtr,
-		m_bPause, 
+		m_tesseract.isActiveWorkspacePaused(),
 		meshAvailable);
 
 	// 9. End frame.
@@ -1828,7 +1812,7 @@ void EuclidEngine::onMouse(int button, int state, int x, int y) {
 	const bool singleParticleConfigPreviewActive =
 		m_arbiter.isParticleConfigLayer() &&
 		m_arbiter.isSingleParticleSelected() &&
-		m_tesseract.isSPCadPlaced();
+		m_tesseract.isPlacedSP();
 
 	const bool singleParticleOpenGLCameraActive =
 		singleParticleConfigPreviewActive ||
@@ -1868,7 +1852,7 @@ void EuclidEngine::onMouse(int button, int state, int x, int y) {
 		}
 
 		// Normal global camera modes:
-		// Menu/layer transitions, PARTICLES_3D, non-SINGLE_PARTICLE view.
+		// Menu/layer transitions, PARTICLE_SIMULATION, non-SP view.
 		m_camera.zoomByWheel(button);
 
 		glutPostRedisplay();
@@ -2035,12 +2019,12 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 		);
 
 		m_singleParticlePlaced = false;
-		m_tesseract.clearSPCadPlacement();
+		m_tesseract.clearSPPlacement();
 	}
 
 	if (previousGrid != m_arbiter.getGridSelection()) {
 		m_singleParticlePlaced = false;
-		m_tesseract.clearSPCadPlacement();
+		m_tesseract.clearSPPlacement();
 	}
 	// ---------------------------------------------------------
 	// SINGLE_PARTICLE Layer_2 live preview.
@@ -2059,7 +2043,7 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 	// recreated when they enter SINGLE_PARTICLE config again.
 	if (returnedFromSingleParticleConfig) {
 		m_singleParticlePlaced = false;
-		m_tesseract.clearSPCadPlacement();
+		m_tesseract.clearSPPlacement();
 
 		if (m_renderer) {
 			m_renderer->setParticleHighlighted(false);
@@ -2071,15 +2055,10 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 		if (enteredVolumeRenderSubLayer || result.regenerateVolume) {
 			regenerateVolumeField();
 		}
-		else if (m_arbiter.isVolumeRenderSubLayer() && (
-			volumePrimitiveChanged ||
-			volumeScaleChanged || 
-			volumeRotationChanged)) {
-
+		else if (m_arbiter.isVolumeRenderSubLayer() && (volumePrimitiveChanged || volumeScaleChanged || volumeRotationChanged)) {
 			regenerateVolumeField();
 		}
 		else if (volumePrimitiveChanged || volumeScaleChanged || volumeRotationChanged) {
-
 			m_tesseract.markVolumeDirty();
 		}
 	}
@@ -2099,14 +2078,17 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 	case TheArbiter::CMD_START_CUDA_SIMULATION:
 		if (!m_arbiter.isParticlesSelected()) break;
 
-
 		m_tesseract.enterWorkspace(
-			Tesseract::WORKSPACE_PARTICLE_SIMULATION
+			TheArbiter::WorkspaceId::PARTICLE_SIMULATION
 		);
 
 		m_singleParticlePlaced = false;
-		m_tesseract.clearSPCadPlacement();
-		m_bPause = false;
+		m_tesseract.clearSPPlacement();
+
+		applyParticleSelectionsToSystem();
+
+		if (!m_tesseract.startPSWorkspace())
+			break;
 
 		m_displayMode = EuclidRenderer::PARTICLE_SPHERES;
 
@@ -2115,7 +2097,6 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 			m_renderer->setParticleHighlighted(false);
 		}
 
-		applyParticleSelectionsToSystem();
 		syncRenderingWithParticleSystem();
 
 		m_camera.setBehaviorMode(
@@ -2125,7 +2106,6 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 
 	case TheArbiter::CMD_PLACE_SINGLE_PARTICLE:
 		placeSingleParticleAtOrigin();
-		m_bPause = true;
 		m_camera.setBehaviorMode(
 			CameraProcessor::CAM_SINGLE_PARTICLE_ORBIT_CLOSE
 		);
@@ -2138,14 +2118,11 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 		break;
 
 	case TheArbiter::CMD_TOGGLE_PAUSE:
-		m_bPause = !m_bPause;
+		m_tesseract.togglePSPause();
 		break;
 
 	case TheArbiter::CMD_STEP_SIMULATION:
-		if (m_psystem && m_arbiter.isSimulationRunLayer()) {
-			m_psystem->update(m_timestep);
-			syncRenderingWithParticleSystem();
-		}
+		m_tesseract.stepPSWorkspace();
 		break;
 
 	case TheArbiter::CMD_REDRAW:
@@ -2154,8 +2131,6 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 	default:
 		break;
 	}
-
-	
 
 	// Side-panel action from SUB_LAYER_3.
 	if (result.exportObjRequested) {
@@ -2461,7 +2436,7 @@ void EuclidEngine::advanceObjExportJob() {
 	switch (m_objExportStage) {
 
 		// =========================================================
-		// 10% — Validate/extract mesh
+		// 10% â€” Validate/extract mesh
 		// =========================================================
 	case ObjExportStage::PREPARE_MESH:
 
@@ -2488,7 +2463,7 @@ void EuclidEngine::advanceObjExportJob() {
 		break;
 
 		// =========================================================
-		// 20% — Classification
+		// 20% â€” Classification
 		// =========================================================
 	case ObjExportStage::REPORT_CLASSIFICATION:
 
@@ -2512,7 +2487,7 @@ void EuclidEngine::advanceObjExportJob() {
 		break;
 
 		// =========================================================
-		// 25% — Marching Cubes VBO
+		// 25% â€” Marching Cubes VBO
 		// =========================================================
 	case ObjExportStage::REPORT_MC_VBO:
 
@@ -2537,7 +2512,7 @@ void EuclidEngine::advanceObjExportJob() {
 		break;
 
 		// =========================================================
-		// 30% — Mesh bounds
+		// 30% â€” Mesh bounds
 		// =========================================================
 	case ObjExportStage::REPORT_BOUNDS:
 
@@ -2600,7 +2575,7 @@ void EuclidEngine::advanceObjExportJob() {
 		break;
 
 		// =========================================================
-		// 40% — Extract output
+		// 40% â€” Extract output
 		// =========================================================
 	case ObjExportStage::REPORT_EXTRACTION:
 
@@ -2625,7 +2600,7 @@ void EuclidEngine::advanceObjExportJob() {
 		break;
 
 		// =========================================================
-		// 50% — Engine extraction confirmation
+		// 50% â€” Engine extraction confirmation
 		// =========================================================
 	case ObjExportStage::REPORT_ENGINE_EXTRACTION:
 
@@ -2649,7 +2624,7 @@ void EuclidEngine::advanceObjExportJob() {
 		break;
 
 		// =========================================================
-		// 60% — Asynchronous file writer
+		// 60% â€” Asynchronous file writer
 		// =========================================================
 	case ObjExportStage::BEGIN_FILE_WRITE:
 
@@ -2681,7 +2656,7 @@ void EuclidEngine::advanceObjExportJob() {
 		return;
 
 		// =========================================================
-		// 75% — File is complete
+		// 75% â€” File is complete
 		// =========================================================
 	case ObjExportStage::REPORT_FILE_WRITTEN:
 
@@ -2703,7 +2678,7 @@ void EuclidEngine::advanceObjExportJob() {
 		break;
 
 		// =========================================================
-		// 80% — Allow one rendered frame before reload
+		// 80% â€” Allow one rendered frame before reload
 		// =========================================================
 	case ObjExportStage::BEGIN_MESH_RELOAD:
 
@@ -2756,7 +2731,7 @@ void EuclidEngine::advanceObjExportJob() {
 		break;
 
 		// =========================================================
-		// 90% — Renderer load report
+		// 90% â€” Renderer load report
 		// =========================================================
 	case ObjExportStage::REPORT_MESH_LOADED:
 
@@ -2782,7 +2757,7 @@ void EuclidEngine::advanceObjExportJob() {
 		break;
 
 		// =========================================================
-		// 99% — Select mesh rendering
+		// 99% â€” Select mesh rendering
 		// =========================================================
 	case ObjExportStage::ACTIVATE_MESH_MODE:
 
@@ -2802,7 +2777,7 @@ void EuclidEngine::advanceObjExportJob() {
 		break;
 
 		// =========================================================
-		// 100% — Finished
+		// 100% â€” Finished
 		// =========================================================
 	case ObjExportStage::FINISH:
 

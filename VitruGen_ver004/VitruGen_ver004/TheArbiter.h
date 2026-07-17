@@ -613,7 +613,7 @@ private:
 		ArbiterResult& result
 	);
 
-	void toggleEnvironmentSelection();
+	void cycleEnvironmentSelection(int dir);
 	void toggleGridSelection();
 	void toggleParticleColorSelection();
 	void toggleParticleResetMode();

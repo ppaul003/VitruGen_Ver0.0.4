@@ -37,13 +37,9 @@ public:
 		// Reverse transition
 		ANIM_PHASE_RETURN_TO_IDLE
 	};
-	enum WorkspaceBranch {
-		WORKSPACE_NONE = 0,
-		WORKSPACE_PARTICLE_SIMULATION,
-		WORKSPACE_SINGLE_PARTICLE_MCAD,
-		WORKSPACE_COUNT
-	};
-
+	///////////////////////////////////////////////////////////////////////
+	using WorkspaceId =
+		TheArbiter::WorkspaceId;
 	struct WorkspaceUpdateContext {
 		bool paused = false;
 		float timestep = 0.0f;
@@ -77,8 +73,9 @@ public:
 
 		float threshold = 0.0f;
 		float sliceDistance = 0.0f;
-
 	};
+
+	// -- SINGLE_PARTICLE_MCAD -- ///////////////////////////////////////////////////////////////////
 	struct InjectionVector {
 		int dx;
 		int dy;
@@ -104,6 +101,51 @@ public:
 		float3 yAxis;
 		float3 zAxis;
 	};
+	struct SPWorkspaceInstance {
+		WorkspaceId id =
+			WorkspaceId::SINGLE_PARTICLE_MCAD;
+
+		bool initialized = false;
+		bool sharedResourcesBound = false;
+	};
+
+	// -- LINKED_PARTICLE_MCAD -- ///////////////////////////////////////////
+	struct LPWorkspaceInstance {
+		WorkspaceId id =
+			WorkspaceId::LINKED_PARTICLES_MCAD;
+
+		bool initialized = false;
+	};
+
+	///////////////////////////////////////////////////////////////////////
+	struct PSRuntimeState {
+		bool paused = true;
+		float elapsedSimulationTime = 0.0f;
+	};
+	struct PSSimulationConfig {
+
+		float fixedTimestep = 0.002f;
+		int solverIterations = 1;
+
+		float globalDamping = 1.0f;
+		float gravityMagnitude = 0.0f;
+
+		float collisionSpring = 0.0f;
+		float collisionDamping = 0.02f;
+		float collisionShear = 0.1f;
+		float collisionAttraction = 0.0f;
+		float simulationBoxSize = 4.0f;
+	};
+	struct PSWorkspaceInstance {
+		WorkspaceId id =
+			WorkspaceId::PARTICLE_SIMULATION;
+
+		bool initialized = false;
+		bool sharedResourcesBound = false;
+
+		PSSimulationConfig config;
+		PSRuntimeState runtime;
+	};
 
 	Tesseract();
 	~Tesseract();
@@ -122,11 +164,7 @@ public:
 	bool isTransitioningTo3D() const { return m_animTransition != ANIM_TRANS_NONE; }
 	bool isOrientingTo3D() const { return m_animPhase == ANIM_PHASE_ORIENT_TO_3D; }
 	
-
-	void beginAnimTransition(
-		TesseractAnimTransition transition,
-		float timeS
-	);
+	void beginAnimTransition(TesseractAnimTransition transition, float timeS);
 	void updateAnimBehavior(float timeS);
 
 	size_t getVolumeBytes() const;
@@ -135,9 +173,9 @@ public:
 	// Checkpoint B:
 	// These are intentionally no-op hooks for now.
 	// Behavior will be moved into these gradually in Checkpoints C/D.
-	WorkspaceBranch getActiveWorkspace() const { return m_activeWorkspace; }
+	WorkspaceId getActiveWorkspace() const { return m_activeWorkspace; }
 
-	void enterWorkspace(WorkspaceBranch workspace);
+	void enterWorkspace(WorkspaceId workspace);
 	void exitWorkspace();
 
 	void updateActiveWorkspace(const WorkspaceUpdateContext& ctx);
@@ -152,7 +190,6 @@ public:
 		int viewportW,
 		int viewportH
 	);
-
 	bool handleWorkspaceMotion(
 		TheArbiter& arbiter,
 		int x,
@@ -160,7 +197,6 @@ public:
 		int viewportW,
 		int viewportH
 	);
-
 	bool handleWorkspacePassiveMotion(
 		TheArbiter& arbiter,
 		int x,
@@ -169,62 +205,74 @@ public:
 		int viewportH
 	);
 
-	////////////////////// --- PARTICLES_3D --- ////////////////////////////////////////////////////////
+	////////////////////// --- SHARED PARTICLE RESOURCES --- ///////////////////////////////////////////
 	///////////////////////////////////////////////////////////////////////////////////////////////////
-	void bindParticleSimulationResources(
+	void bindSharedParticleResources(
 		ParticleSystem* psystem,
 		EuclidRenderer* renderer,
 		std::vector<float>* radiusBuffer
 	);
 
-	void syncParticleSimulationRendering();
+	////////////////////// --- PARTICLE_SIMULATION (PS) --- ////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////////////////////////
+	const PSSimulationConfig& getPSConfig() const { return m_PSWorkspace.config; }
+	float getPSSimulationTime() const { return m_PSWorkspace.runtime.elapsedSimulationTime; }
 
-	void updateSingleParticleCAD(const WorkspaceUpdateContext& ctx);
-	void updateParticleSimulation(
-		bool active,
-		bool paused,
-		float timestep,
-		int iterations,
-		float damping,
-		float gravity,
-		float collideSpring,
-		float collideAttraction,
-		float simBox,
-		float& simTime
-	);
-	void renderParticleSimulation(
-		EuclidRenderer::DisplayMode displayMode,
-		bool displayEnabled
-	);
-	////////////////////// --- PARTICLES_3D --- ////////////////////////////////////////////////////////
+	bool startPSWorkspace();
+	bool togglePSPause();
+	bool resetPSWorkspace(ParticleSystem::ParticleConfig config);
+	bool stepPSWorkspace();
+
+	bool isPSPaused() const { return m_PSWorkspace.runtime.paused; }
+	bool isPSWorkspaceInitialized() const { return m_PSWorkspace.initialized; }
+	bool isActiveWorkspacePaused() const;
+
+	bool initializePSWorkspace();
+	void renderPSWorkspace(const WorkspaceRenderContext& ctx);
+	void updatePSWorkspace(const WorkspaceUpdateContext& ctx);
+
+	void applyPSConfig();
+	void syncPSRendering();
+	////////////////////// --- PARTICLE_SIMULATION (PS) --- ////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////////////////////////
+
+	////////////////////// --- LINKED_PARTICLES_MCAD (LP) --- //////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////////////////////////
+	bool isLPWorkspaceInitialized() const { return m_LPWorkspace.initialized; }
+
+	bool initializeLPWorkspace();
+	void updateLPWorkspace(const WorkspaceUpdateContext& ctx);
+	void renderLPWorkspace(const WorkspaceRenderContext& ctx);
+	////////////////////// --- LINKED_PARTICLES_MCAD (LP) --- //////////////////////////////////////////
 	///////////////////////////////////////////////////////////////////////////////////////////////////
 	// WORKSPACE BRANCH
 	////////////////////// --- SINGLE_PARTICLE --- /////////////////////////////////////////////////////
 	///////////////////////////////////////////////////////////////////////////////////////////////////
-	bool placeSPCadAnchor(float particleRadius);
-	bool commitSPWorkingVolume(const TheArbiter& arbiter);
+	bool placeSPAnchor(float particleRadius);
+	bool isSPWorkspaceIntialized() const { return m_SPWorkspace.initialized; }
+
+	bool initializeSPWorkspace();
+	void renderSPWorkspace(const WorkspaceRenderContext& ctx);
+	void updateSPWorkspace(const WorkspaceUpdateContext& ctx);
+
+	void applySPConfig(float particleRadius);
+	void syncSPRendering();
 	
+	void clearSPPlacement() { m_placedSP = false; }
+	// SP PIPELINE
+
+	bool commitSPWorkingVolume(const TheArbiter& arbiter);
 	bool hasVolume() const { return m_dWorkingVolume != nullptr; }
 	bool hasCommittedGeometry() const { return m_hasCommittedGeometry; }
 	bool hasCommittedVolume() const { return m_dBaseVolume != nullptr; }
 	bool hasBrushVolume() const { return m_dBrushVolume != nullptr; }
 
-	bool isSPCadPlaced() const { return m_SPCadPlaced; }
+	bool isPlacedSP() const { return m_placedSP; }
 	bool isVolumeDirty() const { return m_volumeDirty; }
 
 	float* getVolume() const { return m_dWorkingVolume; }
 	float* getCommittedVolume() const { return m_dBaseVolume; }
 	float* getBrushVolume() const { return m_dBrushVolume; }
-
-	void clearSPCadPlacement() { m_SPCadPlaced = false; }
-	void syncSPCadRendering();
-	void applySPCadConfig(float particleRadius);
-	void renderSPCadWorkspace(
-		const TheArbiter& arbiter,
-		float thetaRad,
-		float phiRad,
-		float zs
-	);
 	
 	void bindCommittedVolume(float* dVolume);
 	void bindBrushVolume(float* dVolume) { m_dBrushVolume = dVolume; m_volumeDirty = true; }
@@ -271,8 +319,6 @@ public:
 		float sliceDistance
 	);
 
-	
-
 	void releaseSPVolumeBoundarySensor();
 	void regenerateSPVolumeField(const TheArbiter& arbiter);
 	void bindSPCadVolumeResource(struct cudaGraphicsResource** cudaPboResourceSlot);
@@ -305,9 +351,27 @@ public:
 	///////////////////////////////////////////////////////////////////////////////////////////////////
 
 private:
-	// --- SP MODE --- //
-	bool commitSPInjectionBoolean(const TheArbiter& arbiter);
+	// --- WORKSPACE UPDATE SIGNAL ---
+	bool advanceParticleSimSTEP();
+	bool updateSingleParticleMCAD();
+	bool updateLinkedParticlesMCAD(); // Placeholder
 
+	// --- WORKSPACE RENDERER BRANCH ---
+	void renderSingleParticleWorkspace(const WorkspaceRenderContext& ctx);
+	void renderLinkedParticlesWorkspace(const WorkspaceRenderContext& ctx); // Placeholder
+	void renderParticleSimulation(EuclidRenderer::DisplayMode displayMode, bool displayEnabled);
+
+	void renderSingleParticleMCAD(
+		const TheArbiter& arbiter,
+		float thetaRad,
+		float phiRad,
+		float zs
+	);
+	// --- PS MODE METHODS --- //
+
+
+	// --- SP MODE METHODS --- //
+	bool commitSPInjectionBoolean(const TheArbiter& arbiter);
 	int getSPVolumePrimitiveId(const TheArbiter& arbiter) const;
 	int getSPVolumePrimitiveIdFromState(const TheArbiter::VolumeObjectState& state) const;
 
@@ -323,12 +387,12 @@ private:
 		const TheArbiter& arbiter, 
 		const TheArbiter::VolumeObjectState& state) const;
 
-	void renderSingleParticleWorkspace(const WorkspaceRenderContext& ctx);
+
 	void generateSPVolume0Field(const TheArbiter& arbiter, float* dDestination);
 	void generateSPVolume1BrushField(const TheArbiter& arbiter, float* dDestination);
 	
 	void markSPVolumeBoundarySafe();
-	// --- SP MODE --- //
+	/////////////////////////////////////////////////////////////////
 
 	void updateMealyAnimBehavior(float timeS);
 	void updateMooreAnimBehavior(float timeS);
@@ -339,11 +403,15 @@ private:
 	TesseractAnimTransition m_animTransition = ANIM_TRANS_NONE;
 	TesseractAnimMode m_animMode = ANIM_MODE_IDLE_PREVIEW;
 	TesseractAnimPhase m_animPhase = ANIM_PHASE_NONE;
-	WorkspaceBranch m_activeWorkspace = WORKSPACE_NONE;
+
+	WorkspaceId m_activeWorkspace = WorkspaceId::NONE;
+
+	PSWorkspaceInstance m_PSWorkspace;
+	LPWorkspaceInstance m_LPWorkspace;
+	SPWorkspaceInstance m_SPWorkspace;
 
 	// --- SINGLE_PARTICLE CAD STATE ---
-	bool m_SPCadPlaced = false;
-
+	bool m_placedSP = false;
 	bool m_cameraFocusRequested = false;
 	bool m_volumeDirty = true;
 	bool m_committedVolumeReady = false;
@@ -386,7 +454,10 @@ private:
 
 	bool m_volumeBoundarySensorReady = false;
 
-	// --- PARTICLES_3D WORKSPACE RESOURCES ---
+	// --- SHARED PARTICLE WORKSPACE RESOURCES ---
+	// PS and SP currently consume the same engine-owned ParticleSystem,
+	// renderer, and radius buffer. These remain shared services until a
+	// later Gate 2 checkpoint defines their final ownership contract.
 	ParticleSystem* m_particleSystem = nullptr;
 	EuclidRenderer* m_renderer = nullptr;
 	std::vector<float>* m_particleRadii = nullptr;

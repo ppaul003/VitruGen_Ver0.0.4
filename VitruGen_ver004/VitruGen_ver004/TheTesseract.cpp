@@ -36,171 +36,134 @@ Tesseract::Tesseract() {
 Tesseract::~Tesseract() {
 	releaseSPVolumeBoundarySensor();
 }
+void Tesseract::updateMealyAnimBehavior(float timeS) {
+	if (m_transitionDuration <= 0.0f) {
+		m_animTransition = ANIM_TRANS_NONE;
+		m_animPhase = ANIM_PHASE_NONE;
+		return;
+	}
 
-size_t Tesseract::getVolumeBytes() const {
-	return static_cast<size_t>(m_volumeSize.x) *
-		static_cast<size_t>(m_volumeSize.y) *
-		static_cast<size_t>(m_volumeSize.z) *
-		sizeof(float);
+	const float rawT =
+		(timeS - m_transitionStartTime) / m_transitionDuration;
+
+	const float t = smoothStep01(rawT);
+
+	switch (m_animPhase) {
+	case ANIM_PHASE_ORIENT_TO_3D:
+		m_previewRotation =
+			lerp(m_startPreviewRotation, 0.0f, t);
+
+		m_sliceAnimation =
+			lerp(m_startSliceAnimation, 0.5f, t);
+
+		if (rawT >= 1.0f) {
+			m_previewRotation = 0.0f;
+			m_sliceAnimation = 0.5f;
+
+			m_animPhase = ANIM_PHASE_CAMERA_FOCUS_TO_3D;
+			m_transitionStartTime = timeS;
+			m_transitionDuration = 1.25f;
+
+			m_cameraFocusRequested = true;
+		}
+		break;
+
+	case ANIM_PHASE_CAMERA_FOCUS_TO_3D:
+		m_previewRotation = 0.0f;
+		m_sliceAnimation = 0.5f;
+
+		if (rawT >= 1.0f) {
+			m_animMode = ANIM_MODE_3D_GRID_STABLE;
+			m_animPhase = ANIM_PHASE_NONE;
+			m_animTransition = ANIM_TRANS_NONE;
+		}
+		break;
+
+	case ANIM_PHASE_RETURN_TO_IDLE: {
+		const float idleRotation =
+			timeS * 25.0f;
+
+		const float idleSlice =
+			fmod(timeS * 0.35f, 3.0f);
+
+		m_previewRotation =
+			lerp(m_startPreviewRotation, idleRotation, t);
+
+		m_sliceAnimation =
+			lerp(m_startSliceAnimation, idleSlice, t);
+
+		if (rawT >= 1.0f) {
+			m_previewRotation = idleRotation;
+			m_sliceAnimation = idleSlice;
+
+			m_animMode = ANIM_MODE_IDLE_PREVIEW;
+			m_animPhase = ANIM_PHASE_NONE;
+			m_animTransition = ANIM_TRANS_NONE;
+		}
+		break;
+	}
+
+	default:
+		m_animTransition = ANIM_TRANS_NONE;
+		m_animPhase = ANIM_PHASE_NONE;
+		break;
+	}
 }
-bool Tesseract::initializeSPVolumeBoundarySensor() {
+void Tesseract::updateMooreAnimBehavior(float timeS) {
+	switch (m_animMode) {
+	case ANIM_MODE_IDLE_PREVIEW:
+		m_previewRotation = timeS * 25.0f;
+		m_sliceAnimation = fmod(timeS * 0.35f, 3.0f);
+		break;
 
-	if (m_volumeSize.x <= 0 ||
-		m_volumeSize.y <= 0 ||
-		m_volumeSize.z <= 0) {
+	case ANIM_MODE_3D_GRID_STABLE:
+		m_previewRotation = 0.0f;
+		m_sliceAnimation = 0.5f;
+		break;
 
-		return false;
+	default:
+		break;
 	}
-
-	const unsigned int requiredFaceStride =
-		getVolumeBoundaryFaceStride(m_volumeSize);
-
-	const size_t requiredMaskBytes =
-		getVolumeBoundaryMaskBytes(m_volumeSize);
-
-	if (requiredFaceStride == 0 ||
-		requiredMaskBytes == 0) {
-
-		return false;
-	}
-
-	const bool buffersAlreadyValid =
-		m_dVolumeBoundaryMask != nullptr &&
-		m_dVolumeBoundaryUnsafeCount != nullptr &&
-		m_volumeBoundaryFaceStride ==
-		requiredFaceStride &&
-		m_volumeBoundaryMaskCPU.size() ==
-		requiredMaskBytes;
-
-	if (buffersAlreadyValid) {
-		return true;
-	}
-
-	releaseSPVolumeBoundarySensor();
-
-	allocateArray(reinterpret_cast<void**>(&m_dVolumeBoundaryMask),
-		requiredMaskBytes);
-
-	allocateArray(reinterpret_cast<void**>(&m_dVolumeBoundaryUnsafeCount),
-		sizeof(unsigned int));
-
-	if (!m_dVolumeBoundaryMask ||
-		!m_dVolumeBoundaryUnsafeCount) {
-
-		releaseSPVolumeBoundarySensor();
-		return false;
-	}
-
-	m_volumeBoundaryMaskCPU.assign(
-		requiredMaskBytes,
-		static_cast<unsigned char>(0)
-	);
-
-	m_volumeBoundaryFaceStride =
-		requiredFaceStride;
-
-	m_volumeBoundaryUnsafeCount = 0;
-	m_volumeBoundarySensorReady = false;
-
-	printf(
-		"[Tesseract] Volume boundary sensor allocated: "
-		"faceStride=%u maskBytes=%zu\n",
-		m_volumeBoundaryFaceStride,
-		requiredMaskBytes
-	);
-
-	return true;
 }
-bool Tesseract::updateSPVolumeBoundarySensor(float isoValue, float safetyBand) {
-
-	return classifySPVolumeBoundaryForSource(
-		m_dWorkingVolume,
-		isoValue,
-		safetyBand
-	);
-}
-bool Tesseract::classifySPVolumeBoundaryForSource(
-	const float* dSourceVolume,
-	float isoValue,
-	float safetyBand) {
-
-	m_volumeBoundarySensorReady = false;
-	m_volumeBoundaryUnsafeCount = 0;
-
-	if (!dSourceVolume) return false;
-	if (!initializeSPVolumeBoundarySensor())
-		return false;
-
-	const size_t maskBytes =
-		getVolumeBoundaryMaskBytes(m_volumeSize);
-
-	if (maskBytes == 0 || 
-		m_volumeBoundaryMaskCPU.size() != maskBytes)
-		return false;
-
-	classifyVolumeBoundaryLauncher(
-		dSourceVolume,
-		m_dVolumeBoundaryMask,
-		m_dVolumeBoundaryUnsafeCount,
-		m_volumeSize,
-		isoValue,
-		safetyBand
-	);
-
-	threadSync();
-
-	copyArrayFromDevice(
-		&m_volumeBoundaryUnsafeCount,
-		m_dVolumeBoundaryUnsafeCount,
-		nullptr,
-		static_cast<int>(sizeof(unsigned int))
-	);
-
-	if (m_volumeBoundaryUnsafeCount == 0) {
-
-		fill(
-			m_volumeBoundaryMaskCPU.begin(),
-			m_volumeBoundaryMaskCPU.end(),
-			static_cast<unsigned char>(0)
-		);
-	}
-	else {
-
-		copyArrayFromDevice(
-			m_volumeBoundaryMaskCPU.data(),
-			m_dVolumeBoundaryMask,
-			nullptr,
-			static_cast<int>(maskBytes)
-		);
+void Tesseract::updateAnimBehavior(float timeS) {
+	if (m_animTransition != ANIM_TRANS_NONE) {
+		updateMealyAnimBehavior(timeS);
+		return;
 	}
 
-	m_volumeBoundarySensorReady = true;
-
-	return true;
+	updateMooreAnimBehavior(timeS);
 }
 
-void Tesseract::releaseSPVolumeBoundarySensor() {
+void Tesseract::beginIdleTo3DGridTransition(float timeS) {
+	m_animTransition = ANIM_TRANS_IDLE_TO_3D_GRID;
+	m_animPhase = ANIM_PHASE_ORIENT_TO_3D;
 
-	if (m_dVolumeBoundaryMask) {
-		freeArray(m_dVolumeBoundaryMask);
+	m_transitionStartTime = timeS;
+	m_transitionDuration = 1.25f;
 
-		m_dVolumeBoundaryMask = nullptr;
+	m_startPreviewRotation = fmod(m_previewRotation, 360.0f);
+	if (m_startPreviewRotation < 0.0f) {
+		m_startPreviewRotation += 360.0f;
 	}
 
-	if (m_dVolumeBoundaryUnsafeCount) {
-		freeArray(m_dVolumeBoundaryUnsafeCount);
-
-		m_dVolumeBoundaryUnsafeCount = nullptr;
-	}
-
-	m_volumeBoundaryMaskCPU.clear();
-	m_volumeBoundaryMaskCPU.shrink_to_fit();
-
-	m_volumeBoundaryFaceStride = 0;
-	m_volumeBoundaryUnsafeCount = 0;
-	m_volumeBoundarySensorReady = false;
+	m_startSliceAnimation = m_sliceAnimation;
+	m_cameraFocusRequested = false;
 }
+void Tesseract::begin3DGridToIdleTransition(float timeS) {
+	m_animTransition = ANIM_TRANS_3D_GRID_TO_IDLE;
+	m_animPhase = ANIM_PHASE_RETURN_TO_IDLE;
 
+	m_transitionStartTime = timeS;
+	m_transitionDuration = 1.25f;
+
+	m_startPreviewRotation = fmod(m_previewRotation, 360.0f);
+	if (m_startPreviewRotation < 0.0f) {
+		m_startPreviewRotation += 360.0f;
+	}
+
+	m_startSliceAnimation = m_sliceAnimation;
+	m_cameraFocusRequested = false;
+}
 void Tesseract::beginAnimTransition(TesseractAnimTransition transition, float timeS) {
 
 	switch (transition) {
@@ -218,14 +181,6 @@ void Tesseract::beginAnimTransition(TesseractAnimTransition transition, float ti
 		break;
 	}
 }
-void Tesseract::updateAnimBehavior(float timeS) {
-	if (m_animTransition != ANIM_TRANS_NONE) {
-		updateMealyAnimBehavior(timeS);
-		return;
-	}
-
-	updateMooreAnimBehavior(timeS);
-}
 bool Tesseract::consumeCameraFocusReqest() {
 	if (!m_cameraFocusRequested) {
 		return false;
@@ -236,23 +191,67 @@ bool Tesseract::consumeCameraFocusReqest() {
 	return true;
 }
 
-void Tesseract::enterWorkspace(WorkspaceBranch workspace) {
+void Tesseract::enterWorkspace(WorkspaceId workspace) {
 	if (m_activeWorkspace == workspace) return;
 
 	m_activeWorkspace = workspace;
-
 	switch (m_activeWorkspace) {
-	case WORKSPACE_PARTICLE_SIMULATION:
-		syncParticleSimulationRendering();
+
+	case WorkspaceId::PARTICLE_SIMULATION:
+		initializePSWorkspace();
 		break;
 
-	case WORKSPACE_SINGLE_PARTICLE_MCAD:
-		if (m_SPCadPlaced)
-			syncSPCadRendering();
+	case WorkspaceId::SINGLE_PARTICLE_MCAD:
+		initializeSPWorkspace();
+		break;
+
+	case WorkspaceId::LINKED_PARTICLES_MCAD:
+		initializeLPWorkspace();
 		break;
 
 	default:
-	case WORKSPACE_NONE:
+	case WorkspaceId::NONE:
+		break;
+	}
+}
+void Tesseract::updateActiveWorkspace(const WorkspaceUpdateContext& ctx) {
+	switch (m_activeWorkspace) {
+
+	case WorkspaceId::PARTICLE_SIMULATION:
+		updatePSWorkspace(ctx);
+		break;
+
+	case WorkspaceId::SINGLE_PARTICLE_MCAD:
+		updateSPWorkspace(ctx);
+		break;
+
+	case WorkspaceId::LINKED_PARTICLES_MCAD:
+		updateLPWorkspace(ctx);
+		break;
+
+	default:
+	case WorkspaceId::NONE:
+		break;
+	}
+}
+void Tesseract::renderActiveWorkspace(const WorkspaceRenderContext& ctx) {
+	switch (m_activeWorkspace) {
+
+	case WorkspaceId::PARTICLE_SIMULATION:
+		renderPSWorkspace(ctx);
+		break;
+
+	case WorkspaceId::SINGLE_PARTICLE_MCAD:
+		renderSPWorkspace(ctx);
+		break;
+
+	case WorkspaceId::LINKED_PARTICLES_MCAD:
+		renderLPWorkspace(ctx);
+		break;
+
+
+	default:
+	case WorkspaceId::NONE:
 		break;
 	}
 }
@@ -260,56 +259,7 @@ void Tesseract::exitWorkspace() {
 	if (m_renderer) {
 		m_renderer->setParticleHighlighted(false);
 	}
-	m_activeWorkspace = WORKSPACE_NONE;
-}
-void Tesseract::updateActiveWorkspace(const WorkspaceUpdateContext& ctx) {
-	switch (m_activeWorkspace) {
-	case WORKSPACE_SINGLE_PARTICLE_MCAD:
-		updateSingleParticleCAD(ctx);
-		break;
-
-	case WORKSPACE_PARTICLE_SIMULATION:
-		if (!ctx.simTime) return;
-
-		updateParticleSimulation(
-			true,
-			ctx.paused,
-			ctx.timestep,
-			ctx.iterations,
-			ctx.damping,
-			ctx.gravity,
-			ctx.collideSpring,
-			ctx.collideAttraction,
-			ctx.simBox,
-			*ctx.simTime
-		);
-		break;
-	default:
-	case WORKSPACE_NONE:
-		break;
-	}
-
-
-}
-void Tesseract::renderActiveWorkspace(const WorkspaceRenderContext& ctx) {
-
-	switch (m_activeWorkspace) {
-	case WORKSPACE_SINGLE_PARTICLE_MCAD:
-		renderSingleParticleWorkspace(ctx);
-		break;
-
-	case WORKSPACE_PARTICLE_SIMULATION:
-		renderParticleSimulation(
-			ctx.displayMode,
-			ctx.displayEnabled
-		);
-		break;
-
-	default:
-	case WORKSPACE_NONE:
-		break;
-	}
-
+	m_activeWorkspace = WorkspaceId::NONE;
 }
 
 bool Tesseract::handleWorkspaceMouse(
@@ -321,7 +271,7 @@ bool Tesseract::handleWorkspaceMouse(
 	int viewportW,
 	int viewportH) {
 
-	if (m_activeWorkspace != WORKSPACE_SINGLE_PARTICLE_MCAD)
+	if (m_activeWorkspace != WorkspaceId::SINGLE_PARTICLE_MCAD)
 		return false;
 
 	if (!arbiter.isWorkplaneParticleSelectSubLayer())
@@ -330,14 +280,7 @@ bool Tesseract::handleWorkspaceMouse(
 	if (button != GLUT_LEFT_BUTTON || state != GLUT_DOWN)
 		return false;
 
-
-	arbiter.updateHoverFromScreen(
-		x,
-		y,
-		viewportW,
-		viewportH
-	);
-
+	arbiter.updateHoverFromScreen(x, y, viewportW, viewportH);
 	TheArbiter::ArbiterResult result =
 		arbiter.trySelectParticleAtCurrentSlice();
 
@@ -352,7 +295,7 @@ bool Tesseract::handleWorkspaceMotion(
 	int viewportW,
 	int viewportH) {
 
-	if (m_activeWorkspace != WORKSPACE_SINGLE_PARTICLE_MCAD)
+	if (m_activeWorkspace != WorkspaceId::SINGLE_PARTICLE_MCAD)
 		return false;
 
 	if (!arbiter.isWorkplaneParticleSelectSubLayer())
@@ -375,7 +318,7 @@ bool Tesseract::handleWorkspacePassiveMotion(
 	int viewportW,
 	int viewportH) {
 
-	if (m_activeWorkspace != WORKSPACE_SINGLE_PARTICLE_MCAD)
+	if (m_activeWorkspace != WorkspaceId::SINGLE_PARTICLE_MCAD)
 		return false;
 
 	if (!arbiter.isWorkplaneParticleSelectSubLayer())
@@ -390,48 +333,17 @@ bool Tesseract::handleWorkspacePassiveMotion(
 
 	return true;
 }
-
-// WORKSPACE BRANCH
-// PARTICLE_3D FUNCTIONS METHODS
-bool Tesseract::placeSPCadAnchor(float particleRadius) {
-	if (!m_particleSystem) return false;
-
-	m_particleSystem->setParticleRadius(particleRadius);
-	if (m_renderer) {
-		m_renderer->setParticleRadius(
-			m_particleSystem->getParticleRadius()
-		);
-	}
-
-	float pos[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
-	float vel[4] = { 0.0f, 0.0f, 0.0f, m_particleSystem->getParticleRadius() };
-	float acc[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-
-	m_particleSystem->setParticle(
-		ParticleSystem::POSITION,
-		0,
-		pos
-	);
-
-	m_particleSystem->setParticle(
-		ParticleSystem::VELOCITY,
-		0,
-		vel
-	);
-
-	m_particleSystem->setParticle(
-		ParticleSystem::ACCELERATION,
-		0,
-		acc
-	);
-
-	m_SPCadPlaced = true;
-	syncSPCadRendering();
+bool Tesseract::isActiveWorkspacePaused() const {
+	if (m_activeWorkspace ==
+		WorkspaceId::PARTICLE_SIMULATION)
+		return m_PSWorkspace.runtime.paused;
 
 	return true;
 }
 
-void Tesseract::bindParticleSimulationResources(
+// WORKSPACE BRANCH
+// PARTICLE_3D FUNCTIONS METHODS
+void Tesseract::bindSharedParticleResources(
 	ParticleSystem* psystem,
 	EuclidRenderer* renderer,
 	vector<float>* radiusBuffer) {
@@ -439,19 +351,57 @@ void Tesseract::bindParticleSimulationResources(
 	m_particleSystem = psystem;
 	m_renderer = renderer;
 	m_particleRadii = radiusBuffer;
+
+	const bool resourcesBound =
+		m_particleSystem &&
+		m_renderer &&
+		m_particleRadii;
+
+	m_SPWorkspace.sharedResourcesBound = resourcesBound;
+	m_PSWorkspace.sharedResourcesBound = resourcesBound;
 }
 
-void Tesseract::syncParticleSimulationRendering() {
-	if (!m_particleSystem || !m_renderer || !m_particleRadii) {
+bool Tesseract::initializePSWorkspace() {
+	m_PSWorkspace.sharedResourcesBound =
+		m_particleSystem && m_renderer && m_particleRadii;
+
+	if (!m_PSWorkspace.sharedResourcesBound)
+		return false;
+
+	m_PSWorkspace.initialized = true;
+	syncPSRendering();
+	return true;
+}
+void Tesseract::renderPSWorkspace(const WorkspaceRenderContext& ctx) {
+	if (!m_PSWorkspace.initialized && !initializePSWorkspace())
 		return;
-	}
+
+	renderParticleSimulation(
+		ctx.displayMode,
+		ctx.displayEnabled
+	);
+}
+void Tesseract::updatePSWorkspace(const WorkspaceUpdateContext& ctx) {
+	if (!m_PSWorkspace.initialized &&
+		!initializePSWorkspace())
+		return;
+
+	(void)ctx;
+
+	if (m_PSWorkspace.runtime.paused) return;
+
+	advanceParticleSimSTEP();
+}
+
+void Tesseract::syncPSRendering() {
+	if (!m_particleSystem ||
+		!m_renderer ||
+		!m_particleRadii) return;
 
 	const int numParticles =
 		m_particleSystem->getNumParticles();
 
-	if (numParticles <= 0) {
-		return;
-	}
+	if (numParticles <= 0) return;
 
 	if (m_particleRadii->size() <
 		static_cast<size_t>(numParticles)) {
@@ -476,91 +426,166 @@ void Tesseract::syncParticleSimulationRendering() {
 		numParticles
 	);
 }
-void Tesseract::updateSingleParticleCAD(const WorkspaceUpdateContext& ctx) {
+void Tesseract::applyPSConfig() {
+	if (!m_particleSystem) return;
 
-	(void)ctx;
+	const PSSimulationConfig& config =
+		m_PSWorkspace.config;
 
-	if (!m_SPCadPlaced) return;
-	// For now, no physics update.
-	// SINGLE_PARTICLE is a CAD anchor, not a running particle simulation.
-}
-void Tesseract::updateParticleSimulation(
-	bool active,
-	bool paused,
-	float timestep,
-	int iterations,
-	float damping,
-	float gravity,
-	float collideSpring,
-	float collideAttraction,
-	float simBox,
-	float& simTime) {
-
-	if (!active) {
-		return;
-	}
-
-	if (paused) {
-		return;
-	}
-
-	if (!m_particleSystem) {
-		return;
-	}
-
-	const float boxBoundary =
-		simBox * 0.5f;
-
-	m_particleSystem->setIterations(iterations);
-	m_particleSystem->setDamping(damping);
-	m_particleSystem->setGravity(-gravity);
-	m_particleSystem->setCollideSpring(collideSpring);
-	m_particleSystem->setCollideAttraction(collideAttraction);
-	m_particleSystem->setSimBoundary(boxBoundary);
-
-	m_particleSystem->update(timestep);
-
-	simTime += timestep;
-
-	syncParticleSimulationRendering();
+	m_particleSystem->setIterations(config.solverIterations);
+	m_particleSystem->setDamping(config.globalDamping);
+	m_particleSystem->setGravity(-config.gravityMagnitude);
+	m_particleSystem->setCollideSpring(config.collisionSpring);
+	m_particleSystem->setCollideDamping(config.collisionDamping);
+	m_particleSystem->setCollideShear(config.collisionShear);
+	m_particleSystem->setCollideAttraction(config.collisionAttraction);
+	m_particleSystem->setSimBoundary(config.simulationBoxSize * 0.5f);
 }
 void Tesseract::renderParticleSimulation(
 	EuclidRenderer::DisplayMode displayMode,
 	bool displayEnabled) {
 
-	if (!displayEnabled) {
-		return;
-	}
+	if (!displayEnabled) return;
+	if (!m_renderer || !m_particleSystem) return;
 
-	if (!m_renderer || !m_particleSystem) {
-		return;
-	}
-
-	// PARTICLES_3D owns the normal ver002 OpenGL render path.
+	// PARTICLE_SIMULATION owns the original CUDA sample render path.
 	m_renderer->setGridMode3D();
 	m_renderer->setParticleHighlighted(false);
 
-	syncParticleSimulationRendering();
-
+	syncPSRendering();
 	m_renderer->display(displayMode);
 }
 
+bool Tesseract::advanceParticleSimSTEP() {
+	if (!m_PSWorkspace.initialized &&
+		!initializePSWorkspace())
+		return false;
+
+	if (!m_particleSystem) return false;
+
+	applyPSConfig();
+	const float timestep =
+		m_PSWorkspace.config.fixedTimestep;
+
+	m_particleSystem->update(timestep);
+	m_PSWorkspace.runtime.elapsedSimulationTime += timestep;
+
+	syncPSRendering();
+	return true;
+}
+bool Tesseract::startPSWorkspace() {
+	if (m_activeWorkspace !=
+		WorkspaceId::PARTICLE_SIMULATION)
+		return false;
+
+	if (!m_PSWorkspace.initialized &&
+		!initializePSWorkspace())
+		return false;
+
+	m_PSWorkspace.runtime.paused = false;
+	return true;
+}
+bool Tesseract::togglePSPause() {
+	if (m_activeWorkspace !=
+		WorkspaceId::PARTICLE_SIMULATION)
+		return false;
+
+	m_PSWorkspace.runtime.paused =
+		!m_PSWorkspace.runtime.paused;
+
+	return true;
+}
+bool Tesseract::stepPSWorkspace() {
+	if (m_activeWorkspace !=
+		WorkspaceId::PARTICLE_SIMULATION)
+		return false;
+
+	// Does not change the existing paused state.
+	return advanceParticleSimSTEP();
+}
+bool Tesseract::resetPSWorkspace(ParticleSystem::ParticleConfig config) {
+	if (!m_PSWorkspace.initialized &&
+		!initializePSWorkspace())
+		return false;
+
+	m_particleSystem->reset(config);
+	m_PSWorkspace.runtime.paused = true;
+	m_PSWorkspace.runtime.elapsedSimulationTime = 0.0f;
+
+	syncPSRendering();
+	return true;
+}
+
 // WORKSPACE BRANCH
-// SINGLE PARTICLE FUNCTIONS METHODS
-void Tesseract::syncSPCadRendering() {
+// SINGLE PARTICLE FUNCTIONS METHOD
+bool Tesseract::placeSPAnchor(float particleRadius) {
+	if (!m_particleSystem) return false;
+
+	m_particleSystem->setParticleRadius(particleRadius);
+	if (m_renderer) {
+		m_renderer->setParticleRadius(
+			m_particleSystem->getParticleRadius()
+		);
+	}
+
+	float pos[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+	float vel[4] = { 0.0f, 0.0f, 0.0f, m_particleSystem->getParticleRadius() };
+	float acc[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+	m_particleSystem->setParticle(ParticleSystem::POSITION, 0, pos);
+	m_particleSystem->setParticle(ParticleSystem::VELOCITY, 0, vel);
+	m_particleSystem->setParticle(ParticleSystem::ACCELERATION, 0, acc);
+
+	m_placedSP = true;
+	syncSPRendering();
+
+	return true;
+}
+bool Tesseract::initializeSPWorkspace() {
+	m_SPWorkspace.sharedResourcesBound =
+		m_particleSystem &&
+		m_renderer &&
+		m_particleRadii;
+
+	if (!m_SPWorkspace.sharedResourcesBound)
+		return false;
+
+	m_SPWorkspace.initialized = true;
+	if (m_placedSP)
+		syncSPRendering();
+
+	return true;
+}
+void Tesseract::updateSPWorkspace(const WorkspaceUpdateContext& ctx) {
+	if (!m_SPWorkspace.initialized &&
+		!initializeSPWorkspace())
+		return;
+
+	(void)ctx;
+
+	if (!m_placedSP) return;
+
+	updateSingleParticleMCAD();
+	// For now, no physics update.
+	// SINGLE_PARTICLE is a CAD anchor, not a running particle simulation.
+}
+void Tesseract::renderSPWorkspace(const WorkspaceRenderContext& ctx) {
+	if (!m_SPWorkspace.initialized && !initializeSPWorkspace())
+		return;
+
+	renderSingleParticleWorkspace(ctx);
+}
+
+void Tesseract::syncSPRendering() {
 	if (!m_particleSystem ||
 		!m_renderer ||
-		!m_particleRadii) {
-		return;
-	}
+		!m_particleRadii) return;
 
 	const int numParticles =
 		m_particleSystem->getNumParticles();
 
 	if (numParticles <= 0) return;
-
-	if (m_particleRadii->size() <
-		static_cast<size_t>(numParticles)) {
+	if (m_particleRadii->size() < static_cast<size_t>(numParticles)) {
 
 		m_particleRadii->resize(
 			static_cast<size_t>(numParticles),
@@ -583,21 +608,17 @@ void Tesseract::syncSPCadRendering() {
 		1
 	);
 }
-
-void Tesseract::applySPCadConfig(float particleRadius) {
-	if (!m_particleSystem) {
-		return;
-	}
+void Tesseract::applySPConfig(float particleRadius) {
+	if (!m_particleSystem) return;
 
 	m_particleSystem->setParticleRadius(particleRadius);
-
 	if (m_renderer) {
 		m_renderer->setParticleRadius(
 			m_particleSystem->getParticleRadius()
 		);
 	}
 
-	if (m_SPCadPlaced) {
+	if (m_placedSP) {
 		float vel[4] = {
 			0.0f, 0.0f, 0.0f,
 			m_particleSystem->getParticleRadius()
@@ -609,10 +630,157 @@ void Tesseract::applySPCadConfig(float particleRadius) {
 			vel
 		);
 
-		syncSPCadRendering();
+		syncSPRendering();
 	}
 }
-void Tesseract::renderSPCadWorkspace(
+void Tesseract::renderSingleParticleWorkspace(const WorkspaceRenderContext& ctx) {
+	if (!ctx.arbiter) return;
+	const TheArbiter& arbiter = *ctx.arbiter;
+
+	if (!m_placedSP) return;
+	if (m_renderer) {
+		m_renderer->setParticleHighlighted(
+			arbiter.isWorkplaneParticleSelectSubLayer() &&
+			arbiter.hasSelectedParticle()
+		);
+	}
+
+	const bool configPreviewActive =
+		arbiter.isParticleConfigLayer() &&
+		arbiter.isSingleParticleSelected();
+
+	const bool referenceOrEditActive =
+		arbiter.isSimulationRunLayer() &&
+		arbiter.isSingleParticleSelected() &&
+		(arbiter.isSingleParticleReferenceSubLayer() ||
+			arbiter.isWorkplaneParticleSelectSubLayer());
+
+	if (configPreviewActive || referenceOrEditActive) {
+
+		renderSingleParticleMCAD(
+			arbiter,
+			ctx.thetaRad,
+			ctx.phiRad,
+			ctx.particleWorkspaceZs
+		);
+
+		return;
+	}
+
+	if (arbiter.isVolumeRenderSubLayer()) {
+		renderSPVolumeToPBO(
+			arbiter,
+			2,
+			ctx.viewportW,
+			ctx.viewportH,
+			ctx.thetaRad,
+			ctx.phiRad,
+			ctx.volumeRenderZs,
+			ctx.threshold,
+			ctx.sliceDistance
+		);
+
+		renderSPVolumeTexture();
+
+		// ---------------------------------------------------------
+		// Node_0 injection-voxel selection preview.
+		//
+		// The bridge method performs the exact panel/list visibility
+		// checks, so calling it here is safe for every assembly node.
+		// ---------------------------------------------------------
+		renderSPVolumeInjectionVoxelPreview(
+			arbiter,
+			ctx.thetaRad,
+			ctx.phiRad,
+			ctx.volumeRenderZs
+		);
+		// ---------------------------------------------------------
+		// Node_1 injection edit-target preview.
+		//
+		// List [1] now has spatial feedback:
+		//     VOXEL_0 -> show VOXEL_1 helper cage
+		//     VOXEL_1 -> show VOXEL_0 helper cage
+		// ---------------------------------------------------------
+		renderSPVolumeInjectionEditTargetPreview(
+			arbiter,
+			ctx.thetaRad,
+			ctx.phiRad,
+			ctx.volumeRenderZs
+		);
+
+		// ---------------------------------------------------------
+		// Node_2-only offset drafting grid and boundary sensor.
+		// ---------------------------------------------------------
+		if (arbiter.getVolumeAssemblyNode() == TheArbiter::VOLUME_NODE_OFFSET_OBJECT) {
+
+			renderSPVolumeOffsetGrid(
+				arbiter,
+				ctx.thetaRad,
+				ctx.phiRad,
+				ctx.volumeRenderZs
+			);
+		}
+
+		// Draw the world/object axes last so they remain crisp over the grid.
+		renderSPVolumeOrientationAxes(
+			arbiter,
+			ctx.thetaRad,
+			ctx.phiRad
+		);
+		return;
+	}
+
+	if (arbiter.isMarchingCubesSubLayer()) {
+		renderSPVolumeToPBO(
+			arbiter,
+			3,
+			ctx.viewportW,
+			ctx.viewportH,
+			ctx.thetaRad,
+			ctx.phiRad,
+			ctx.volumeRenderZs,
+			ctx.threshold,
+			ctx.sliceDistance
+		);
+
+		renderSPVolumeTexture();
+
+		if (m_renderer) {
+			const int volumeDim = m_volumeSize.x;
+			const float mcHalfExtent =
+				0.5f * static_cast<float>(volumeDim);
+
+			m_renderer->displayMarchingCubesVoxelGrid(
+				ctx.thetaRad,
+				ctx.phiRad,
+				ctx.volumeRenderZs,
+				volumeDim,
+				16,
+				mcHalfExtent
+			);
+		}
+
+		if (ctx.marchingCubes &&
+			ctx.marchingCubes->hasTriangleData() &&
+			arbiter.isMcWireframeEnabled()) {
+
+			ctx.marchingCubes->renderWireframe(
+				ctx.thetaRad,
+				ctx.phiRad,
+				ctx.volumeRenderZs
+			);
+		}
+
+		renderSPVolumeOrientationAxes(
+			arbiter,
+			ctx.thetaRad,
+			ctx.phiRad
+		);
+
+		return;
+	}
+}
+void Tesseract::renderSingleParticleMCAD(
 	const TheArbiter& arbiter,
 	float thetaRad,
 	float phiRad,
@@ -620,10 +788,7 @@ void Tesseract::renderSPCadWorkspace(
 
 	if (!m_renderer ||
 		!m_particleSystem ||
-		!m_SPCadPlaced) {
-
-		return;
-	}
+		!m_placedSP) return;
 
 	const bool showWorkplane =
 		arbiter.isWorkplaneParticleSelectSubLayer();
@@ -634,9 +799,7 @@ void Tesseract::renderSPCadWorkspace(
 	const bool useMeshRender =
 		arbiter.isParticleRenderMesh();
 
-	m_renderer->setParticleHighlighted(
-		showWorkplane && selected
-	);
+	m_renderer->setParticleHighlighted(showWorkplane && selected);
 
 	m_renderer->displayParticleWorkspace(
 		thetaRad,
@@ -651,126 +814,23 @@ void Tesseract::renderSPCadWorkspace(
 		useMeshRender
 	);
 }
+bool Tesseract::updateSingleParticleMCAD() {
+	if (!m_SPWorkspace.initialized &&
+		!initializeSPWorkspace())
+		return false;
 
-void Tesseract::clearSPCommittedVolume() {
-	if (!m_dBaseVolume) return;
+	if (!m_particleSystem) return false;
 
-	clearVolumeKernelLauncher(
-		m_dBaseVolume,
-		m_volumeSize,
-		1.0e6f
-	);
-
-	threadSync();
-
-	m_committedVolumeReady = true;
-	m_hasCommittedGeometry = false;
-	m_volumeDirty = true;
-}
-void Tesseract::copyCommittedVolumeToPreview() {
-	m_volumeBoundarySensorReady = false;
-	if (!m_dBaseVolume || !m_dWorkingVolume) return;
-
-	cudaMemcpy(
-		m_dWorkingVolume,
-		m_dBaseVolume,
-		getVolumeBytes(),
-		cudaMemcpyDeviceToDevice
-	);
-
-	threadSync();
-	m_volumeDirty = false;
+	syncSPRendering();
+	return true;
 }
 
-void Tesseract::updateSPVolumePreview(const TheArbiter& arbiter) {
-	m_volumeBoundarySensorReady = false;
-	if (!m_dWorkingVolume || !m_dBaseVolume) return;
-
-	if (!m_committedVolumeReady) {
-		clearSPCommittedVolume();
-	}
-
-	const SPVolumeBasis basis = buildSPVolumeBasis(arbiter);
-
-	const bool baseSelected =
-		arbiter.getVolumePrimitiveSelection() ==
-		TheArbiter::VOLUME_PRIMITIVE_BASE &&
-		!arbiter.isInjectionBrushBaseSelected();
-
-	const float3 offset = buildSPVolumeOffset(arbiter);
-	
-	// ---------------------------------------------------------
-	// BASE: transform/resample the committed working mesh.
-	// VOLUME_1 BASE is different. For VOLUME_1, BASE means
-	// "the injection brush has been locally rebased."
-	// That case is intentionally excluded by:
-	//
-	//     !arbiter.isInjectionBrushBaseSelected()
-	// ---------------------------------------------------------
-	if (baseSelected) {
-
-		if (!m_hasCommittedGeometry) {
-			clearVolumeKernelLauncher(
-				m_dWorkingVolume,
-				m_volumeSize,
-				1.0e6f
-			);
-		}
-		else {
-			transformVolumeFieldLauncher(
-				m_dBaseVolume,
-				m_dWorkingVolume,
-				m_volumeSize,
-				make_float3(
-					arbiter.getEffectiveVolumeScaleX(),
-					arbiter.getEffectiveVolumeScaleY(),
-					arbiter.getEffectiveVolumeScaleZ()
-				),
-				offset,
-				basis.xAxis,
-				basis.yAxis,
-				basis.zAxis
-			);
-		}
-
-		threadSync();
-		m_volumeDirty = false;
-		return;
-	}
-
-	// ---------------------------------------------------------
-	// Editable primitive preview.
-	//
-	// Checkpoint 4B cleanup:
-	//
-	// At this stage, updateSPVolumePreview() should NOT perform
-	// FUSE/CUT boolean composition.
-	//
-	// It only generates the currently selected active volume state:
-	//
-	//     VOLUME_0 -> anchor object preview
-	//     VOLUME_1 -> brush object preview
-	//
-	// FUSE/CUT is still only a render tint / UI mode right now.
-	//
-	// The rail-positioned two-volume composition path belongs to
-	// the next checkpoint after the brush offset follows rail.
-	// ---------------------------------------------------------
-	volumeKernelLauncher(
-		m_dWorkingVolume,
-		m_volumeSize,
-		getSPVolumePrimitiveId(arbiter),
-		buildSPVolumePrimitiveParams(arbiter),
-		offset,
-		basis.xAxis,
-		basis.yAxis,
-		basis.zAxis
-	);
-
-	threadSync();
-	m_volumeDirty = false;
+size_t Tesseract::getVolumeBytes() const {
+	return static_cast<size_t>(m_volumeSize.x) *
+		static_cast<size_t>(m_volumeSize.y) *
+		static_cast<size_t>(m_volumeSize.z) *
+		sizeof(float);
 }
-
 bool Tesseract::commitSPWorkingVolume(const TheArbiter& arbiter) {
 	if (!m_dBaseVolume || !m_dWorkingVolume) return false;
 
@@ -947,6 +1007,210 @@ bool Tesseract::commitSPInjectionBoolean(const TheArbiter& arbiter) {
 	m_volumeDirty = false;
 
 	return true;
+}
+
+void Tesseract::generateSPVolume0Field(const TheArbiter& arbiter, float* dDestination) {
+	if (!dDestination) return;
+
+	const TheArbiter::VolumeObjectState& state =
+		arbiter.getVolume0State();
+
+	const bool baseSelected =
+		state.primitive == TheArbiter::VOLUME_PRIMITIVE_BASE;
+
+	const SPVolumeBasis basis =
+		buildSPVolumeBasisFromState(arbiter, state);
+
+	const float3 offset = buildSPVolumeOffsetFromState(state);
+	if (baseSelected) {
+		if (!m_hasCommittedGeometry || !m_dBaseVolume) {
+
+			clearVolumeKernelLauncher(
+				dDestination,
+				m_volumeSize,
+				1.0e6f
+			);
+		}
+		else {
+			transformVolumeFieldLauncher(
+				m_dBaseVolume,
+				dDestination,
+				m_volumeSize,
+				make_float3(
+					state.scaleWhole * state.scaleX,
+					state.scaleWhole * state.scaleY,
+					state.scaleWhole * state.scaleZ
+				),
+				offset,
+				basis.xAxis,
+				basis.yAxis,
+				basis.zAxis
+			);
+		}
+
+		return;
+	}
+
+	volumeKernelLauncher(
+		dDestination,
+		m_volumeSize,
+		getSPVolumePrimitiveIdFromState(state),
+		buildSPVolumePrimitiveParamsFromState(state),
+		offset,
+		basis.xAxis,
+		basis.yAxis,
+		basis.zAxis
+	);
+}
+void Tesseract::generateSPVolume1BrushField(const TheArbiter& arbiter, float* dDestination) {
+	if (!dDestination) return;
+	if (!arbiter.hasInjectionVoxelSelected()) {
+		clearVolumeKernelLauncher(
+			dDestination,
+			m_volumeSize,
+			1.0e6f
+		);
+
+		return;
+	}
+
+	const TheArbiter::VolumeObjectState& state =
+		arbiter.getVolume1State();
+
+	const SPVolumeBasis basis =
+		buildSPVolumeBasisFromState(arbiter, state);
+
+	const float3 railBrushOffset =
+		buildSPVolumeRailBrushOffset(arbiter);
+
+	volumeKernelLauncher(
+		dDestination,
+		m_volumeSize,
+		getSPVolumePrimitiveIdFromState(state),
+		buildSPVolumePrimitiveParamsFromState(state),
+		railBrushOffset,
+		basis.xAxis,
+		basis.yAxis,
+		basis.zAxis
+	);
+}
+
+void Tesseract::updateSPVolumePreview(const TheArbiter& arbiter) {
+	m_volumeBoundarySensorReady = false;
+	if (!m_dWorkingVolume || !m_dBaseVolume) return;
+
+	if (!m_committedVolumeReady) {
+		clearSPCommittedVolume();
+	}
+
+	const SPVolumeBasis basis = buildSPVolumeBasis(arbiter);
+
+	const bool baseSelected =
+		arbiter.getVolumePrimitiveSelection() ==
+		TheArbiter::VOLUME_PRIMITIVE_BASE &&
+		!arbiter.isInjectionBrushBaseSelected();
+
+	const float3 offset = buildSPVolumeOffset(arbiter);
+
+	// ---------------------------------------------------------
+	// BASE: transform/resample the committed working mesh.
+	// VOLUME_1 BASE is different. For VOLUME_1, BASE means
+	// "the injection brush has been locally rebased."
+	// That case is intentionally excluded by:
+	//
+	//     !arbiter.isInjectionBrushBaseSelected()
+	// ---------------------------------------------------------
+	if (baseSelected) {
+
+		if (!m_hasCommittedGeometry) {
+			clearVolumeKernelLauncher(
+				m_dWorkingVolume,
+				m_volumeSize,
+				1.0e6f
+			);
+		}
+		else {
+			transformVolumeFieldLauncher(
+				m_dBaseVolume,
+				m_dWorkingVolume,
+				m_volumeSize,
+				make_float3(
+					arbiter.getEffectiveVolumeScaleX(),
+					arbiter.getEffectiveVolumeScaleY(),
+					arbiter.getEffectiveVolumeScaleZ()
+				),
+				offset,
+				basis.xAxis,
+				basis.yAxis,
+				basis.zAxis
+			);
+		}
+
+		threadSync();
+		m_volumeDirty = false;
+		return;
+	}
+
+	// ---------------------------------------------------------
+	// Editable primitive preview.
+	//
+	// Checkpoint 4B cleanup:
+	//
+	// At this stage, updateSPVolumePreview() should NOT perform
+	// FUSE/CUT boolean composition.
+	//
+	// It only generates the currently selected active volume state:
+	//
+	//     VOLUME_0 -> anchor object preview
+	//     VOLUME_1 -> brush object preview
+	//
+	// FUSE/CUT is still only a render tint / UI mode right now.
+	//
+	// The rail-positioned two-volume composition path belongs to
+	// the next checkpoint after the brush offset follows rail.
+	// ---------------------------------------------------------
+	volumeKernelLauncher(
+		m_dWorkingVolume,
+		m_volumeSize,
+		getSPVolumePrimitiveId(arbiter),
+		buildSPVolumePrimitiveParams(arbiter),
+		offset,
+		basis.xAxis,
+		basis.yAxis,
+		basis.zAxis
+	);
+
+	threadSync();
+	m_volumeDirty = false;
+}
+void Tesseract::copyCommittedVolumeToPreview() {
+	m_volumeBoundarySensorReady = false;
+	if (!m_dBaseVolume || !m_dWorkingVolume) return;
+
+	cudaMemcpy(
+		m_dWorkingVolume,
+		m_dBaseVolume,
+		getVolumeBytes(),
+		cudaMemcpyDeviceToDevice
+	);
+
+	threadSync();
+	m_volumeDirty = false;
+}
+void Tesseract::clearSPCommittedVolume() {
+	if (!m_dBaseVolume) return;
+
+	clearVolumeKernelLauncher(
+		m_dBaseVolume,
+		m_volumeSize,
+		1.0e6f
+	);
+
+	threadSync();
+
+	m_committedVolumeReady = true;
+	m_hasCommittedGeometry = false;
+	m_volumeDirty = true;
 }
 
 // SINGLE PARTICLE MC COMPONENTS
@@ -1162,16 +1426,14 @@ void Tesseract::bindCommittedVolume(float* dVolume) {
 	m_hasCommittedGeometry = false;
 	m_volumeDirty = true;
 }
+void Tesseract::bindSPCadVolumeResource(struct cudaGraphicsResource** cudaPboResourceSlot) {
+	m_cudaPboResourceSlot = cudaPboResourceSlot;
+}
 void Tesseract::clearCommittedVolumeBinding() {
 	m_dBaseVolume = nullptr;
 	m_committedVolumeReady = false;
 	m_hasCommittedGeometry = false;
 	m_volumeDirty = true;
-}
-
-void Tesseract::bindSPCadVolumeResource(struct cudaGraphicsResource** cudaPboResourceSlot) {
-
-	m_cudaPboResourceSlot = cudaPboResourceSlot;
 }
 void Tesseract::regenerateSPVolumeField(const TheArbiter& arbiter) {
 	m_volumeBoundarySensorReady = false;
@@ -1250,6 +1512,7 @@ void Tesseract::regenerateSPVolumeField(const TheArbiter& arbiter) {
 	 // direct-contact safety band
 	updateSPVolumeBoundarySensor(0.0f, 0.0f);
 }
+
 void Tesseract::renderSPVolumeOrientationAxes(
 	const TheArbiter& arbiter,
 	float thetaRad,
@@ -1441,7 +1704,6 @@ void Tesseract::renderSPVolumeInjectionEditTargetPreview(
 	);
 
 }
-
 void Tesseract::renderSPVolumeOffsetGrid(
 	const TheArbiter& arbiter,
 	float thetaRad,
@@ -1599,356 +1861,170 @@ void Tesseract::renderSPVolumeTexture() {
 	if (!m_renderer) return;
 	m_renderer->displayVolumeTexture();
 }
+bool Tesseract::initializeSPVolumeBoundarySensor() {
+	if (m_volumeSize.x <= 0 ||
+		m_volumeSize.y <= 0 ||
+		m_volumeSize.z <= 0) {
 
-void Tesseract::updateMealyAnimBehavior(float timeS) {
-	if (m_transitionDuration <= 0.0f) {
-		m_animTransition = ANIM_TRANS_NONE;
-		m_animPhase = ANIM_PHASE_NONE;
-		return;
+		return false;
 	}
 
-	const float rawT =
-		(timeS - m_transitionStartTime) / m_transitionDuration;
+	const unsigned int requiredFaceStride =
+		getVolumeBoundaryFaceStride(m_volumeSize);
 
-	const float t = smoothStep01(rawT);
+	const size_t requiredMaskBytes =
+		getVolumeBoundaryMaskBytes(m_volumeSize);
 
-	switch (m_animPhase) {
-	case ANIM_PHASE_ORIENT_TO_3D:
-		m_previewRotation =
-			lerp(m_startPreviewRotation, 0.0f, t);
+	if (requiredFaceStride == 0 ||
+		requiredMaskBytes == 0) {
 
-		m_sliceAnimation =
-			lerp(m_startSliceAnimation, 0.5f, t);
-
-		if (rawT >= 1.0f) {
-			m_previewRotation = 0.0f;
-			m_sliceAnimation = 0.5f;
-
-			m_animPhase = ANIM_PHASE_CAMERA_FOCUS_TO_3D;
-			m_transitionStartTime = timeS;
-			m_transitionDuration = 1.25f;
-
-			m_cameraFocusRequested = true;
-		}
-		break;
-
-	case ANIM_PHASE_CAMERA_FOCUS_TO_3D:
-		m_previewRotation = 0.0f;
-		m_sliceAnimation = 0.5f;
-
-		if (rawT >= 1.0f) {
-			m_animMode = ANIM_MODE_3D_GRID_STABLE;
-			m_animPhase = ANIM_PHASE_NONE;
-			m_animTransition = ANIM_TRANS_NONE;
-		}
-		break;
-
-	case ANIM_PHASE_RETURN_TO_IDLE: {
-		const float idleRotation =
-			timeS * 25.0f;
-
-		const float idleSlice =
-			fmod(timeS * 0.35f, 3.0f);
-
-		m_previewRotation =
-			lerp(m_startPreviewRotation, idleRotation, t);
-
-		m_sliceAnimation =
-			lerp(m_startSliceAnimation, idleSlice, t);
-
-		if (rawT >= 1.0f) {
-			m_previewRotation = idleRotation;
-			m_sliceAnimation = idleSlice;
-
-			m_animMode = ANIM_MODE_IDLE_PREVIEW;
-			m_animPhase = ANIM_PHASE_NONE;
-			m_animTransition = ANIM_TRANS_NONE;
-		}
-		break;
+		return false;
 	}
 
-	default:
-		m_animTransition = ANIM_TRANS_NONE;
-		m_animPhase = ANIM_PHASE_NONE;
-		break;
+	const bool buffersAlreadyValid =
+		m_dVolumeBoundaryMask != nullptr &&
+		m_dVolumeBoundaryUnsafeCount != nullptr &&
+		m_volumeBoundaryFaceStride ==
+		requiredFaceStride &&
+		m_volumeBoundaryMaskCPU.size() ==
+		requiredMaskBytes;
+
+	if (buffersAlreadyValid) return true;
+	releaseSPVolumeBoundarySensor();
+
+	allocateArray(
+		reinterpret_cast<void**>(&m_dVolumeBoundaryMask),
+		requiredMaskBytes
+	);
+	allocateArray(
+		reinterpret_cast<void**>(&m_dVolumeBoundaryUnsafeCount),
+		sizeof(unsigned int)
+	);
+
+	if (!m_dVolumeBoundaryMask ||
+		!m_dVolumeBoundaryUnsafeCount) {
+
+		releaseSPVolumeBoundarySensor();
+		return false;
 	}
+
+	m_volumeBoundaryMaskCPU.assign(
+		requiredMaskBytes,
+		static_cast<unsigned char>(0)
+	);
+
+	m_volumeBoundaryFaceStride =
+		requiredFaceStride;
+
+	m_volumeBoundaryUnsafeCount = 0;
+	m_volumeBoundarySensorReady = false;
+
+	printf(
+		"[Tesseract] Volume boundary sensor allocated: "
+		"faceStride=%u maskBytes=%zu\n",
+		m_volumeBoundaryFaceStride,
+		requiredMaskBytes
+	);
+
+	return true;
 }
-void Tesseract::updateMooreAnimBehavior(float timeS) {
-	switch (m_animMode) {
-	case ANIM_MODE_IDLE_PREVIEW:
-		m_previewRotation = timeS * 25.0f;
-		m_sliceAnimation = fmod(timeS * 0.35f, 3.0f);
-		break;
+bool Tesseract::updateSPVolumeBoundarySensor(float isoValue, float safetyBand) {
 
-	case ANIM_MODE_3D_GRID_STABLE:
-		m_previewRotation = 0.0f;
-		m_sliceAnimation = 0.5f;
-		break;
-
-	default:
-		break;
-	}
-}
-void Tesseract::beginIdleTo3DGridTransition(float timeS) {
-	m_animTransition = ANIM_TRANS_IDLE_TO_3D_GRID;
-	m_animPhase = ANIM_PHASE_ORIENT_TO_3D;
-
-	m_transitionStartTime = timeS;
-	m_transitionDuration = 1.25f;
-
-	m_startPreviewRotation = fmod(m_previewRotation, 360.0f);
-	if (m_startPreviewRotation < 0.0f) {
-		m_startPreviewRotation += 360.0f;
-	}
-
-	m_startSliceAnimation = m_sliceAnimation;
-	m_cameraFocusRequested = false;
-}
-void Tesseract::begin3DGridToIdleTransition(float timeS) {
-	m_animTransition = ANIM_TRANS_3D_GRID_TO_IDLE;
-	m_animPhase = ANIM_PHASE_RETURN_TO_IDLE;
-
-	m_transitionStartTime = timeS;
-	m_transitionDuration = 1.25f;
-
-	m_startPreviewRotation = fmod(m_previewRotation, 360.0f);
-	if (m_startPreviewRotation < 0.0f) {
-		m_startPreviewRotation += 360.0f;
-	}
-
-	m_startSliceAnimation = m_sliceAnimation;
-	m_cameraFocusRequested = false;
-}
-void Tesseract::renderSingleParticleWorkspace(const WorkspaceRenderContext& ctx) {
-	if (!ctx.arbiter) return;
-	const TheArbiter& arbiter = *ctx.arbiter;
-
-	if (!m_SPCadPlaced) return;
-	if (m_renderer) {
-		m_renderer->setParticleHighlighted(
-			arbiter.isWorkplaneParticleSelectSubLayer() &&
-			arbiter.hasSelectedParticle()
-		);
-	}
-
-	const bool configPreviewActive =
-		arbiter.isParticleConfigLayer() &&
-		arbiter.isSingleParticleSelected();
-
-	const bool referenceOrEditActive =
-		arbiter.isSimulationRunLayer() &&
-		arbiter.isSingleParticleSelected() &&
-		(arbiter.isSingleParticleReferenceSubLayer() ||
-			arbiter.isWorkplaneParticleSelectSubLayer());
-
-	if (configPreviewActive || referenceOrEditActive) {
-		renderSPCadWorkspace(
-			arbiter,
-			ctx.thetaRad,
-			ctx.phiRad,
-			ctx.particleWorkspaceZs
-		);
-
-		return;
-	}
-
-	if (arbiter.isVolumeRenderSubLayer()) {
-		renderSPVolumeToPBO(
-			arbiter,
-			2,
-			ctx.viewportW,
-			ctx.viewportH,
-			ctx.thetaRad,
-			ctx.phiRad,
-			ctx.volumeRenderZs,
-			ctx.threshold,
-			ctx.sliceDistance
-		);
-
-		renderSPVolumeTexture();
-
-		// ---------------------------------------------------------
-		// Node_0 injection-voxel selection preview.
-		//
-		// The bridge method performs the exact panel/list visibility
-		// checks, so calling it here is safe for every assembly node.
-		// ---------------------------------------------------------
-		renderSPVolumeInjectionVoxelPreview(
-			arbiter,
-			ctx.thetaRad,
-			ctx.phiRad,
-			ctx.volumeRenderZs
-		);
-		// ---------------------------------------------------------
-		// Node_1 injection edit-target preview.
-		//
-		// List [1] now has spatial feedback:
-		//     VOXEL_0 -> show VOXEL_1 helper cage
-		//     VOXEL_1 -> show VOXEL_0 helper cage
-		// ---------------------------------------------------------
-		renderSPVolumeInjectionEditTargetPreview(
-			arbiter,
-			ctx.thetaRad,
-			ctx.phiRad,
-			ctx.volumeRenderZs
-		);
-
-		// ---------------------------------------------------------
-		// Node_2-only offset drafting grid and boundary sensor.
-		// ---------------------------------------------------------
-		if (arbiter.getVolumeAssemblyNode() == TheArbiter::VOLUME_NODE_OFFSET_OBJECT) {
-
-			renderSPVolumeOffsetGrid(
-				arbiter,
-				ctx.thetaRad,
-				ctx.phiRad,
-				ctx.volumeRenderZs
-			);
-		}
-
-		// Draw the world/object axes last so they remain crisp over the grid.
-		renderSPVolumeOrientationAxes(
-			arbiter,
-			ctx.thetaRad,
-			ctx.phiRad
-		);
-		return;
-	}
-
-	if (arbiter.isMarchingCubesSubLayer()) {
-		renderSPVolumeToPBO(
-			arbiter,
-			3,
-			ctx.viewportW,
-			ctx.viewportH,
-			ctx.thetaRad,
-			ctx.phiRad,
-			ctx.volumeRenderZs,
-			ctx.threshold,
-			ctx.sliceDistance
-		);
-
-		renderSPVolumeTexture();
-
-		if (m_renderer) {
-			const int volumeDim = m_volumeSize.x;
-			const float mcHalfExtent =
-				0.5f * static_cast<float>(volumeDim);
-
-			m_renderer->displayMarchingCubesVoxelGrid(
-				ctx.thetaRad,
-				ctx.phiRad,
-				ctx.volumeRenderZs,
-				volumeDim,
-				16,
-				mcHalfExtent
-			);
-		}
-
-		if (ctx.marchingCubes &&
-			ctx.marchingCubes->hasTriangleData() &&
-			arbiter.isMcWireframeEnabled()) {
-
-			ctx.marchingCubes->renderWireframe(
-				ctx.thetaRad,
-				ctx.phiRad,
-				ctx.volumeRenderZs
-			);
-		}
-
-		renderSPVolumeOrientationAxes(
-			arbiter,
-			ctx.thetaRad,
-			ctx.phiRad
-		);
-
-		return;
-	}
-}
-
-void Tesseract::generateSPVolume0Field(const TheArbiter& arbiter, float* dDestination) {
-	if (!dDestination) return;
-
-	const TheArbiter::VolumeObjectState& state =
-		arbiter.getVolume0State();
-
-	const bool baseSelected =
-		state.primitive == TheArbiter::VOLUME_PRIMITIVE_BASE;
-
-	const SPVolumeBasis basis =
-		buildSPVolumeBasisFromState(arbiter, state);
-
-	const float3 offset = buildSPVolumeOffsetFromState(state);
-	if (baseSelected) {
-		if (!m_hasCommittedGeometry || !m_dBaseVolume) {
-
-			clearVolumeKernelLauncher(
-				dDestination,
-				m_volumeSize,
-				1.0e6f
-			);
-		}
-		else {
-			transformVolumeFieldLauncher(
-				m_dBaseVolume,
-				dDestination,
-				m_volumeSize,
-				make_float3(
-					state.scaleWhole * state.scaleX,
-					state.scaleWhole * state.scaleY,
-					state.scaleWhole * state.scaleZ
-				),
-				offset,
-				basis.xAxis,
-				basis.yAxis,
-				basis.zAxis
-			);
-		}
-
-		return;
-	}
-
-	volumeKernelLauncher(
-		dDestination,
-		m_volumeSize,
-		getSPVolumePrimitiveIdFromState(state),
-		buildSPVolumePrimitiveParamsFromState(state),
-		offset,
-		basis.xAxis,
-		basis.yAxis,
-		basis.zAxis
+	return classifySPVolumeBoundaryForSource(
+		m_dWorkingVolume,
+		isoValue,
+		safetyBand
 	);
 }
-void Tesseract::generateSPVolume1BrushField(const TheArbiter& arbiter, float* dDestination) {
-	if (!dDestination) return;
-	if (!arbiter.hasInjectionVoxelSelected()) {
-		clearVolumeKernelLauncher(
-			dDestination,
-			m_volumeSize,
-			1.0e6f
-		);
+bool Tesseract::classifySPVolumeBoundaryForSource(
+	const float* dSourceVolume,
+	float isoValue,
+	float safetyBand) {
 
-		return;
+	m_volumeBoundarySensorReady = false;
+	m_volumeBoundaryUnsafeCount = 0;
+
+	if (!dSourceVolume) return false;
+	if (!initializeSPVolumeBoundarySensor())
+		return false;
+
+	const size_t maskBytes =
+		getVolumeBoundaryMaskBytes(m_volumeSize);
+
+	if (maskBytes == 0 ||
+		m_volumeBoundaryMaskCPU.size() != maskBytes)
+		return false;
+
+	classifyVolumeBoundaryLauncher(
+		dSourceVolume,
+		m_dVolumeBoundaryMask,
+		m_dVolumeBoundaryUnsafeCount,
+		m_volumeSize,
+		isoValue,
+		safetyBand
+	);
+
+	threadSync();
+
+	copyArrayFromDevice(
+		&m_volumeBoundaryUnsafeCount,
+		m_dVolumeBoundaryUnsafeCount,
+		nullptr,
+		static_cast<int>(sizeof(unsigned int))
+	);
+
+	if (m_volumeBoundaryUnsafeCount == 0) {
+
+		fill(
+			m_volumeBoundaryMaskCPU.begin(),
+			m_volumeBoundaryMaskCPU.end(),
+			static_cast<unsigned char>(0)
+		);
+	}
+	else {
+
+		copyArrayFromDevice(
+			m_volumeBoundaryMaskCPU.data(),
+			m_dVolumeBoundaryMask,
+			nullptr,
+			static_cast<int>(maskBytes)
+		);
 	}
 
-	const TheArbiter::VolumeObjectState& state =
-		arbiter.getVolume1State();
+	m_volumeBoundarySensorReady = true;
 
-	const SPVolumeBasis basis =
-		buildSPVolumeBasisFromState(arbiter, state);
+	return true;
+}
 
-	const float3 railBrushOffset = 
-		buildSPVolumeRailBrushOffset(arbiter);
+void Tesseract::releaseSPVolumeBoundarySensor() {
 
-	volumeKernelLauncher(
-		dDestination,
-		m_volumeSize,
-		getSPVolumePrimitiveIdFromState(state),
-		buildSPVolumePrimitiveParamsFromState(state),
-		railBrushOffset,
-		basis.xAxis,
-		basis.yAxis,
-		basis.zAxis
+	if (m_dVolumeBoundaryMask) {
+		freeArray(m_dVolumeBoundaryMask);
+
+		m_dVolumeBoundaryMask = nullptr;
+	}
+
+	if (m_dVolumeBoundaryUnsafeCount) {
+		freeArray(m_dVolumeBoundaryUnsafeCount);
+
+		m_dVolumeBoundaryUnsafeCount = nullptr;
+	}
+
+	m_volumeBoundaryMaskCPU.clear();
+	m_volumeBoundaryMaskCPU.shrink_to_fit();
+
+	m_volumeBoundaryFaceStride = 0;
+	m_volumeBoundaryUnsafeCount = 0;
+	m_volumeBoundarySensorReady = false;
+}
+void Tesseract::markSPVolumeBoundarySafe() {
+	m_volumeBoundarySensorReady = true;
+	m_volumeBoundaryUnsafeCount = 0;
+
+	fill(
+		m_volumeBoundaryMaskCPU.begin(),
+		m_volumeBoundaryMaskCPU.end(),
+		static_cast<unsigned char>(0)
 	);
 }
 
@@ -1993,17 +2069,6 @@ int Tesseract::getSPVolumePrimitiveIdFromState(const TheArbiter::VolumeObjectSta
 		case TheArbiter::VOLUME_PRIMITIVE_FRUSTUM: return 6;
 		default: return 0;
 	}
-}
-
-void Tesseract::markSPVolumeBoundarySafe() {
-	m_volumeBoundarySensorReady = true;
-	m_volumeBoundaryUnsafeCount = 0;
-
-	fill(
-		m_volumeBoundaryMaskCPU.begin(),
-		m_volumeBoundaryMaskCPU.end(),
-		static_cast<unsigned char>(0)
-	);
 }
 float3 Tesseract::buildSPVolumeOffset(const TheArbiter& arbiter) const {
 
@@ -2073,7 +2138,6 @@ float3 Tesseract::buildSPVolumeRailBrushOffset(const TheArbiter& arbiter) const 
 		railCenter.z + localBrushOffset.z
 	);
 }
-
 float4 Tesseract::buildSPVolumePrimitiveParams(const TheArbiter& arbiter) const {
 
 	const float minDim =
@@ -2247,8 +2311,38 @@ float4 Tesseract::buildSPVolumePrimitiveParamsFromState(const TheArbiter::Volume
 
 	return param;
 }
-// WORKSPACE BRANCH
 // END OF SINGLE PARTICLE FUNCTIONS METHODS
+
+bool Tesseract::initializeLPWorkspace() {
+	// Gate 2 placeholder only. LINKED_PARTICLES_MCAD remains RESERVED in
+	// TheArbiter and therefore cannot be entered through normal navigation.
+	m_LPWorkspace.initialized = true;
+	return true;
+}
+void Tesseract::updateLPWorkspace(const WorkspaceUpdateContext& ctx) {
+	(void)ctx;
+	if (!m_LPWorkspace.initialized &&
+		!initializeLPWorkspace())
+		return;
+
+	updateLinkedParticlesMCAD();
+}
+void Tesseract::renderLPWorkspace(const WorkspaceRenderContext& ctx) {
+	if (!m_LPWorkspace.initialized &&
+		!initializeLPWorkspace())
+		return;
+
+	renderLinkedParticlesWorkspace(ctx);
+}
+
+void Tesseract::renderLinkedParticlesWorkspace(const WorkspaceRenderContext& ctx) {
+
+	(void)ctx;
+}
+bool Tesseract::updateLinkedParticlesMCAD() {
+	return m_LPWorkspace.initialized;
+}
+// WORKSPACE BRANCH
 
 
 

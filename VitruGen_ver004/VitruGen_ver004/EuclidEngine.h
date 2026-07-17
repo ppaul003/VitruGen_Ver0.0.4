@@ -232,14 +232,12 @@ private:
 	bool m_sysMode = false;
 	bool m_exiting = false;
 	bool m_cleaned = false;
-	bool m_bPause = false;
+
 	bool m_displaySliders = false;
 	bool m_singleParticlePlaced = false;
 	bool m_mcMeshGenerated = false;
 	bool m_mcRevealAnimating = false;
 	bool m_objExportFutureActive = false;
-
-	int m_iterations = 1;
 
 	// --- GLUT / CUDA SDK SUPPORT ---
 	int m_menuId = 0;
@@ -252,18 +250,6 @@ private:
 
 	uint m_numParticles = 0;
 	uint3 m_gridSizeDim{};
-
-	// --- SIM PARAMETERS ---
-	float m_timestep = 0.002f;
-	float m_simTime = 0.0f;
-
-	float m_damping = 1.0f;
-	float m_gravity = 0.0f;
-
-	float m_collideSpring = 0.0f;
-	float m_collideDamping = 0.0f;
-	float m_collideShear = 0.0f;
-	float m_collideAttraction = 0.0f;
 
 	float m_volumeFrameTheta = 0.0f;
 	float m_volumeFramePhi = 0.0f;

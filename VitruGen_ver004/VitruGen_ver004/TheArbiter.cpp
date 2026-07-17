@@ -354,12 +354,63 @@ TheArbiter::TheArbiter() {
 }
 TheArbiter::~TheArbiter() {}
 
-void TheArbiter::toggleEnvironmentSelection() {
-	m_navigation.globalShellSelection =
-		isIdleSelected()
-		? GlobalShellSelection::WORKSPACE_DOMAINS
-		: GlobalShellSelection::IDLE;
+void TheArbiter::cycleEnvironmentSelection(int dir) {
+	if (dir == 0) return;
 
+	// User-visible order:
+	// IDLE -> GRID_2D -> GRID_3D -> SIMCAD_4D
+	int currIndex = 0;
+	if (!isIdleSelected()) {
+		switch (m_navigation.selectedDomain) {
+		case WorkspaceDomain::GRID_2D:
+			currIndex = 1;
+			break;
+
+		case WorkspaceDomain::GRID_3D:
+			currIndex = 2;
+			break;
+
+		case WorkspaceDomain::SIMCAD_4D:
+			currIndex = 3;
+			break;
+
+		default:
+		case WorkspaceDomain::NONE:
+		case WorkspaceDomain::COUNT:
+			currIndex = 2;
+			break;
+		}
+	}
+
+	const int step = dir < 0 ? -1 : 1;
+	const int nextIndex =
+		(currIndex + step + 4) % 4;
+
+	if (nextIndex == 0) {
+		m_navigation.globalShellSelection =
+			GlobalShellSelection::IDLE;
+	}
+	else {
+		m_navigation.globalShellSelection =
+			GlobalShellSelection::WORKSPACE_DOMAINS;
+
+		switch (nextIndex) {
+		case 1:
+			m_navigation.selectedDomain =
+				WorkspaceDomain::GRID_2D;
+			break;
+
+		case 2:
+			m_navigation.selectedDomain =
+				WorkspaceDomain::GRID_3D;
+			break;
+
+		case 3:
+			m_navigation.selectedDomain =
+				WorkspaceDomain::SIMCAD_4D;
+			break;
+		}
+	}
 	validateNavigationState();
 }
 void TheArbiter::toggleGridSelection() {
@@ -1429,8 +1480,12 @@ void TheArbiter::handleGlobalShellKeyboard(
 	ArbiterResult& result) {
 	switch (event.signal) {
 	case KeyboardInput::KEY_A:
+		cycleEnvironmentSelection(-1);
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		break;
 	case KeyboardInput::KEY_D:
-		toggleEnvironmentSelection();
+		cycleEnvironmentSelection(+1);
 		result.command = CMD_REDRAW;
 		result.requestRedraw = true;
 		break;
@@ -1513,6 +1568,7 @@ bool TheArbiter::setVolumeBoundaryStatus(
 
 	return changed;
 }
+
 bool TheArbiter::isSubLayerPanelItemSelectable(int item) const {
 	if (m_volumeAssemblyNode == VOLUME_NODE_OFFSET_OBJECT) {
 		if (hasInjectionVoxelSelected()) {
@@ -1529,7 +1585,6 @@ bool TheArbiter::isSubLayerPanelItemSelectable(int item) const {
 	return true;
 
 }
-
 int TheArbiter::getActiveSubLayerPanelItemCount() const {
 	if (isMarchingCubesSubLayer()) return MC_LIST_COUNT;
 
@@ -1586,14 +1641,23 @@ const char* TheArbiter::getLayerName() const {
 	}
 }
 const char* TheArbiter::getEnvironmentName() const {
-	switch (getEnvironmentSelection()) {
-	case ENV_IDLE:
+	if (isIdleSelected()) {
 		return "IDLE";
+	}
 
-	case ENV_3D_GRID:
-		return "3D_GRID";
+	switch (m_navigation.selectedDomain) {
+	case WorkspaceDomain::GRID_2D:
+		return "GRID_2D";
+
+	case WorkspaceDomain::GRID_3D:
+		return "GRID_3D";
+
+	case WorkspaceDomain::SIMCAD_4D:
+		return "SIMCAD_4D";
 
 	default:
+	case WorkspaceDomain::NONE:
+	case WorkspaceDomain::COUNT:
 		return "UNKNOWN_ENVIRONMENT";
 	}
 }
