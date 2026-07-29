@@ -143,48 +143,70 @@ namespace {
 
 #endif
 
+// =============================================================================
+// APPLICATION LIFECYCLE / INITIALIZATION
+// =============================================================================
 EuclidEngine::EuclidEngine() {}
 EuclidEngine::~EuclidEngine() { shutdown(); }
 
 bool EuclidEngine::init(int argc, char** argv) {
 	printf("VitruGen Starting... \n\n");
 	printf("Welcome to the Tesseract Generator Matrix! \n");
+	printf("Anaheim Systems Dynamics Corp.\n\n");
 
 	s_instance = this;
 
-	printf("CUDA TESSERACT BEHAVIORAL OBJECT\n\n");
+	// -----------------------------------------------------------------
+	// Resource capacities
+	// These are allocation limits, not current Arbiter selections.
+	// -----------------------------------------------------------------
+	m_particleSimCapacity = kParticleSimCapacity;
+	m_particleSimActiveCount = kParticleSimCapacity;
 
-	m_numParticles = kNumParticles;
-	uint gridDim = kGridSize;
-	m_gridSizeDim.x = m_gridSizeDim.y = m_gridSizeDim.z = gridDim;
+	const uint gridDim = kGridSize;
+	m_gridSizeDim = make_uint3(gridDim, gridDim, gridDim);
 
-	printf("grid: %d x %d x %d = %d cells\n",
-		m_gridSizeDim.x, m_gridSizeDim.y, m_gridSizeDim.z,
-		m_gridSizeDim.x * m_gridSizeDim.y * m_gridSizeDim.z);
-	printf("particles: %u\n", m_numParticles);
+
+	printf(
+		"particle simulation grid: %u x %u x %u = %u cells\n",
+		m_gridSizeDim.x,
+		m_gridSizeDim.y,
+		m_gridSizeDim.z,
+		m_gridSizeDim.x * m_gridSizeDim.y * m_gridSizeDim.z
+	);
+
+	printf(
+		"particle simulation capacity: %u\n",
+		m_particleSimCapacity
+	);
+
+	printf(
+		"single-particle MCAD capacity: %u\n",
+		kSingleParticleCapacity
+	);
 
 	initGL(&argc, argv);
 	cudaGLInit(argc, argv);
-
-	setRadii(m_numParticles);
-	initParticleSystem(m_numParticles, m_gridSizeDim);
+	//
+	initRenderer();
+	initParticleSystems();
+	//
 	initVolumeField();
 	initPixelBuffer();
 	initMarchingCubes();
-
+	//
 	glutDisplayFunc(&EuclidEngine::sDisplay);
 	glutReshapeFunc(&EuclidEngine::sReshape);
 	glutMouseFunc(&EuclidEngine::sMouse);
 	glutMotionFunc(&EuclidEngine::sMotion);
 	glutPassiveMotionFunc(&EuclidEngine::sPassiveMotion);
 	glutKeyboardFunc(&EuclidEngine::sKeyboard);
-	glutSpecialFunc(&EuclidEngine::sSpecial);
 	glutIdleFunc(&EuclidEngine::sIdle);
-
+	//
 	glutCloseFunc(&EuclidEngine::sClose);
-
 	return true;
 }
+
 void EuclidEngine::initGL(int* argc, char** argv) {
 	glutInit(argc, argv);
 	glutInitDisplayMode(GLUT_RGB | GLUT_DEPTH | GLUT_DOUBLE);
@@ -205,13 +227,12 @@ void EuclidEngine::initGL(int* argc, char** argv) {
 	m_viewport.resize(kWidth, kHeight);
 	m_viewport.applyPerspective(60.0f);
 }
-void EuclidEngine::initParticleSystem(uint numParticles, uint3 gridSize) {
 
-	m_psystem = new ParticleSystem(numParticles, gridSize);
-	m_psystem->reset(ParticleSystem::CNFG_DEFAULT_RESTART);
+// Shared ParticleSystem and EuclidRenderer resources used by both active
+// particle workspaces.
+void EuclidEngine::initRenderer() {
 
 	m_renderer = new EuclidRenderer;
-	m_renderer->setParticleSystem(m_psystem);
 
 	m_renderer->setWindowSize(
 		m_viewport.getWidth(),
@@ -219,41 +240,74 @@ void EuclidEngine::initParticleSystem(uint numParticles, uint3 gridSize) {
 	);
 
 	m_renderer->setFOV(60.0f);
-	m_renderer->setParticleRadius(m_psystem->getParticleRadius());
-	m_renderer->setColorBuffer(m_psystem->getColorBuffer());
-	m_renderer->setRadiusBuffer(m_psystem->getRadiiBuffer());
 
-	// Ver0.0.2: color is now controlled by Layer 2 particle configuration.
-	m_psystem->setUniformParticleColor(1.0f, 0.0f, 0.0f, 1.0f);
-
-	m_psystem->dumpRadii(m_rad.data());
-	m_renderer->setVertexBuffer(m_psystem->getCurrentReadBuffer(), m_psystem->getNumParticles());
-	m_renderer->setRadius(m_rad.data(), m_psystem->getNumParticles());
-
-	const int visualGridDim = 16;
-
-	const float simBoxSize =
-		m_tesseract.getPSConfig().simulationBoxSize;
-
-	const float visualCellSize = simBoxSize / (float)visualGridDim;
-	const float halfBox = simBoxSize * 0.5f;
-
-	m_renderer->setGrid(
-		ivec3(visualGridDim, visualGridDim, visualGridDim),
-		vec3(-halfBox, -halfBox, -halfBox),
-		vec3(visualCellSize, visualCellSize, visualCellSize)
-	);
-
+	// shared default visual style
 	m_renderer->setGridStyle(4, false);
+	m_renderer->setGridMode3D();
+	m_renderer->setParticleHighlighted(false);
+}
 
-	m_tesseract.bindSharedParticleResources(
-		m_psystem,
-		m_renderer,
-		&m_rad
+void EuclidEngine::initParticleSystems() {
+	// -------------------------------------------------------------
+	// SIMCAD_4D particle simulation
+	// -------------------------------------------------------------
+	m_particleSimRadii.assign(
+		kParticleSimCapacity,
+		0.0f
 	);
+
+	m_particleSimSystem = new ParticleSystem(
+		kParticleSimCapacity,
+		m_gridSizeDim,
+		true
+	);
+
+	m_particleSimSystem->setUniformParticleColor(1.0f, 0.0, 0.0f, 1.0f);
+
+	m_particleSimSystem->reset(
+		ParticleSystem::CNFG_DEFAULT_RESTART
+	);
+
+	// -------------------------------------------------------------
+	// GRID_3D / SINGLE_PARTICLE_MCAD anchor
+	// -------------------------------------------------------------
+	m_singleParticleRadii.assign(
+		kSingleParticleCapacity,
+		0.0f
+	);
+
+	const uint3 singleParticleGrid = make_uint3(1u, 1u, 1u);
+
+	m_singleParticleSystem = new ParticleSystem(
+		kSingleParticleCapacity,
+		singleParticleGrid,
+		true
+	);
+
+	m_singleParticleSystem->setUniformParticleColor(1.0f, 0.0f, 0.0f, 1.0f);
+
+	m_singleParticleSystem->reset(
+		ParticleSystem::CNFG_DEFAULT_RESTART
+	);
+
+	/// Bind each resource to its proper Tesseract workspace.
+	m_tesseract.bindParticleSimulationResources(
+		m_particleSimSystem,
+		m_renderer,
+		&m_particleSimRadii
+	);
+	//
+	m_tesseract.bindSingleParticleResources(
+		m_singleParticleSystem,
+		m_renderer,
+		&m_singleParticleRadii
+	);
+	/// </summary>
 
 	sdkCreateTimer(&m_timer);
 }
+
+// SINGLE_PARTICLE_MCAD scalar-field resources.
 void EuclidEngine::initVolumeField() {
 	const int3& v = m_tesseract.getVolumeSize();
 	const size_t volumeBytes = m_tesseract.getVolumeBytes();
@@ -269,7 +323,7 @@ void EuclidEngine::initVolumeField() {
 
 		return;
 	}
-	
+
 	// -----------------------------------------------------------------
 	// Display/preview field.
 	//
@@ -347,6 +401,7 @@ void EuclidEngine::initVolumeField() {
 		static_cast<double>(3 * volumeBytes) / (1024.0 * 1024.0)
 	);
 }
+
 void EuclidEngine::initMarchingCubes() {
 	if (m_marchingCubes) return;
 
@@ -363,6 +418,8 @@ void EuclidEngine::initMarchingCubes() {
 
 	printf("[EuclidEngine] Marching Cubes initialized.\n");
 }
+
+// SINGLE_PARTICLE_MCAD CUDA/OpenGL volume-render interop resources.
 void EuclidEngine::initPixelBuffer() {
 	if (m_pbo || m_tex) return;
 
@@ -397,20 +454,20 @@ void EuclidEngine::initPixelBuffer() {
 		m_renderer->attachTexture(m_tex);
 	}
 }
+
 void EuclidEngine::initMenus() {
 	rebuildMenus();
 }
 
-void EuclidEngine::run() {
-	glutMainLoop();
-}
+void EuclidEngine::run() { glutMainLoop(); }
+
 void EuclidEngine::shutdown() {
 	if (m_cleaned) return;
 	m_cleaned = true;
 
-	if (m_timer) { 
-		sdkDeleteTimer(&m_timer); 
-		m_timer = nullptr; 
+	if (m_timer) {
+		sdkDeleteTimer(&m_timer);
+		m_timer = nullptr;
 	}
 
 	if (m_objExportFutureActive && m_objExportFuture.valid()) {
@@ -422,18 +479,26 @@ void EuclidEngine::shutdown() {
 	freeMarchingCubes();
 	freeVolumeField();
 
-	if (m_renderer) { 
-		delete m_renderer; 
-		m_renderer = nullptr; 
+	if (m_renderer) {
+		delete m_renderer;
+		m_renderer = nullptr;
 	}
 
-	if (m_psystem) { 
-		delete m_psystem; 
-		m_psystem = nullptr; 
+	if (m_particleSimSystem) {
+		delete m_particleSimSystem;
+		m_particleSimSystem = nullptr;
 	}
 
-	m_rad.clear();
-	m_rad.shrink_to_fit();
+	if (m_singleParticleSystem) {
+		delete m_singleParticleSystem;
+		m_singleParticleSystem = nullptr;
+	}
+
+	m_particleSimRadii.clear();
+	m_particleSimRadii.shrink_to_fit();
+
+	m_singleParticleRadii.clear();
+	m_singleParticleRadii.shrink_to_fit();
 
 #ifdef _WIN32
 
@@ -441,15 +506,14 @@ void EuclidEngine::shutdown() {
 
 #endif
 }
+
 void EuclidEngine::computeFPS() {
-	static unsigned int frameCount = 0;
-	frameCount++;
 	m_fpsCount++;
 
 	if (m_fpsCount == m_fpsLimit) {
 		char fps[256];
 		float ifps = 1.f / (sdkGetAverageTimerValue(&m_timer) / 1000.f);
-		sprintf(fps, "VitruGen 0.0.4: (%u particles): %3.1f fps", m_numParticles, ifps);
+		sprintf(fps, "VitruGen 0.0.4:  %3.1f fps", ifps);
 
 		glutSetWindowTitle(fps);
 		m_fpsCount = 0;
@@ -458,9 +522,7 @@ void EuclidEngine::computeFPS() {
 		sdkResetTimer(&m_timer);
 	}
 }
-void EuclidEngine::setRadii(uint numParticles) {
-	m_rad.assign(numParticles, 0.0f);
-}
+
 void EuclidEngine::requestExit() {
 	if (m_exiting) return;
 
@@ -468,6 +530,10 @@ void EuclidEngine::requestExit() {
 	glutIdleFunc(nullptr);
 	s_instance = nullptr;
 }
+
+// =============================================================================
+// CONTEXT MENU PRESENTATION / COMMAND ROUTING
+// =============================================================================
 void EuclidEngine::rebuildMenus() {
 	glutDetachMenu(GLUT_RIGHT_BUTTON);
 
@@ -560,7 +626,7 @@ void EuclidEngine::rebuildMenus() {
 				m_arbiter.hasInjectionVoxelSelected();
 
 			const bool editingBrush =
-				injectionSelected && 
+				injectionSelected &&
 				m_arbiter.isEditingInjectionVoxel1();
 
 			// -------------------------------------------------------------
@@ -730,7 +796,7 @@ void EuclidEngine::rebuildMenus() {
 			// -------------------------------------------------------------
 			// Context-sensitive Node_2 title.
 			// -------------------------------------------------------------
-			const char* nodeTitle = 
+			const char* nodeTitle =
 				editingBrush
 				? "- Sub-Layer 2: Offset Brush Object"
 				: editingAnchor
@@ -999,22 +1065,29 @@ void EuclidEngine::rebuildMenus() {
 	glutAttachMenu(GLUT_RIGHT_BUTTON);
 }
 
-// --- GLUT thunks ---
+// =============================================================================
+// GLUT CALLBACK BRIDGE
+// =============================================================================
 void EuclidEngine::sDisplay() {
 	if (s_instance) s_instance->onDisplay();
 }
+
 void EuclidEngine::sReshape(int w, int h) {
 	if (s_instance) s_instance->onReshape(w, h);
 }
+
 void EuclidEngine::sMouse(int b, int s, int x, int y) {
 	if (s_instance) s_instance->onMouse(b, s, x, y);
 }
+
 void EuclidEngine::sMotion(int x, int y) {
 	if (s_instance) s_instance->onMotion(x, y);
 }
+
 void EuclidEngine::sPassiveMotion(int x, int y) {
 	if (s_instance) s_instance->onPassiveMotion(x, y);
 }
+
 void EuclidEngine::sMainMenu(int value) {
 	if (!s_instance) return;
 	if (value == MENU_NOP) return;
@@ -1185,7 +1258,7 @@ void EuclidEngine::sMainMenu(int value) {
 		return;
 	}
 
-	
+
 	// =========================================================
 	// Marching Cubes sub-layer navigation
 	// =========================================================
@@ -1232,19 +1305,22 @@ void EuclidEngine::sMainMenu(int value) {
 		0
 	);
 }
+
 void EuclidEngine::sKeyboard(unsigned char k, int x, int y) {
 	if (s_instance) s_instance->onKeyboard(k, x, y);
 }
-void EuclidEngine::sSpecial(int k, int x, int y) {
-	if (s_instance) s_instance->onSpecial(k, x, y);
-}
+
 void EuclidEngine::sIdle() {
 	if (s_instance) s_instance->onIdle();
 }
+
 void EuclidEngine::sClose() {
 	if (s_instance) s_instance->onClose();
 }
 
+// =============================================================================
+// RESOURCE TEARDOWN
+// =============================================================================
 void EuclidEngine::destroyPixelBuffer() {
 	if (m_cudaPboResource) {
 		unregisterGLBufferObject(m_cudaPboResource);
@@ -1266,6 +1342,7 @@ void EuclidEngine::destroyPixelBuffer() {
 		m_renderer->attachTexture(0);
 	}
 }
+
 void EuclidEngine::freeVolumeField() {
 	m_tesseract.releaseSPVolumeBoundarySensor();
 	m_arbiter.setVolumeBoundaryStatus(false, 0);
@@ -1288,6 +1365,7 @@ void EuclidEngine::freeVolumeField() {
 		m_tesseract.clearBrushVolumeBinding();
 	}
 }
+
 void EuclidEngine::freeMarchingCubes() {
 	if (!m_marchingCubes) return;
 
@@ -1295,44 +1373,99 @@ void EuclidEngine::freeMarchingCubes() {
 
 	delete m_marchingCubes;
 	m_marchingCubes = nullptr;
-
-
 }
 
-void EuclidEngine::regenerateVolumeField() {
-	if (!m_tesseract.hasVolume())
-		initVolumeField();
+// =============================================================================
+// SHARED PARTICLE CONFIGURATION
+// =============================================================================
 
-	m_tesseract.regenerateSPVolumeField(m_arbiter);
-	syncVolumeBoundaryStatusFromTesseract();
-}
+void EuclidEngine::drawTesseractGridAndPlane() {
+	if (!m_renderer) return;
 
-void EuclidEngine::applySingleParticleConfigToSystem() {
-	applySelectedParticleColorToSystem();
+	// ---------------------------------------------------------
+	// Restore the global diagnostic Tesseract grid.
+	//
+	// The shared renderer may be reconfigured by individual
+	// workspaces, so the global presentation restores its own
+	// grid geometry before drawing.
+	// ---------------------------------------------------------
+	constexpr int diagGridDim = 16;
 
-	m_tesseract.applySPConfig(m_arbiter.getParticleRadius());
-	m_singleParticlePlaced = m_tesseract.isPlacedSP();
-}
-void EuclidEngine::applySelectedParticleColorToSystem() {
-	if (!m_psystem) return;
+	const float simBoxSize =
+		m_tesseract.getPSConfig().simulationBoxSize;
 
-	switch (m_arbiter.getParticleColorSelection()) {
-	case TheArbiter::PARTICLE_COLOR_BLUE:
-		m_psystem->setUniformParticleColor(0.0f, 0.25f, 1.0f, 1.0f);
-		break;
+	const float halfBox = simBoxSize * 0.5f;
 
-	case TheArbiter::PARTICLE_COLOR_GREEN:
-		m_psystem->setUniformParticleColor(0.0f, 1.0f, 0.25f, 1.0f);
-		break;
+	const float diagCellSize =
+		simBoxSize / static_cast<float>(diagGridDim);
 
-	default:
-	case TheArbiter::PARTICLE_COLOR_RED:
-		m_psystem->setUniformParticleColor(1.0f, 0.05f, 0.0f, 1.0f);
-		break;
+	m_renderer->setGrid(
+		ivec3(diagGridDim, diagGridDim, diagGridDim),
+		vec3(-halfBox, -halfBox, -halfBox),
+		vec3(diagCellSize, diagCellSize, diagCellSize)
+	);
+
+	m_renderer->setGridStyle(4, false);
+
+	// Draw the full 3D Tesseract boundary/grid.
+	m_renderer->setGridMode3D();
+	m_renderer->displayGrid();
+
+	// ---------------------------------------------------------
+	// Menu-layer moving diagnostic slice.
+	// ---------------------------------------------------------
+
+
+	if (m_arbiter.isMenuLayer() ||
+		m_tesseract.isTransitioningToWorkspace()) {
+
+		const int halfSlice = diagGridDim / 2;
+
+		const float cycle =
+			m_tesseract.getSliceAnimation();
+
+		const int segment =
+			static_cast<int>(cycle);
+
+		const float local =
+			cycle - static_cast<float>(segment);
+
+		const int sliceOffset =
+			static_cast<int>(round(-halfSlice +
+					local * static_cast<float>(halfSlice * 2)));
+
+		EuclidRenderer::WorkPlane plane =
+			EuclidRenderer::PLANE_XY;
+
+		if (segment == 0) {
+			// XY plane moves through Z.
+			plane = EuclidRenderer::PLANE_XY;
+		}
+		else if (segment == 1) {
+			// XZ plane moves through Y.
+			plane = EuclidRenderer::PLANE_XZ;
+		}
+		else {
+			// YZ plane moves through X.
+			plane = EuclidRenderer::PLANE_YZ;
+		}
+
+		m_renderer->setGridMode2D(
+			plane,
+			sliceOffset
+		);
+
+		m_renderer->displayGrid();
+
+		// Never leave shared renderer state in GRID_2D mode.
+		m_renderer->setGridMode3D();
 	}
 }
+// =============================================================================
+// PARTICLE_SIM WORKSPACE SUPPORT (SIMCAD_4D)
+// =============================================================================
 void EuclidEngine::applyParticleSelectionsToSystem() {
-	if (!m_psystem) return;
+	if (!m_particleSimSystem) return;
 
 	ParticleSystem::ParticleConfig config = ParticleSystem::CNFG_DEFAULT_RESTART;
 	if (m_arbiter.getParticleResetMode() == TheArbiter::PARTICLE_RESET_RANDOM)
@@ -1341,47 +1474,68 @@ void EuclidEngine::applyParticleSelectionsToSystem() {
 	if (!m_tesseract.resetPSWorkspace(config))
 		return;
 
-	applySelectedParticleColorToSystem();
+	applyPSSelectedParticleColorToSystem();
 	syncRenderingWithParticleSystem();
 }
 
-void EuclidEngine::drawTesseractGridAndPlane() {
-	if (!m_renderer) return;
+void EuclidEngine::applyPSSelectedParticleColorToSystem() {
+	if (!m_particleSimSystem) return;
 
-	// Draw full 3D tesseract bondary/grid
-	m_renderer->setGridMode3D();
-	m_renderer->displayGrid();
+	switch (m_arbiter.getParticleColorSelection()) {
+	case TheArbiter::PARTICLE_COLOR_BLUE:
+		m_particleSimSystem->setUniformParticleColor(0.0f, 0.25f, 1.0f, 1.0f);
+		break;
 
-	// menu layer, draw the idle animation
-	if (m_arbiter.isMenuLayer() || m_tesseract.isTransitioningTo3D()) {
-		const int halfSlice = 8;
+	case TheArbiter::PARTICLE_COLOR_GREEN:
+		m_particleSimSystem->setUniformParticleColor(0.0f, 1.0f, 0.25f, 1.0f);
+		break;
 
-		float cycle = m_tesseract.getSliceAnimation();
-		int segment = static_cast<int>(cycle);
-		float local = cycle - static_cast<float>(segment);
+	default:
+	case TheArbiter::PARTICLE_COLOR_RED:
+		m_particleSimSystem->setUniformParticleColor(1.0f, 0.05f, 0.0f, 1.0f);
+		break;
+	}
+}
+// =============================================================================
+// GLOBAL TESSERACT PRESENTATION
+// =============================================================================
 
-		int sliceOffset =
-			static_cast<int>(round(-halfSlice + local * (halfSlice) * 2));
 
-		EuclidRenderer::WorkPlane plane = EuclidRenderer::PLANE_XY;
+// =============================================================================
+// SINGLE_PARTICLE_MCAD WORKSPACE SUPPORT (GRID_3D)
+// =============================================================================
+void EuclidEngine::regenerateVolumeField() {
+	if (!m_tesseract.hasVolume()) {
+		initVolumeField();
+	}
 
-		if (segment == 0)
-			plane = EuclidRenderer::PLANE_XY;
-		// tranverse Z
+	m_tesseract.regenerateSPVolumeField(m_arbiter);
+	syncVolumeBoundaryStatusFromTesseract();
+}
 
-		else if (segment == 1)
-			plane = EuclidRenderer::PLANE_XZ;
-		// transverse Y
+void EuclidEngine::applySingleParticleConfigToSystem() {
+	applySPSelectedParticleColorToSystem();
 
-		else if (segment == 2)
-			plane = EuclidRenderer::PLANE_YZ;
-		// transverse X
+	m_tesseract.applySPConfig(m_arbiter.getParticleRadius());
+	m_singleParticlePlaced = m_tesseract.isPlacedSP();
+}
 
-		m_renderer->setGridMode2D(plane, sliceOffset);
-		m_renderer->displayGrid();
+void EuclidEngine::applySPSelectedParticleColorToSystem() {
+	if (!m_singleParticleSystem) return;
 
-		// Restore default grid mode
-		m_renderer->setGridMode3D();
+	switch (m_arbiter.getParticleColorSelection()) {
+	case TheArbiter::PARTICLE_COLOR_BLUE:
+		m_singleParticleSystem->setUniformParticleColor(0.0f, 0.25f, 1.0f, 1.0f);
+		break;
+
+	case TheArbiter::PARTICLE_COLOR_GREEN:
+		m_singleParticleSystem->setUniformParticleColor(0.0f, 1.0f, 0.25f, 1.0f);
+		break;
+
+	default:
+	case TheArbiter::PARTICLE_COLOR_RED:
+		m_singleParticleSystem->setUniformParticleColor(1.0f, 0.05f, 0.0f, 1.0f);
+		break;
 	}
 }
 
@@ -1390,13 +1544,14 @@ void EuclidEngine::placeSingleParticleAtOrigin() {
 		TheArbiter::WorkspaceId::SINGLE_PARTICLE_MCAD
 	);
 
-	applySelectedParticleColorToSystem();
+	applySPSelectedParticleColorToSystem();
 
 	m_singleParticlePlaced =
 		m_tesseract.placeSPAnchor(
 			m_arbiter.getParticleRadius()
 		);
 }
+
 void EuclidEngine::startSingleParticleConfigPreview() {
 	if (!m_arbiter.isParticleConfigLayer() ||
 		!m_arbiter.isSingleParticleSelected()) return;
@@ -1414,7 +1569,7 @@ void EuclidEngine::startSingleParticleConfigPreview() {
 	// before pressing RUN SIMULATION LAYER.
 	// ---------------------------------------------------------
 	m_tesseract.enterWorkspace(TheArbiter::WorkspaceId::SINGLE_PARTICLE_MCAD);
-	applySelectedParticleColorToSystem();
+	applySPSelectedParticleColorToSystem();
 
 	if (!m_tesseract.isPlacedSP()) {
 
@@ -1436,6 +1591,7 @@ void EuclidEngine::startSingleParticleConfigPreview() {
 		CameraProcessor::CAM_SINGLE_PARTICLE_ORBIT_CLOSE
 	);
 }
+
 void EuclidEngine::applyVoxelBaseCommit() {
 	if (!m_tesseract.hasCommittedVolume())
 		return;
@@ -1446,7 +1602,7 @@ void EuclidEngine::applyVoxelBaseCommit() {
 		glutPostRedisplay();
 		return;
 	}
-	
+
 	m_arbiter.finalizeVoxelBaseCommit();
 	m_tesseract.copyCommittedVolumeToPreview();
 	// The copied BASE is still the exact safe field that passed
@@ -1456,9 +1612,13 @@ void EuclidEngine::applyVoxelBaseCommit() {
 	syncVolumeBoundaryStatusFromTesseract();
 }
 
+// =============================================================================
+// WORKSPACE ROUTING / SHARED RESOURCE SYNCHRONIZATION
+// =============================================================================
 void EuclidEngine::syncRenderingWithParticleSystem() {
 	m_tesseract.syncPSRendering();
 }
+
 void EuclidEngine::syncTesseractWorkspaceFromArbiter() {
 	TheArbiter::WorkspaceId targetWorkspace =
 		TheArbiter::WorkspaceId::NONE;
@@ -1474,7 +1634,7 @@ void EuclidEngine::syncTesseractWorkspaceFromArbiter() {
 
 	const bool particleSimulationRunActive =
 		m_arbiter.isSimulationRunLayer() &&
-		m_arbiter.isParticlesSelected();
+		m_arbiter.isParticleSimulationSelected();
 
 	if (particleSimulationRunActive) {
 		targetWorkspace =
@@ -1553,6 +1713,7 @@ void EuclidEngine::syncCameraBehaviorFromArbiter() {
 		CameraProcessor::CAM_STANDARD_3D_ORBIT
 	);
 }
+
 void EuclidEngine::syncVolumeBoundaryStatusFromTesseract() {
 	const bool changed =
 		m_arbiter.setVolumeBoundaryStatus(m_tesseract.isSPVolumeBoundarySensorReady(),
@@ -1563,9 +1724,12 @@ void EuclidEngine::syncVolumeBoundaryStatusFromTesseract() {
 	}
 }
 
+// =============================================================================
+// OBJ EXPORT MODAL INPUT
+// =============================================================================
 bool EuclidEngine::handleObjExportModalKeyboard(const KeyboardInput::KeyEvent& event) {
 	if (!isObjExportModalActive()) return false;
-	
+
 	using PanelMode = ViewPort::ObjExportPanelMode;
 	if (m_objExportPanel.mode == PanelMode::CONFIRM) {
 
@@ -1633,6 +1797,9 @@ bool EuclidEngine::handleObjExportModalKeyboard(const KeyboardInput::KeyEvent& e
 	return true;
 }
 
+// =============================================================================
+// RUNTIME EVENT HANDLERS
+// =============================================================================
 void EuclidEngine::onReshape(int w, int h) {
 	m_viewport.resize(w, h);
 	m_viewport.applyPerspective(60.0F);
@@ -1645,6 +1812,7 @@ void EuclidEngine::onReshape(int w, int h) {
 	destroyPixelBuffer();
 	initPixelBuffer();
 }
+
 void EuclidEngine::onDisplay() {
 	if (m_exiting || m_cleaned) return;
 	sdkStartTimer(&m_timer);
@@ -1667,7 +1835,7 @@ void EuclidEngine::onDisplay() {
 	m_camera.updateLag();
 	m_camera.updatePocketZoomLag();
 
-	if (m_tesseract.consumeCameraFocusReqest()) {
+	if (m_tesseract.consumeCameraFocusRequest()) {
 		const bool singleParticleCameraContext =
 			m_arbiter.isSingleParticleSelected() &&
 			(m_arbiter.isParticleConfigLayer() ||
@@ -1681,7 +1849,7 @@ void EuclidEngine::onDisplay() {
 		}
 	}
 
-	if (m_arbiter.isMenuLayer() || m_tesseract.isOrientingTo3D()) {
+	if (m_arbiter.isMenuLayer() || m_tesseract.isOrientingToWorkspace()) {
 		m_camera.applyMenuCameraTransform(
 			m_tesseract.getPreviewRotation()
 		);
@@ -1691,15 +1859,13 @@ void EuclidEngine::onDisplay() {
 	}
 
 	// 5. Capture current model-view matrix into the Tesseract.
-	m_tesseract.captureModelView();
-
 	// 6. Draw the production Tesseract grid only when the active
-	// workspace is not the SINGLE_PARTICLE SIMCAD workspace.
-	const float DEG_TO_RAD = 0.01745329251994329577f;
+	// workspace is not the local SINGLE_PARTICLE_MCAD workspace.
+	const float degreesToRadians = 0.01745329251994329577f;
 	const float* rot = m_camera.getLaggedRotation();
 
-	m_volumeFramePhi = rot[0] * DEG_TO_RAD;
-	m_volumeFrameTheta = rot[1] * DEG_TO_RAD;
+	m_volumeFramePhi = rot[0] * degreesToRadians;
+	m_volumeFrameTheta = rot[1] * degreesToRadians;
 
 	const bool singleParticleWorkspaceActive =
 		m_tesseract.getActiveWorkspace() ==
@@ -1709,9 +1875,11 @@ void EuclidEngine::onDisplay() {
 		m_tesseract.getActiveWorkspace() ==
 		TheArbiter::WorkspaceId::PARTICLE_SIMULATION;
 
-	// Draw global production Tesseract grid unless SINGLE_PARTICLE owns
-	// its local CAD/volume/marching-cubes workspace.
-	if (!singleParticleWorkspaceActive) {
+	// The global diagnostic grid is used by the menu and configuration
+	// layers. Active particle workspaces own their local render context.
+	if (!singleParticleWorkspaceActive &&
+		!particleSimulationWorkspaceActive) {
+
 		drawTesseractGridAndPlane();
 	}
 
@@ -1745,7 +1913,7 @@ void EuclidEngine::onDisplay() {
 
 	// 7. Draw particles only when a mode explicitly requests particle rendering.
 	const bool meshAvailable =
-		m_renderer && 
+		m_renderer &&
 		m_renderer->hasParticleMeshOBJ();
 
 	ViewPort::MarchingCubesPanelData mcPanelData;
@@ -1755,7 +1923,7 @@ void EuclidEngine::onDisplay() {
 
 		mcPanelDataPtr = &mcPanelData;
 
-		if (m_marchingCubes && 
+		if (m_marchingCubes &&
 			m_marchingCubes->isInitialized()) {
 
 			const uint3 gridSize =
@@ -1793,7 +1961,7 @@ void EuclidEngine::onDisplay() {
 
 	// 8. Draw screen-space overlay.
 	m_viewport.drawOverlay(
-		m_arbiter, 
+		m_arbiter,
 		mcPanelDataPtr,
 		exportPanelDataPtr,
 		m_tesseract.isActiveWorkspacePaused(),
@@ -1930,8 +2098,11 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 	KeyboardInput::KeyEvent event = m_keyboard.onKey(key, x, y);
 	if (handleObjExportModalKeyboard(event)) return;
 
-	TheArbiter::AppLayer previousLayer = m_arbiter.getAppLayer();
-	TheArbiter::GridSelection previousGrid = m_arbiter.getGridSelection();
+	TheArbiter::ApplicationLayer previousLayer =
+		m_arbiter.getApplicationLayer();
+
+	TheArbiter::WorkspaceId previousWorkspace =
+		m_arbiter.getSelectedWorkspace();
 
 	TheArbiter::SingleParticleSubLayer previousSubLayer =
 		m_arbiter.getSingleParticleSubLayer();
@@ -1955,23 +2126,24 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 		applyVoxelBaseCommit();
 	}
 
-	bool entered3DGridFromMenu =
-		(previousLayer == TheArbiter::LAYER_MENU) &&
+	bool enteredWorkspaceDomainFromMenu =
+		(previousLayer == TheArbiter::ApplicationLayer::GLOBAL_SHELL) &&
 		(!m_arbiter.isMenuLayer());
 
 	bool returnedToMenu =
-		(previousLayer != TheArbiter::LAYER_MENU) &&
+		(previousLayer != TheArbiter::ApplicationLayer::GLOBAL_SHELL) &&
 		m_arbiter.isMenuLayer();
 
 	bool enteredSingleParticleConfig =
-		(previousLayer == TheArbiter::LAYER_ENVIRONMENT_CONFIGURATION) &&
+		(previousLayer == TheArbiter::ApplicationLayer::DOMAIN_SELECTION) &&
 		m_arbiter.isParticleConfigLayer() &&
 		m_arbiter.isSingleParticleSelected();
 
 	bool returnedFromSingleParticleConfig =
-		(previousLayer == TheArbiter::LAYER_3D_GRID_MODE_CONFIGURATION) &&
+		(previousLayer == TheArbiter::ApplicationLayer::WORKSPACE_CONFIGURATION) &&
 		m_arbiter.isEnvironmentConfigLayer() &&
-		(previousGrid == TheArbiter::GRID_SINGLE_PARTICLE);
+		(previousWorkspace ==
+			TheArbiter::WorkspaceId::SINGLE_PARTICLE_MCAD);
 
 	bool enteredVolumeRenderSubLayer =
 		(previousSubLayer != TheArbiter::SP_SUB_LAYER_VOLUME_RENDER) &&
@@ -1997,15 +2169,14 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 		fabs(previousRollDeg - m_arbiter.getRotationRollDeg()) > 0.0001f;
 
 	if (enteredMarchingCubesSubLayer) {
-		//classifyMarchingCubesOnly();
 		extractMarchingCubesMesh();
 	}
 
-	if (entered3DGridFromMenu) {
+	if (enteredWorkspaceDomainFromMenu) {
 		float timeS = glutGet(GLUT_ELAPSED_TIME) * 0.001f;
 
 		m_tesseract.beginAnimTransition(
-			Tesseract::ANIM_TRANS_IDLE_TO_3D_GRID,
+			Tesseract::ANIM_TRANS_IDLE_TO_WORKSPACE,
 			timeS
 		);
 	}
@@ -2014,7 +2185,7 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 		float timeS = glutGet(GLUT_ELAPSED_TIME) * 0.001f;
 
 		m_tesseract.beginAnimTransition(
-			Tesseract::ANIM_TRANS_3D_GRID_TO_IDLE,
+			Tesseract::ANIM_TRANS_WORKSPACE_TO_IDLE,
 			timeS
 		);
 
@@ -2022,7 +2193,7 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 		m_tesseract.clearSPPlacement();
 	}
 
-	if (previousGrid != m_arbiter.getGridSelection()) {
+	if (previousWorkspace != m_arbiter.getSelectedWorkspace()) {
 		m_singleParticlePlaced = false;
 		m_tesseract.clearSPPlacement();
 	}
@@ -2068,15 +2239,8 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 		glutDestroyWindow(glutGetWindow());
 		return;
 
-		/* OLD VER_003 BLOCK
-		case TheArbiter::CMD_START_CUDA_SIMULATION:
-			applyParticleSelectionsToSystem();
-			m_bPause = false;
-			break;
-		*/
-		// --- NEW BLOCK
 	case TheArbiter::CMD_START_PARTICLE_SIMULATION:
-		if (!m_arbiter.isParticlesSelected()) break;
+		if (!m_arbiter.isParticleSimulationSelected()) break;
 
 		m_tesseract.enterWorkspace(
 			TheArbiter::WorkspaceId::PARTICLE_SIMULATION
@@ -2089,8 +2253,6 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 
 		if (!m_tesseract.startPSWorkspace())
 			break;
-
-		m_displayMode = EuclidRenderer::PARTICLE_SPHERES;
 
 		if (m_renderer) {
 			m_renderer->setGridMode3D();
@@ -2110,7 +2272,7 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 			CameraProcessor::CAM_SINGLE_PARTICLE_ORBIT_CLOSE
 		);
 		break;
-		// --- NEW BLOCK
+
 	case TheArbiter::CMD_PARTICLE_CONFIG_CHANGED:
 	case TheArbiter::CMD_PARTICLE_RADIUS_CHANGED:
 	case TheArbiter::CMD_PARTICLE_RENDER_MODE_CHANGED:
@@ -2146,8 +2308,8 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 	}
 
 	bool menuContextChanged =
-		(previousLayer != m_arbiter.getAppLayer()) ||
-		(previousGrid != m_arbiter.getGridSelection()) ||
+		(previousLayer != m_arbiter.getApplicationLayer()) ||
+		(previousWorkspace != m_arbiter.getSelectedWorkspace()) ||
 		(previousSubLayer != m_arbiter.getSingleParticleSubLayer());
 
 	if (menuContextChanged || result.rebuildMenu) {
@@ -2156,13 +2318,6 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 
 	if (result.requestRedraw) {
 		glutPostRedisplay();
-	}
-}
-void EuclidEngine::onSpecial(int key, int x, int y) {
-	if (isObjExportModalActive()) return;
-
-	if (m_displaySliders && m_params) {
-		m_params->Special(key, x, y);
 	}
 }
 void EuclidEngine::onIdle() {
@@ -2176,44 +2331,9 @@ void EuclidEngine::onClose() {
 	glutLeaveMainLoop();
 }
 
-void EuclidEngine::classifyMarchingCubesOnly() {
-	if (!m_marchingCubes) {
-		initMarchingCubes();
-	}
-
-	if (!m_marchingCubes) {
-		printf("[EuclidEngine] MC classify skipped: MarchingCubes unavailable.\n");
-		return;
-	}
-
-	if (!m_tesseract.hasVolume()) {
-		initVolumeField();
-	}
-
-	if (!m_tesseract.hasVolume()) {
-		printf("[EuclidEngine] MC classify skipped: volume unavailable.\n");
-		return;
-	}
-
-	if (m_tesseract.isVolumeDirty()) {
-		regenerateVolumeField();
-	}
-
-	float* dVolume = m_tesseract.getVolume();
-
-	if (!dVolume) {
-		printf("[EuclidEngine] MC classify skipped: null volume pointer.\n");
-		return;
-	}
-
-	m_marchingCubes->classifyOnly(dVolume, kMarchingCubesIsoValue);
-
-	printf(
-		"[EuclidEngine] MC classify checkpoint: activeVoxels=%u, totalVerts=%u\n",
-		m_marchingCubes->getActiveVoxelCount(),
-		m_marchingCubes->getTotalVertexCount()
-	);
-}
+// =============================================================================
+// MARCHING CUBES / OBJ EXPORT PIPELINE
+// =============================================================================
 void EuclidEngine::extractMarchingCubesMesh() {
 	if (!m_marchingCubes) {
 		initMarchingCubes();
@@ -2249,22 +2369,19 @@ void EuclidEngine::extractMarchingCubesMesh() {
 		kMarchingCubesIsoValue
 	);
 
-	m_mcMeshGenerated =
+	const bool meshGenerated =
 		m_marchingCubes->hasTriangleData();
-
-	m_mcRevealAnimating = m_mcMeshGenerated;
-	m_mcRevealT = 0.0f;
 
 	printf(
 		"[EuclidEngine] MC extract complete: verts=%u tris=%u valid=%s\n",
 		m_marchingCubes->getTotalVertexCount(),
 		m_marchingCubes->getGeneratedTriangleCount(),
-		m_mcMeshGenerated ? "YES" : "NO"
+		meshGenerated ? "YES" : "NO"
 	);
 }
 void EuclidEngine::exportCurrentMeshOBJ() {
 	if (isObjExportWorking()) return;
-	
+
 	m_objExportPanel =
 		ViewPort::ObjExportPanelData{};
 
@@ -2361,9 +2478,9 @@ void EuclidEngine::advanceObjExportJob() {
 	// ---------------------------------------------------------
 	if (m_objExportPanel.mode == ViewPort::ObjExportPanelMode::COMPLETE) {
 
-		if (now >= m_objExportCompleteUntilMs) 
+		if (now >= m_objExportCompleteUntilMs)
 			closeObjExportPanel();
-		
+
 		return;
 	}
 
@@ -2394,9 +2511,9 @@ void EuclidEngine::advanceObjExportJob() {
 		const std::future_status status =
 			m_objExportFuture.wait_for(milliseconds(0));
 
-		if (status != future_status::ready) 
+		if (status != future_status::ready)
 			return;
-	
+
 		const bool succeeded =
 			m_objExportFuture.get();
 
@@ -2430,7 +2547,7 @@ void EuclidEngine::advanceObjExportJob() {
 	}
 
 	if (now < m_objExportNextStepMs) return;
-	
+
 	char line[512];
 
 	switch (m_objExportStage) {
@@ -2644,7 +2761,7 @@ void EuclidEngine::advanceObjExportJob() {
 				m_objExportPath;
 
 			m_objExportFuture = async(
-				launch::async, 
+				launch::async,
 				[marchingCubes, path]() {
 					return marchingCubes->exportOBJ(path.c_str(), true);
 				}

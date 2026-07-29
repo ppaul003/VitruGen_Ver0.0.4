@@ -28,7 +28,12 @@ struct ParticleProxy3D {
 
 class ParticleSystem {
 public:
-	ParticleSystem(uint numParticles, uint3 gridSize);
+	ParticleSystem(
+		uint numParticles,
+		uint3 gridSize,
+		bool bUseOpenGL
+	);
+
 	~ParticleSystem();
 
 	enum ParticleConfig {
@@ -83,12 +88,22 @@ public:
 	void setCollideShear(float x) { m_params.shear = x; }
 	void setCollideAttraction(float x) { m_params.attraction = x; }
 	void setSimBoundary(float x) { m_params.boundary = x; }
-	
+
 	void* getCudaPosVBO() const { return (void*)m_cudaPosVBO; }
 	void* getCudaColorVBO() const { return (void*)m_cudaColorVBO; }
 
 	ParticleProxy3D getSingleParticleProxy(uint index = 0);
 	ParticleProxy3D getActiveParticle() { return getSingleParticleProxy(0); }
+
+	uint addSphere(
+		uint start,
+		const float* position,
+		const float* velocity,
+		int latticeRadius,
+		float spacing
+	);
+
+
 
 protected:
 	ParticleSystem() {}
@@ -146,7 +161,7 @@ protected:
 
 	SimParams m_params;
 	ParticleClass* m_particleClass;
-	
+
 	float4 m_uniformParticleColor{ 1.0f, 0.05f, 0.0f, 1.0f };
 };
 

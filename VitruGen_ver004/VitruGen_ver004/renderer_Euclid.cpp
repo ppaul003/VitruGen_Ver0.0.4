@@ -94,7 +94,7 @@ static int getOffsetGridMajorEvery(float normalizedIncrement) {
     }
 
     const int majorEvery =
-        static_cast<int>(lroundf(normalizedMajorStep / 
+        static_cast<int>(lroundf(normalizedMajorStep /
             normalizedIncrement));
 
     return std::max(1, majorEvery);
@@ -264,19 +264,26 @@ void EuclidRenderer::setVertexBuffer(unsigned int vbo, int numParticles) {
     m_vbo = vbo;
     m_numParticles = numParticles;
 }
-void EuclidRenderer::setRadius(float* r, int numParticles) {
+void EuclidRenderer::setRadius(
+    float* radiusData,
+    int numParticles) {
+
     assert(m_bInitialized);
 
-    if (m_radCapacity != numParticles) {
+    if (!radiusData || numParticles <= 0) {
+        m_numParticles = 0;
+        return;
+    }
+
+    if (m_radCapacity < numParticles) {
+
         delete[] m_rad;
+
         m_rad = new float[numParticles];
         m_radCapacity = numParticles;
     }
 
-    for (int i = 0; i < numParticles; i++) {
-        m_rad[i] = r[i];
-    }
-
+    copy_n(radiusData, numParticles, m_rad);
     m_numParticles = numParticles;
 }
 
@@ -459,7 +466,7 @@ void EuclidRenderer::drawVolumeAxes(
     // Scaling follows the effective local object basis:
     //
     //     effective basis =
-    //         baked basis × editable rotation
+    //         baked basis ï¿½ editable rotation
     // -----------------------------------------------------------------
     if (scaleGuide) {
 
@@ -672,7 +679,7 @@ void EuclidRenderer::drawVolumeBoundaryCage(
 
     majorEvery = std::max(1, majorEvery);
 
-    const float halfExtent = 
+    const float halfExtent =
         0.5f * static_cast<float>(volumeDim);
 
     // For a 128^3 volume:
@@ -709,9 +716,9 @@ void EuclidRenderer::drawVolumeBoundaryCage(
             // Major boundary-grid line:
             // brighter greenish cyan.
             glColor4f(
-                majorColor.r, 
-                majorColor.g, 
-                majorColor.b, 
+                majorColor.r,
+                majorColor.g,
+                majorColor.b,
                 majorColor.a * alphaScale
             );
         }
@@ -878,7 +885,7 @@ void EuclidRenderer::drawVolumeBoundaryContactPatches(
     if (boundaryMask.size() < requiredEntries) return;
 
     const unsigned int patchesPerFace =
-        static_cast<unsigned int>(volumeDim) * 
+        static_cast<unsigned int>(volumeDim) *
         static_cast<unsigned int>(volumeDim);
 
     if (boundaryFaceStride < patchesPerFace) return;
@@ -902,7 +909,7 @@ void EuclidRenderer::drawVolumeBoundaryContactPatches(
     glBegin(GL_LINES);
 
     for (unsigned int face = 0; face < kFaceCount; face++) {
-        
+
         const size_t faceBase =
             static_cast<size_t>(face) *
             static_cast<size_t>(boundaryFaceStride);
@@ -942,7 +949,7 @@ void EuclidRenderer::drawVolumeBoundaryContactPatches(
                 b = vec3(negativeWall, u1, v0);
                 c = vec3(negativeWall, u1, v1);
                 d = vec3(negativeWall, u0, v1);
-                
+
                 break;
 
             case 1:
@@ -1002,12 +1009,12 @@ void EuclidRenderer::drawVolumeBoundaryContactPatches(
             // Square edge A -> B.
             glVertex3f(a.x, a.y, a.z);
             glVertex3f(b.x, b.y, b.z);
-           
+
 
             // B -> C.
             glVertex3f(b.x, b.y, b.z);
             glVertex3f(c.x, c.y, c.z);
-     
+
 
             // C -> D.
             glVertex3f(c.x, c.y, c.z);
@@ -1151,10 +1158,10 @@ void EuclidRenderer::drawVolumeOffsetGridPlane(
     //
     //     minor line every 0.01
     //     major line every 0.10
-    const int majorEvery = 
+    const int majorEvery =
         getOffsetGridMajorEvery(normalizedIncrement);
 
-    const bool drawXZ = 
+    const bool drawXZ =
         offsetAxis == VOLUME_OFFSET_AXIS_Z;
 
     glLineWidth(1.0f);
@@ -1165,7 +1172,7 @@ void EuclidRenderer::drawVolumeOffsetGridPlane(
         const float position =
             static_cast<float>(i) * minorStep;
 
-        if (position < -halfExtent || position > halfExtent) 
+        if (position < -halfExtent || position > halfExtent)
             continue;
 
         const bool major = (i % majorEvery) == 0;
@@ -2180,7 +2187,7 @@ void EuclidRenderer::clearParticleMeshOBJ() {
     m_particleMeshMin = vec3(0.0f);
     m_particleMeshMax = vec3(0.0f);
     m_particleMeshCenter = vec3(0.0f);
-        
+
     m_particleMeshMaxExtent = 1.0f;
     m_particleMeshLoaded = false;
     m_particleMeshPath.clear();
@@ -2189,7 +2196,7 @@ bool EuclidRenderer::uploadParticleMeshVBO() {
     m_particleMeshVertexCount = 0;
 
     if (m_particleMeshVerts.empty()) return false;
-    
+
 
     if (m_particleMeshNorms.size() !=
         m_particleMeshVerts.size()) {
@@ -2380,7 +2387,7 @@ void EuclidRenderer::displayVolumeInjectionVoxelPreview(
 
     glTranslatef(0.0f, 0.0f, -zs);
 
-    glRotatef(phiRad * 180.0f / 
+    glRotatef(phiRad * 180.0f /
         static_cast<float>(M_PI),
         1.0f, 0.0f, 0.0f);
 
@@ -2422,7 +2429,7 @@ void EuclidRenderer::displayVolumeInjectionVoxelPreview(
     //     center cage becomes orange to mark BASE anchor.
     // ---------------------------------------------------------
     if (hasInjectionVoxel) {
-        
+
         drawVolumeBoundaryCage(
             volumeDim,
             majorEvery,
@@ -2446,11 +2453,11 @@ void EuclidRenderer::displayVolumeInjectionVoxelPreview(
     // Selected neighboring injection chamber.
     // ---------------------------------------------------------
     if (hasInjectionVoxel) {
-        
-        const float chamberStep = 
+
+        const float chamberStep =
             static_cast<float>(volumeDim);
 
-        const float targetX = 
+        const float targetX =
             static_cast<float>(injectionDx) * chamberStep;
 
         const float targetY =
@@ -2561,9 +2568,9 @@ void EuclidRenderer::displayVolumeInjectionVoxelPreview(
 
         glLineWidth(2.5f);
         glColor4f(
-            lastRailColor.r, 
-            lastRailColor.g, 
-            lastRailColor.b, 
+            lastRailColor.r,
+            lastRailColor.g,
+            lastRailColor.b,
             lastRailColor.a
         );
 
@@ -2613,7 +2620,7 @@ void EuclidRenderer::displayVolumeInjectionEditTargetPreview(
     if (!hasInjectionVoxel) return;
 
 
-    alphaScale = 
+    alphaScale =
         std::max(0.0f, std::min(1.0f, alphaScale));
 
     glViewport(0, 0, m_window_w, m_window_h);
@@ -2762,7 +2769,7 @@ void EuclidRenderer::displayVolumeInjectionEditTargetPreview(
         ? vec4(0.38f, 1.00f, 0.84f, 0.95f)
         : vec4(1.00f, 0.95f, 0.72f, 0.95f);
 
-    const float focusTick = 
+    const float focusTick =
         static_cast<float>(volumeDim) * 0.055f;
 
     glLineWidth(4.0f);
@@ -3019,7 +3026,7 @@ void EuclidRenderer::displayVolumeInjectionRailMarker(
 
     // ---------------------------------------------------------
     // Moving rail marker.
-    // 
+    //
     // Brush local-offset tether.
     //
     // White mini-cross = rail-positioned brush base.

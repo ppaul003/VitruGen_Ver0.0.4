@@ -103,7 +103,6 @@ public:
 		const glm::vec3& cellSize
 	);
 
-
 	DisplayMode getDisplayMode() const { return m_displayMode; }
 
 	void display(DisplayMode mode = PARTICLE_POINTS);
@@ -171,7 +170,7 @@ public:
 		float brushOffsetX = 0.0f,
 		float brushOffsetY = 0.0f,
 		float brushOffsetZ = 0.0f
-		
+
 	);
 	void displayVolumeOffsetGrid(
 		float thetaRad,
@@ -316,7 +315,7 @@ protected:
 
 	bool uploadParticleMeshVBO();
 	void computeParticleMeshBounds();
-	
+
 
 private:
 	static constexpr float kWorkspaceBoxSize = 4.0f;

@@ -122,22 +122,31 @@ struct integrate_functor {
 /// <PARTICLE SYSTEM HELPERS>
 ///-----------------------------------------------------------------------------------------
 // calculate position in uniform grid
-__device__ int3 calcGridPos(float3 p) {
+__device__
+int3 calcGridPos(float3 p) {
 	int3 gridPos;
 	gridPos.x = floor((p.x - cSimParams.worldOrigin.x) / cSimParams.cellSize.x);
 	gridPos.y = floor((p.y - cSimParams.worldOrigin.y) / cSimParams.cellSize.y);
 	gridPos.z = floor((p.z - cSimParams.worldOrigin.z) / cSimParams.cellSize.z);
 	return gridPos;
 }
+
 // calculate address in grid from position (clamping to edges)
-__device__ uint calcGridHash(int3 gridPos) {
+__device__
+uint calcGridHash(int3 gridPos) {
 	gridPos.x = gridPos.x & (cSimParams.gridSize.x - 1); // wrap grid, assumes size is power of 2
 	gridPos.y = gridPos.y & (cSimParams.gridSize.y - 1);
 	gridPos.z = gridPos.z & (cSimParams.gridSize.z - 1);
 	return ((gridPos.z * cSimParams.gridSize.y) * cSimParams.gridSize.x) + (gridPos.y * cSimParams.gridSize.x) + gridPos.x;
 }
+
 // calculate grid hash value for each particle
-__device__ float3 bodyBodyInteractions(float4 bi, float4 bj, float3 ai) {
+__device__
+float3 bodyBodyInteractions(
+	float4 bi,
+	float4 bj,
+	float3 ai) {
+
 	float3 posi = make_float3(bi);
 	float3 posj = make_float3(bj);
 
@@ -168,7 +177,8 @@ __device__ float3 tile_calculation(float4 myPosition, float3 acc, uint tile, uin
 
 	return acc;
 }
-__device__ float3 collideSpheres(
+__device__
+float3 collideSpheres(
 	float4 posA,
 	float4 posB,
 	float4 velA,
@@ -204,7 +214,17 @@ __device__ float3 collideSpheres(
 
 	return force;
 }
-__device__ float3 collideCell(int3 gridPos, uint index, float4 pos, float4 vel, float4* oldPos, float4* oldVel, uint* cellStart, uint* cellEnd) {
+__device__
+float3 collideCell(
+	int3 gridPos,
+	uint index,
+	float4 pos,
+	float4 vel,
+	float4* oldPos,
+	float4* oldVel,
+	uint* cellStart,
+	uint* cellEnd) {
+
 	uint gridHash = calcGridHash(gridPos);
 	uint startIndex = FETCH(cellStart, gridHash);
 
@@ -216,6 +236,7 @@ __device__ float3 collideCell(int3 gridPos, uint index, float4 pos, float4 vel, 
 
 		for (int j = startIndex; j < endIndex; j++) {
 			if (j != index) { // check not colliding with self
+
 				float4 pos2 = FETCH(oldPos, j);
 				float4 vel2 = FETCH(oldVel, j);
 
@@ -417,7 +438,8 @@ float sdfRectFrustumZApprox(
 	return outside + inside;
 }
 
-__device__ float funcSDFLocal(
+__device__
+float funcSDFLocal(
 	float dx, float dy, float dz,
 	float id, float4 param) {
 	// id 0: ellipsoid / sphere
@@ -507,8 +529,8 @@ __device__ float funcSDFLocal(
 	);
 }
 
-__device__ float3
-worldPointToObjectLocalBasis(
+__device__
+float3 worldPointToObjectLocalBasis(
 	float3 worldPoint,
 	float3 basisX,
 	float3 basisY,
@@ -532,7 +554,8 @@ worldPointToObjectLocalBasis(
 		worldPoint.z * basisZ.z
 	);
 }
-__device__ float funcSDFOffset(
+__device__
+float funcSDFOffset(
 	int c, int r, int s,
 	int id, int3 volSize,
 	float4 param,
@@ -1137,8 +1160,15 @@ void calcHashD(
 }
 
 __global__
-void reorderDataAndFindCellStartD(uint* cellStart, uint* cellEnd, float4* sortedPos, float4* sortedVel, // outputs
-	uint* gridParticleHash, uint* gridParticleIndex, float4* oldPos, float4* oldVel, // inputs
+void reorderDataAndFindCellStartD(
+	uint* cellStart,
+	uint* cellEnd,
+	float4* sortedPos,
+	float4* sortedVel,
+	uint* gridParticleHash,
+	uint* gridParticleIndex,
+	float4* oldPos,
+	float4* oldVel,
 	uint numParticles) {
 
 	extern __shared__ uint sharedHash[]; // blockSize + 1 elements
@@ -1187,7 +1217,14 @@ void reorderDataAndFindCellStartD(uint* cellStart, uint* cellEnd, float4* sorted
 }
 
 __global__
-void collideD(float4* newVel, float4* oldPos, float4* oldVel, uint* gridParticleIndex, uint* cellStart, uint* cellEnd, uint numParticles) {
+void collideD(
+	float4* newVel,
+	float4* oldPos,
+	float4* oldVel,
+	uint* gridParticleIndex,
+	uint* cellStart,
+	uint* cellEnd,
+	uint numParticles) {
 
 	const uint index = blockIdx.x * blockDim.x + threadIdx.x;
 	if (index >= numParticles) return;
@@ -1206,8 +1243,21 @@ void collideD(float4* newVel, float4* oldPos, float4* oldVel, uint* gridParticle
 	for (int z = -1; z <= 1; z++) {
 		for (int y = -1; y <= 1; y++) {
 			for (int x = -1; x <= 1; x++) {
-				int3 neighbourPos = gridPos + make_int3(x, y, z);
-				force += collideCell(neighbourPos, index, pos, vel, oldPos, oldVel, cellStart, cellEnd);
+
+				int3 neighbourPos =
+					gridPos + make_int3(x, y, z);
+
+				force +=
+					collideCell(
+						neighbourPos,
+						index,
+						pos,
+						vel,
+						oldPos,
+						oldVel,
+						cellStart,
+						cellEnd
+					);
 			}
 		}
 	}
@@ -1722,7 +1772,7 @@ void renderKernelOverlay(
 	int method,
 	float zs,
 	float theta,
-	float phi, 
+	float phi,
 	float threshold,
 	float dist,
 	float tintR,
@@ -1733,7 +1783,7 @@ void renderKernelOverlay(
 	const uint c = blockIdx.x * blockDim.x + threadIdx.x;
 	const uint r = blockIdx.y * blockDim.y + threadIdx.y;
 
-	if (c >= static_cast<uint>(w) || 
+	if (c >= static_cast<uint>(w) ||
 		r >= static_cast<uint>(h))
 		return;
 
@@ -1946,7 +1996,7 @@ void composeVolumePrimitiveKernel(
 		static_cast<int>(c),
 		static_cast<int>(r),
 		static_cast<int>(s),
-		id, volSize, param, 
+		id, volSize, param,
 		basisX, basisY, basisZ,
 		offset
 	);
@@ -1969,8 +2019,8 @@ __global__
 void composeVolumeFieldsKernel(
 	const float* d_base,
 	const float* d_brush,
-	float* d_out, 
-	int3 volSize, 
+	float* d_out,
+	int3 volSize,
 	int op) {
 
 	const uint c = blockIdx.x * blockDim.x + threadIdx.x;
@@ -2025,9 +2075,9 @@ void transformVolumeFieldKernel(
 		return;
 	}
 
-	const uint index = 
-		c + 
-		r * static_cast<uint>(volSize.x) + 
+	const uint index =
+		c +
+		r * static_cast<uint>(volSize.x) +
 		s * static_cast<uint>(volSize.x * volSize.y);
 
 	const float3 worldPoint = make_float3(
@@ -2084,7 +2134,7 @@ void transformVolumeFieldKernel(
 __device__ __forceinline__
 uint volumeBoundaryLinearIndex(int x, int y, int z, int3 volSize) {
 
-	return static_cast<uint>(x) + 
+	return static_cast<uint>(x) +
 		static_cast<uint>(y) * static_cast<uint>(volSize.x) +
 		static_cast<uint>(z) * static_cast<uint>(volSize.x * volSize.y);
 }
@@ -2133,7 +2183,7 @@ int2 volumeBoundaryFaceDimensions(int face, int3 volSize) {
 
 
 __device__ __forceinline__
-uint volumeBoundarySampleIndex(int face,int u,int v, 
+uint volumeBoundarySampleIndex(int face,int u,int v,
 	bool interiorSample, int3 volSize) {
 
 	int x = 0;
@@ -2331,12 +2381,12 @@ void classifyVolumeBoundaryKernel(
 	const uint face = slot / faceStride;
 	const uint localPatch = slot - face * faceStride;
 
-	const int2 faceDimensions = 
+	const int2 faceDimensions =
 		volumeBoundaryFaceDimensions(static_cast<int>(face), volSize);
 
 	const uint validPatchCount =
 		static_cast<uint>(faceDimensions.x * faceDimensions.y);
-	
+
 
 	// Non-cubic volumes use the largest face as the common stride.
 	// Any unused slots belonging to smaller faces remain explicitly safe.
@@ -2347,8 +2397,8 @@ void classifyVolumeBoundaryKernel(
 
 	const int u =
 		static_cast<int>(localPatch % static_cast<uint>(faceDimensions.x));
-	
-	const int v = 
+
+	const int v =
 		static_cast<int>(localPatch / static_cast<uint>(faceDimensions.x));
 
 
@@ -2394,7 +2444,7 @@ void classifyVolumeBoundaryKernel(
 
 		const float boundaryDistance = d_volume[boundaryIndex];
 		const float interiorDistance = d_volume[interiorIndex];
-		
+
 		if (volumeBoundaryPairIsUnsafe(
 			boundaryDistance,
 			interiorDistance,

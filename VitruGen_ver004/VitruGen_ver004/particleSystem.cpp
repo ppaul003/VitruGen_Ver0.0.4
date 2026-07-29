@@ -21,7 +21,10 @@
 
 using namespace std;
 
-ParticleSystem::ParticleSystem(uint numParticles, uint3 gridSize) :
+ParticleSystem::ParticleSystem(
+	uint numParticles,
+	uint3 gridSize,
+	bool bUseOpenGL) :
 	m_bInitialized(false),
 	m_numParticles(numParticles),
 	m_numGridCells(0),
@@ -290,17 +293,17 @@ getSingleParticle(ParticleArray array, uint index) {
 	if (!m_bInitialized || index >= m_numParticles) {
 		return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 	}
-	
-	const unsigned int memSize = 
+
+	const unsigned int memSize =
 		sizeof(float) * 4 * m_numParticles;
 
 	switch (array) {
 	default:
 	case POSITION:
 		copyArrayFromDevice(
-			m_hPos, 
-			nullptr, 
-			&m_cuda_posvbo_resource, 
+			m_hPos,
+			nullptr,
+			&m_cuda_posvbo_resource,
 			memSize
 		);
 
@@ -316,9 +319,9 @@ getSingleParticle(ParticleArray array, uint index) {
 	case VELOCITY:
 
 		copyArrayFromDevice(
-			m_hVel, 
-			m_dVel, 
-			nullptr, 
+			m_hVel,
+			m_dVel,
+			nullptr,
 			memSize
 		);
 
@@ -328,7 +331,7 @@ getSingleParticle(ParticleArray array, uint index) {
 			m_hVel[index * 4 + 2],
 			m_hVel[index * 4 + 3]
 		);
-		
+
 
 		break;
 
@@ -507,9 +510,8 @@ void ParticleSystem::reset(ParticleConfig config) {
 ParticleProxy3D ParticleSystem::getSingleParticleProxy(uint index) {
 	ParticleProxy3D p;
 
-	if (!m_bInitialized || index >= m_numParticles) {
-		return p;
-	}
+	if (!m_bInitialized ||
+		index >= m_numParticles) return p;
 
 	p.position =
 		getSingleParticle(POSITION, index);
@@ -528,4 +530,106 @@ ParticleProxy3D ParticleSystem::getSingleParticleProxy(uint index) {
 	p.objectId = 0;
 
 	return p;
+}
+
+uint ParticleSystem::addSphere(
+	uint start,
+	const float* position,
+	const float* velocity,
+	int latticeRadius,
+	float spacing) {
+
+	if (!m_bInitialized ||
+		!position ||
+		!velocity ||
+		start >= m_numParticles ||
+		latticeRadius < 0 ||
+		spacing <= 0.0f) return 0;
+
+	uint index = start;
+
+	const float jitter =
+		m_params.particleRadius * 0.01f;
+
+	// A lattice radius of r extends approximately r spacing units
+	// outward from the supplied center.
+
+	const float sphereRadius =
+		spacing * static_cast<float>(latticeRadius);
+
+	for (int z = -latticeRadius;
+		z <= latticeRadius && index < m_numParticles; z++) {
+
+		for (int y = -latticeRadius;
+			y <= latticeRadius && index < m_numParticles; y++) {
+
+			for (int x = -latticeRadius;
+				x <= latticeRadius && index < m_numParticles; x++) {
+
+				const float dx = static_cast<float>(x) * spacing;
+				const float dy = static_cast<float>(y) * spacing;
+				const float dz = static_cast<float>(z) * spacing;
+
+				const float distance =
+					sqrtf(dx * dx + dy * dy + dz * dz);
+
+				if (distance > sphereRadius) continue;
+
+				const uint base = index * 4;
+
+				m_hPos[base + 0] =
+					position[0] + dx + (frand() * 2.0f - 1.0f) * jitter;
+
+				m_hPos[base + 1] =
+					position[1] + dy + (frand() * 2.0f - 1.0f) * jitter;
+
+				m_hPos[base + 2] =
+					position[2] + dz + (frand() * 2.0f - 1.0f) * jitter;
+				// Current VitruGen position convention.
+				m_hPos[base + 3] = 1.0f; // mass
+
+				m_hVel[base + 0] = velocity[0];
+				m_hVel[base + 1] = velocity[1];
+				m_hVel[base + 2] = velocity[2];
+				// Current VitruGen radius convention.
+				m_hVel[base + 3] =
+					velocity[3] > 0.0f
+					? velocity[3]
+					: m_params.particleRadius;
+
+				m_hAcc[base + 0] = 0.0f;
+				m_hAcc[base + 1] = 0.0f;
+				m_hAcc[base + 2] = 0.0f;
+				m_hAcc[base + 3] = 0.0f;
+
+				index++;
+			}
+		}
+	}
+
+	const uint writtenCount = index - start;
+	if (writtenCount == 0) return 0;
+
+	setArray(
+		POSITION,
+		m_hPos + start * 4,
+		static_cast<int>(start),
+		static_cast<int>(writtenCount)
+	);
+
+	setArray(
+		VELOCITY,
+		m_hVel + start * 4,
+		static_cast<int>(start),
+		static_cast<int>(writtenCount)
+	);
+
+	setArray(
+		ACCELERATION,
+		m_hAcc + start * 4,
+		static_cast<int>(start),
+		static_cast<int>(writtenCount)
+	);
+
+	return writtenCount;
 }

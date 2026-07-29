@@ -3,10 +3,9 @@
 
 #include "Interactions.h"
 
-#include <GL/freeglut.h>
-
 class TheArbiter {
 public:
+	// --- CANONICAL APPLICATION NAVIGATION ---
 	enum class ApplicationLayer {
 		GLOBAL_SHELL = 0,
 		DOMAIN_SELECTION,
@@ -76,27 +75,12 @@ public:
 	static const WorkspaceDescriptor& describeWorkspace(WorkspaceId workspace);
 	static WorkspaceDomain getWorkspaceDomain(WorkspaceId workspace);
 	static WorkspaceAvailability getWorkspaceAvailability(WorkspaceId workspace);
-	static const char* getWorkspaceName(WorkspaceId workspace);
 	static bool workspaceBelongsToDomain(
 		WorkspaceId workspace,
 		WorkspaceDomain domain
 	);
 
-	enum AppLayer {
-		LAYER_MENU = 0,
-		LAYER_ENVIRONMENT_CONFIGURATION = 1,
-		LAYER_3D_GRID_MODE_CONFIGURATION = 2,
-		LAYER_SIMULATION_RUN = 3
-	};
-	enum EnvironmentSelection {
-		ENV_IDLE = 0,
-		ENV_3D_GRID = 1
-	};
-	enum GridSelection {
-		GRID_GRAPH_3D = 0,
-		GRID_SINGLE_PARTICLE = 1,
-		GRID_PARTICLES_3D = 2
-	};
+	// --- PARTICLE WORKSPACE CONFIGURATION ---
 	enum ParticleColorSelection {
 		PARTICLE_COLOR_RED = 0,
 		PARTICLE_COLOR_BLUE = 1,
@@ -109,8 +93,8 @@ public:
 	enum ParticleConfigList {
 		PARTICLE_LIST_COLOR = 0,
 
-		// In SINGLE_PARTICLE mode, list 2 means radius.
-		// In PARTICLES_3D mode, list 2 still acts as reset mode.
+		// In SINGLE_PARTICLE_MCAD, list 2 means radius.
+		// In PARTICLE_SIM mode, list 2 still acts as reset mode.
 		PARTICLE_LIST_RADIUS = 1,
 		PARTICLE_LIST_RESET = PARTICLE_LIST_RADIUS,
 
@@ -118,16 +102,7 @@ public:
 		PARTICLE_LIST_RUN = 3,
 		PARTICLE_LIST_COUNT = 4
 	};
-	enum ObjectSelection {
-		OBJECT_SPHERE = 0,
-		OBJECT_TORUS = 1,
-		OBJECT_BLOCK = 2
-	};
-	enum RenderMethod {
-		METHOD_VOLUME_RENDER = 0,
-		METHOD_SLICE = 1,
-		METHOD_RAYCAST = 2
-	};
+	// --- SINGLE_PARTICLE_MCAD WORKFLOW ---
 	enum ObjectEditMode {
 		EDIT_SCALE_WHOLE = 0,
 		EDIT_SCALE_Z,
@@ -299,7 +274,6 @@ public:
 		CMD_STEP_SIMULATION,
 		CMD_START_PARTICLE_SIMULATION,
 		CMD_PLACE_SINGLE_PARTICLE,
-		CMD_SELECT_PARTICLE,
 		CMD_PARTICLE_CONFIG_CHANGED,
 		CMD_PARTICLE_RADIUS_CHANGED,
 		CMD_PARTICLE_RENDER_MODE_CHANGED,
@@ -353,17 +327,10 @@ public:
 		bool rebuildMenu = false;
 
 		bool enterMarchingCubes = false;
-		bool marchingCubesPlaceholderAction = false;
-		bool outputObjectPlaceholder = false;
 		bool exportObjRequested = false;
-		bool particleConfigChanged = false;
-		bool particleRadiusChanged = false;
-		bool particleRenderModeChanged = false;
-		bool goToSubLayer0 = false;
 
-		// New volume CAD actions
+		// Volume CAD action.
 		bool commitVolumeFuse = false;
-		bool commitVolumeCut = false;
 	};
 
 	static constexpr float kParticleWorldBoundary = 1.0f;
@@ -375,8 +342,9 @@ public:
 	static constexpr float kParticleRadiusStep = (kParticleRadiusMax - kParticleRadiusMin) / 16.0f;
 
 	TheArbiter();
-	~TheArbiter();
+	~TheArbiter() = default;
 
+	// --- SINGLE_PARTICLE_MCAD STATE QUERIES ---
 	ObjectEditMode getObjectEditMode() const { return m_objectEditMode; }
 	ObjectRotationMode getObjectRotationMode() const { return m_objectRotationMode; }
 	ObjectTransformMode getObjectTransformMode() const { return m_objectTransformMode; }
@@ -401,14 +369,10 @@ public:
 	float getOffsetX() const { return getActiveVolumeState().offsetX; }
 	float getOffsetY() const { return getActiveVolumeState().offsetY; }
 	float getOffsetZ() const { return getActiveVolumeState().offsetZ; }
-	float getOffsetDistance() const;
-	float getInjectionT() const { return m_injectionRailT; }
 	float getInjectionRailT() const { return m_injectionRailT; }
-	float getVolumePrimitiveScale() const { return getVolumeScaleWhole(); }
 	float getParticleRadius() const { return m_particleRadius; }
 
-	float dotBasisVector(const BasisVector& a, const BasisVector& b) const { return a.x * b.x + a.y * b.y + a.z * b.z; }
-
+	// --- COMMAND / MENU ENTRY POINTS ---
 	ArbiterResult processKeyboard(const KeyboardInput::KeyEvent& event);
 	ArbiterResult setVolumeAssemblyNode(VolumeAssemblyNode node);
 	ArbiterResult setOffsetVectorSelection(OffsetVector vector);
@@ -420,77 +384,25 @@ public:
 	ArbiterResult activateMarchingCubesPanelItemFromMenu(MarchingCubesPanelItem item);
 	ArbiterResult trySelectParticleAtCurrentSlice();
 
-	const NavigationState& getNavigationState() const { return m_navigation; }
+	// --- CANONICAL NAVIGATION QUERIES ---
 	ApplicationLayer getApplicationLayer() const { return m_navigation.layer; }
-	GlobalShellSelection getGlobalShellSelection() const {return m_navigation.globalShellSelection; }
 	WorkspaceDomain getSelectedDomain() const { return m_navigation.selectedDomain; }
 	WorkspaceId getSelectedWorkspace() const;
 	WorkspaceId getWorkspaceSelection(WorkspaceDomain domain) const;
 
-	// Temporary Gate 1 compatibility adapters. These preserve the public
-	// contract used by EuclidEngine and ViewPort while NavigationState becomes
-	// the sole mutable navigation model.
-	AppLayer getAppLayer() const;
-	EnvironmentSelection getEnvironmentSelection() const;
-	GridSelection getGridSelection() const;
 	ParticleColorSelection getParticleColorSelection() const { return m_particleColorSelection; }
 	ParticleResetMode getParticleResetMode() const { return m_particleResetMode; }
 	ParticleConfigList getActiveParticleConfigList() const { return m_activeParticleConfigList; }
 
 	VolumeAssemblyNode getVolumeAssemblyNode() const { return m_volumeAssemblyNode; }
-	VolumeInjectionVoxel getVolumeInjectionVoxel() const { return m_volumeInjectionVoxel; }
 	VolumeInjectionMode getVolumeInjectionMode() const { return m_volumeInjectionMode; }
-	VolumeEditTarget getVolumeEditTarget() const { return m_volumeEditTarget; }
 
 	SingleParticleSubLayer getSingleParticleSubLayer() const { return m_singleParticleSubLayer; }
 	VolumePrimitive getVolumePrimitiveSelection() const { return getActiveVolumeState().primitive; }
-	ParticleRenderMode getParticleRenderMode() const { return m_particleRenderMode; }
 
 	BasisVector normalizeBasisVector(const BasisVector& v) const;
 	BasisVector transformByBasis(const ObjectBasis& basis, const BasisVector& localVector) const;
 	BasisVector rotateLocalVectorXYZ(const BasisVector& vector, float pitchDeg, float yawDeg, float rollDeg) const;
-
-	BasisVector makeBasisVector(float x, float y, float z) const { return { x, y, z }; }
-	BasisVector addBasisVector(
-		const BasisVector& a,
-		const BasisVector& b) const {
-
-		return {
-			a.x + b.x,
-			a.y + b.y,
-			a.z + b.z
-		};
-	}
-	BasisVector subtractBasisVector(
-		const BasisVector& a,
-		const BasisVector& b) const {
-
-		return {
-			a.x - b.x,
-			a.y - b.y,
-			a.z - b.z
-		};
-	}
-	BasisVector multiplyBasisVector(
-		const BasisVector& v,
-		float scalar) const {
-
-		return {
-			v.x * scalar,
-			v.y * scalar,
-			v.z * scalar
-		};
-	}
-	BasisVector crossBasisVector(
-		const BasisVector& a,
-		const BasisVector& b) const {
-
-		return {
-			a.y * b.z - a.z * b.y,
-			a.z * b.x - a.x * b.z,
-			a.x * b.y - a.y * b.x
-		};
-	}
 
 	OffsetVector getOffsetVectorSelection() const { return m_offsetVectorSelection; }
 
@@ -499,12 +411,11 @@ public:
 	ObjectBasis getEffectiveObjectBasis() const;
 	ObjectBasis orthonormalizeBasis(const ObjectBasis& basis) const;
 	VolumePrimitive getResolvedVolumePrimitiveSelection() const;
-	
+
 	int getInjectionVoxelDX() const;
 	int getInjectionVoxelDY() const;
 	int getInjectionVoxelDZ() const;
 	int getActiveSubLayerPanelItem() const { return m_activeSubLayerPanelItem; }
-	int getInjectionVectorIndex() const { return static_cast<int>(m_offsetVectorSelection); }
 	int getWorkplaneSlice() const { return m_workplaneSlice; }
 	int getActiveSubLayerPanelItemCount() const;
 	int getRotationAngleIncrementDeg() const;
@@ -513,38 +424,23 @@ public:
 	bool isEnvironmentConfigLayer() const { return m_navigation.layer == ApplicationLayer::DOMAIN_SELECTION; }
 	bool isParticleConfigLayer() const { return m_navigation.layer == ApplicationLayer::WORKSPACE_CONFIGURATION; }
 	bool isSimulationRunLayer() const { return m_navigation.layer == ApplicationLayer::ACTIVE_WORKSPACE; }
-	bool is3DViewLayer() const { return !isMenuLayer(); }
 	bool isIdleSelected() const { return m_navigation.globalShellSelection == GlobalShellSelection::IDLE; }
-	bool is3DGridSelected() const { return m_navigation.globalShellSelection == GlobalShellSelection::WORKSPACE_DOMAINS; }
-	bool is3DVisualizationSelected() const { return is3DGridSelected(); }
+	bool isWorkspaceDomainsSelected() const { return m_navigation.globalShellSelection == GlobalShellSelection::WORKSPACE_DOMAINS; }
 
-	bool isGraph3DSelected() const { return getSelectedWorkspace() == WorkspaceId::GRAPH_3D; }
 	bool isSingleParticleSelected() const { return getSelectedWorkspace() == WorkspaceId::SINGLE_PARTICLE_MCAD;}
-	bool isLinkedParticlesSelected() const { return getSelectedWorkspace() == WorkspaceId::LINKED_PARTICLES_MCAD; }
 	bool isParticleSimulationSelected() const { return getSelectedWorkspace() == WorkspaceId::PARTICLE_SIMULATION; }
-	// Temporary compatibility adapter for existing engine code.
-	bool isParticlesSelected() const { return isParticleSimulationSelected(); }
-	bool isWorkParticleSelectSubLayer() const { return isShapeEditSubLayer(); }
-	bool isBaseVolumeSelected() const { return getVolumePrimitiveSelection() == VOLUME_PRIMITIVE_BASE; }
 	bool isVolumeBoundarySensorReady() const { return m_volumeBoundarySensorReady; }
 	bool isVolumeBoundarySafe() const { return m_volumeBoundarySensorReady && m_volumeBoundaryUnsafeCount == 0; }
 	bool isEditingInjectionVoxel0() const { return m_volumeEditTarget == VOLUME_EDIT_TARGET_VOXEL_0; }
 	bool isEditingInjectionVoxel1() const { return m_volumeEditTarget == VOLUME_EDIT_TARGET_VOXEL_1; }
-	bool isInjectionEditPanelActive() const { return m_volumeAssemblyNode == VOLUME_NODE_EDIT_OBJECT && hasInjectionVoxelSelected(); }
-
 	bool setVolumeBoundaryStatus(bool sensorReady, unsigned int unsafeCount);
-	
+
 	bool isSingleParticleReferenceSubLayer() const { return isSimulationRunLayer() && isSingleParticleSelected() && m_singleParticleSubLayer == SP_SUB_LAYER_REFERENCE; }
 	bool isShapeEditSubLayer() const { return isSimulationRunLayer() && isSingleParticleSelected() && m_singleParticleSubLayer == SP_SUB_LAYER_SHAPE_EDIT; }
 	bool isVolumeRenderSubLayer() const { return isSimulationRunLayer() && isSingleParticleSelected() && m_singleParticleSubLayer == SP_SUB_LAYER_VOLUME_RENDER; }
 	bool isMarchingCubesSubLayer() const { return isSimulationRunLayer() && isSingleParticleSelected() && m_singleParticleSubLayer == SP_SUB_LAYER_MARCHING_CUBES; }
 	bool isWorkplaneParticleSelectSubLayer() const { return isShapeEditSubLayer(); }
-	bool isParticleRenderDefault() const { return m_particleRenderMode == PARTICLE_RENDER_DEFAULT; }
 	bool isParticleRenderMesh() const { return m_particleRenderMode == PARTICLE_RENDER_MESH; }
-	bool isMcAnimationEnabled() const { return m_mcAnimationEnabled; }
-	bool isMcRenderingEnabled() const { return m_mcRenderingEnabled; }
-	bool isMcLightingEnabled() const { return m_mcLightingEnabled; }
-	bool isMcWireframeEnabled() const { return m_mcWireframeEnabled; }
 	bool isSubLayerPanelOpen() const { return m_subLayerPanelOpen; }
 	bool isSubLayerPanelEligible() const { return isVolumeRenderSubLayer() || isMarchingCubesSubLayer(); }
 
@@ -552,21 +448,17 @@ public:
 	bool hasHover() const { return m_hoverValid; }
 	bool hasEditableVolumePrimitive() const { return getVolumePrimitiveSelection() != VOLUME_PRIMITIVE_BASE; }
 	bool hasInjectionVoxelSelected() const { return m_volumeInjectionVoxel != INJECTION_VOXEL_NONE; }
-	bool hasPrimitiveBrushSelected() const { return getVolumePrimitiveSelection() != VOLUME_PRIMITIVE_BASE; }
-	
+
 	bool canApplyVolumeToBase() const;
 	bool isInjectionBrushBaseSelected() const;
 
 	unsigned int getVolumeBoundaryUnsafeCount() const { return m_volumeBoundaryUnsafeCount; }
 
-	const char* getLayerName() const;
-	const char* getEnvironmentName() const;
+	const char* getSelectedDomainDisplayName() const;
 	const char* getSelectedWorkspaceDisplayName() const;
-	const char* getGridSelectionName() const { return getSelectedWorkspaceDisplayName(); }
 
 	const char* getParticleColorName() const;
 	const char* getParticleResetModeName() const;
-	const char* getActiveParticleConfigListName() const;
 	const char* getParticleRenderModeName() const;
 	const char* getSingleParticleSubLayerName() const;
 	const char* getVolumePrimitiveName() const;
@@ -578,23 +470,20 @@ public:
 	const char* getVolumeInjectionModeName() const;
 	const char* getVolumeEditTargetName() const;
 	const char* getVolumeEditTargetObjectName() const;
-	const char* getSubLayerPanelListName() const;
 	const char* getOffsetVectorName() const;
 	const char* getOffsetIncrementName() const;
 
 	void setParticleRenderMode(ParticleRenderMode mode) { m_particleRenderMode = mode; }
 	void updateHoverFromScreen(int x, int y, int w, int h);
 	void finalizeVoxelBaseCommit();
-	void resetToMenu();
 
 private:
-	void resetNavigationState();
+	// --- NAVIGATION TRANSITIONS / INPUT ROUTING ---
 	void setApplicationLayer(ApplicationLayer layer);
 	void setWorkspaceSelection(
 		WorkspaceDomain domain,
 		WorkspaceId workspace
 	);
-	void setLegacyGridSelection(GridSelection selection);
 	void validateNavigationState() const;
 	void handleGlobalShellKeyboard(
 		const KeyboardInput::KeyEvent& event,
@@ -609,7 +498,8 @@ private:
 		ArbiterResult& result
 	);
 
-	void cycleEnvironmentSelection(int dir);
+	// --- PARTICLE / WORKSPACE SELECTION ---
+	void cycleGlobalShellSelection(int dir);
 	void cycleWorkspaceSelection(int dir);
 	void toggleParticleColorSelection();
 	void toggleParticleResetMode();
@@ -618,8 +508,8 @@ private:
 	void moveParticleConfigCursorDown();
 
 	void toggleParticleRenderMode();
-	void toggleVolumePrimitiveSelection();
 
+	// --- SINGLE_PARTICLE_MCAD VOLUME EDITING ---
 	void increaseVolumePrimitiveScale();
 	void decreaseVolumePrimitiveScale();
 
@@ -639,7 +529,7 @@ private:
 	const VolumeObjectState& activeVolumeState() const;
 
 	void resetVolumeState(
-		VolumeObjectState& state, 
+		VolumeObjectState& state,
 		VolumePrimitive primitive = VOLUME_PRIMITIVE_SPHERE
 	);
 
@@ -660,6 +550,7 @@ private:
 	void commitObjectRotationToBasis();
 	void commitBrushBase();
 
+	// --- LAYER / SUB-LAYER TRANSITIONS ---
 	void goBackOneLayer(ArbiterResult& result);
 	void enterCurrentSelection(ArbiterResult& result);
 	void advanceSingleParticleSubLayer(ArbiterResult& result);
@@ -675,86 +566,87 @@ private:
 
 	bool isSubLayerPanelItemSelectable(int item) const;
 
-	int getParticleConfigListCount() const;
+	// Basis-vector primitives are implementation details used by the CAD
+	// orientation and orthonormalization helpers.
+	static float dotBasisVector(
+		const BasisVector& a,
+		const BasisVector& b) {
 
-private:
+		return a.x * b.x + a.y * b.y + a.z * b.z;
+	}
+
+	static BasisVector subtractBasisVector(
+		const BasisVector& a,
+		const BasisVector& b) {
+
+		return {
+			a.x - b.x,
+			a.y - b.y,
+			a.z - b.z
+		};
+	}
+
+	static BasisVector multiplyBasisVector(
+		const BasisVector& vector,
+		float scalar) {
+
+		return {
+			vector.x * scalar,
+			vector.y * scalar,
+			vector.z * scalar
+		};
+	}
+
+	static BasisVector crossBasisVector(
+		const BasisVector& a,
+		const BasisVector& b) {
+
+		return {
+			a.y * b.z - a.z * b.y,
+			a.z * b.x - a.x * b.z,
+			a.x * b.y - a.y * b.x
+		};
+	}
+
+	// --- NAVIGATION ---
 	NavigationState m_navigation;
 
+	// --- PARTICLE WORKSPACE CONFIGURATION ---
 	ParticleColorSelection m_particleColorSelection = PARTICLE_COLOR_RED;
 	ParticleResetMode m_particleResetMode = PARTICLE_RESET_DEFAULT;
 	ParticleConfigList m_activeParticleConfigList = PARTICLE_LIST_COLOR;
-	ObjectSelection m_objectSelection = OBJECT_SPHERE;
-	RenderMethod m_renderMethod = METHOD_RAYCAST;
-	ObjectEditMode m_objectEditMode = EDIT_SCALE_WHOLE;
-	ObjectRotationMode m_objectRotationMode = ROTATE_PITCH;
-	ObjectTransformMode m_objectTransformMode = TRANSFORM_SCALE;
-	VolumeAssemblyNode m_volumeAssemblyNode = VOLUME_NODE_PREVIEW;
-	VolumeInjectionVoxel m_volumeInjectionVoxel = INJECTION_VOXEL_NONE;
-	VolumeEditTarget m_volumeEditTarget = VOLUME_EDIT_TARGET_VOXEL_0;
-	VolumeInjectionMode m_volumeInjectionMode = VOLUME_FUSE;
 	ParticleRenderMode m_particleRenderMode = PARTICLE_RENDER_DEFAULT;
-	
+	float m_particleRadius = kParticleRadiusDefault;
+
+	// --- SINGLE_PARTICLE_MCAD WORKFLOW ---
 	SingleParticleSubLayer m_singleParticleSubLayer = SP_SUB_LAYER_REFERENCE;
-	VolumePrimitive m_volumePrimitiveSelection = VOLUME_PRIMITIVE_SPHERE;
-
-	OffsetVector m_offsetVectorSelection = OFFSET_VECTOR_X;
-
-	bool m_mcAnimationEnabled = false;
-	bool m_mcRenderingEnabled = true;
-	bool m_mcLightingEnabled = false;
-	bool m_mcWireframeEnabled = true;
-	bool m_selectedParticle = false;
-	bool m_subLayerPanelOpen = false;
-	bool m_hoverValid = false;
-	bool m_volumeBoundarySensorReady = false;
-
+	VolumeAssemblyNode m_volumeAssemblyNode = VOLUME_NODE_PREVIEW;
 	int m_workplaneSlice = 0;
-	int m_activeSubLayerPanelItem = 0;
-	int m_rotationAngleIncrementIndex = 0;
-	int m_offsetIncrementIndex = 0;
-
-	unsigned int m_volumeBoundaryUnsafeCount = 0;
-
+	bool m_selectedParticle = false;
+	bool m_hoverValid = false;
 	float m_hoverX = 0.0f;
 	float m_hoverY = 0.0f;
 
-	float m_volumePrimitiveScale = 1.0f;
+	// --- VOLUME OBJECT EDITING ---
+	ObjectEditMode m_objectEditMode = EDIT_SCALE_WHOLE;
+	ObjectRotationMode m_objectRotationMode = ROTATE_PITCH;
+	ObjectTransformMode m_objectTransformMode = TRANSFORM_SCALE;
+	VolumeInjectionVoxel m_volumeInjectionVoxel = INJECTION_VOXEL_NONE;
+	VolumeEditTarget m_volumeEditTarget = VOLUME_EDIT_TARGET_VOXEL_0;
+	VolumeInjectionMode m_volumeInjectionMode = VOLUME_FUSE;
+	OffsetVector m_offsetVectorSelection = OFFSET_VECTOR_X;
+	int m_rotationAngleIncrementIndex = 0;
+	int m_offsetIncrementIndex = 0;
 	float m_offsetIncrement = 0.01f;
-	// Normalized volume-domain translation.
-	//
-	// For a 128^3 volume:
-	//     normalized 1.00 = 64 voxel units
-	//     normalized 0.01 = 0.64 voxel units
-	float m_offsetX = 0.0f;
-	float m_offsetY = 0.0f;
-	float m_offsetZ = 0.0f;
-
-	float m_mcIsoValue = 0.0f;
-
-	float m_threshold = 0.0f;
-	float m_sliceDistance = 0.0f;
-
-	float m_particleRadius = kParticleRadiusDefault;
-
-	float m_scaleWhole = 1.0f;
-	float m_scaleX = 1.0f;
-	float m_scaleY = 1.0f;
-	float m_scaleZ = 1.0f;
-
-	float m_rotationPitchDeg = 0.0f;
-	float m_rotationYawDeg = 0.0f;
-	float m_rotationRollDeg = 0.0f;
-
 	float m_injectionRailT = 0.0f;
-
-	ObjectBasis m_objectBasis{
-		{ 1.0f, 0.0f, 0.0f },
-		{ 0.0f, 1.0f, 0.0f },
-		{ 0.0f, 0.0f, 1.0f }
-	};
-
 	VolumeObjectState m_volume0State;
 	VolumeObjectState m_volume1State;
+
+	// --- SUB-LAYER PANEL / BOUNDARY STATUS ---
+	bool m_subLayerPanelOpen = false;
+	int m_activeSubLayerPanelItem = 0;
+	bool m_volumeBoundarySensorReady = false;
+	unsigned int m_volumeBoundaryUnsafeCount = 0;
 };
 
 #endif

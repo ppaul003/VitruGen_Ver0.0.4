@@ -23,8 +23,6 @@
 #include <future>
 #include <string>
 
-#include <paramgl.h>
-
 #include "Interactions.h"
 #include "Camera.h"
 #include "ViewPort.h"
@@ -45,85 +43,7 @@ public:
 	void shutdown();
 
 private:
-	static EuclidEngine* s_instance;
-
-	// --- GLUT STATIC CALLBACK THUNKS ---
-	static void sDisplay();
-	static void sReshape(int w, int h);
-	static void sMouse(int button, int state, int x, int y);
-	static void sMotion(int x, int y);
-	static void sPassiveMotion(int x, int y);
-	static void sMainMenu(int value);
-	static void sKeyboard(unsigned char key, int x, int y);
-	static void sSpecial(int key, int x, int y);
-	static void sIdle();
-	static void sClose();
-
-	// --- REAL INSTANCE HANDLERS ---
-	void onDisplay();
-	void onReshape(int w, int h);
-	void onMouse(int button, int state, int x, int y);
-	void onMotion(int x, int y);
-	void onPassiveMotion(int x, int y);
-	void onKeyboard(unsigned char key, int x, int y);
-	void onSpecial(int key, int x, int y);
-	void onIdle();
-	void onClose();
-
-	// --- ENGINE SETUP ---
-	void initGL(int* argc, char** argv);
-	void initParticleSystem(uint numParticles, uint3 gridSize);
-	void initVolumeField();
-	void initMarchingCubes();
-	void initPixelBuffer();
-	void initMenus();
-	void rebuildMenus();
-
-	// --- ENGINE SERVICES ---
-	void computeFPS();
-	void requestExit();
-
-	void freeVolumeField();
-	void freeMarchingCubes();
-	void destroyPixelBuffer();
-	void regenerateVolumeField();
-
-	void setRadii(uint numParticles);
-	void placeSingleParticleAtOrigin();
-	void startSingleParticleConfigPreview();
-
-	// --- WORKSPACE RENDERS ---
-	void drawTesseractGridAndPlane();
-
-	// --- WORKSPACE / RESOURCE SYNC ---
-	void syncRenderingWithParticleSystem();
-	void syncTesseractWorkspaceFromArbiter();
-	void syncCameraBehaviorFromArbiter();
-	void syncVolumeBoundaryStatusFromTesseract();
-
-	void applyParticleSelectionsToSystem();
-	void applySingleParticleConfigToSystem();
-	void applySelectedParticleColorToSystem();
-
-	void classifyMarchingCubesOnly();
-	void extractMarchingCubesMesh();
-	void exportCurrentMeshOBJ();
-
-	void applyVoxelBaseCommit();
-
-	void beginObjExportJob();
-	void advanceObjExportJob();
-
-	void appendObjExportLog(const std::string& line);
-	void failObjExportJob(const std::string& reason);
-
-	void closeObjExportPanel();
-
-	bool handleObjExportModalKeyboard(const KeyboardInput::KeyEvent& event);
-
-	bool isObjExportModalActive() const;
-	bool isObjExportWorking() const;
-
+	// --- ENGINE-LOCAL TYPES ---
 	enum class ObjExportStage {
 		NONE = 0,
 
@@ -146,12 +66,87 @@ private:
 		FINISH
 	};
 
-private:
+	static EuclidEngine* s_instance;
+
+	// --- GLUT CALLBACK BRIDGE ---
+	static void sDisplay();
+	static void sReshape(int w, int h);
+	static void sMouse(int button, int state, int x, int y);
+	static void sMotion(int x, int y);
+	static void sPassiveMotion(int x, int y);
+	static void sMainMenu(int value);
+	static void sKeyboard(unsigned char key, int x, int y);
+	static void sIdle();
+	static void sClose();
+
+	// --- APPLICATION LIFECYCLE / PLATFORM SETUP ---
+	void initGL(int* argc, char** argv);
+	void initMenus();
+	void rebuildMenus();
+	void computeFPS();
+	void requestExit();
+
+	// --- RUNTIME EVENT HANDLERS ---
+	void onDisplay();
+	void onReshape(int w, int h);
+	void onMouse(int button, int state, int x, int y);
+	void onMotion(int x, int y);
+	void onPassiveMotion(int x, int y);
+	void onKeyboard(unsigned char key, int x, int y);
+	void onIdle();
+	void onClose();
+
+	// --- WORKSPACE ROUTING / GLOBAL PRESENTATION ---
+	void drawTesseractGridAndPlane();
+	void syncTesseractWorkspaceFromArbiter();
+	void syncCameraBehaviorFromArbiter();
+
+	// --- SHARED PARTICLE RESOURCES ---
+	void initRenderer();
+	void initParticleSystems();
+	void syncRenderingWithParticleSystem();
+
+
+	// --- PARTICLE_SIM WORKSPACE (SIMCAD_4D) ---
+	void applyParticleSelectionsToSystem();
+	void applyPSSelectedParticleColorToSystem();
+
+	// --- SINGLE_PARTICLE_MCAD WORKSPACE (GRID_3D) ---
+	void initVolumeField();
+	void initPixelBuffer();
+	void destroyPixelBuffer();
+	void freeVolumeField();
+	void regenerateVolumeField();
+
+	void placeSingleParticleAtOrigin();
+	void startSingleParticleConfigPreview();
+	void applySingleParticleConfigToSystem();
+	void applySPSelectedParticleColorToSystem();
+	void applyVoxelBaseCommit();
+	void syncVolumeBoundaryStatusFromTesseract();
+
+	// --- MARCHING CUBES / OBJ EXPORT PIPELINE ---
+	void initMarchingCubes();
+	void freeMarchingCubes();
+	void extractMarchingCubesMesh();
+	void exportCurrentMeshOBJ();
+	void beginObjExportJob();
+	void advanceObjExportJob();
+	void appendObjExportLog(const std::string& line);
+	void failObjExportJob(const std::string& reason);
+	void closeObjExportPanel();
+	bool handleObjExportModalKeyboard(const KeyboardInput::KeyEvent& event);
+	bool isObjExportModalActive() const;
+	bool isObjExportWorking() const;
+
 	// --- CONSTANTS ---
 	static constexpr uint kWidth = 1920;
 	static constexpr uint kHeight = 1080;
 	static constexpr uint kGridSize = 64;
-	static constexpr uint kNumParticles = 256;
+	//static constexpr uint kNumParticles = 256;
+
+	static constexpr uint kParticleSimCapacity = 16384;
+	static constexpr uint kSingleParticleCapacity = 1;
 
 	static constexpr int MENU_NOP = -1;
 	static constexpr int MENU_EDIT_SCALE_WHOLE = '1';
@@ -178,7 +173,6 @@ private:
 	static constexpr int MENU_TO_NODE_OFFSET_OBJECT = 1103;
 	static constexpr int MENU_TO_NODE_APPLY_BASE = 1104;
 	static constexpr int MENU_RUN_MC_MODE = 1105;
-
 	// Node 2 / Node 3 offset controls.
 	// These remain placeholders during this checkpoint.
 	static constexpr int MENU_OFFSET_Z_VECTOR = 1201;
@@ -191,81 +185,70 @@ private:
 	static constexpr int MENU_COMMIT_NEW_BASE_VECTOR = 1301;
 	// Node_1 injection-brush local basis commit.
 	static constexpr int MENU_COMMIT_BRUSH_BASE = 1302;
-	
 
-	static constexpr float kSimBox = 4.0f;
 	static constexpr float kMarchingCubesIsoValue = 0.0f;
 
-	// --- CORE COMPONENTS ---
+	// --- APPLICATION CORE ---
 	TheArbiter m_arbiter;
 	Tesseract m_tesseract;
-
-	// --- VIEW / DISPLAY COMPONENTS ---
 	ViewPort m_viewport;
 	CameraProcessor m_camera;
 
-	// --- INPUT PORTS ---
+	// --- INPUT ---
 	MouseInput m_mouse;
 	KeyboardInput m_keyboard;
 
-	// --- CUDA KERNEL / SIM / RENDER COMPONENTS ---
-	ParticleSystem* m_psystem = nullptr;
-	MarchingCubes* m_marchingCubes = nullptr;
+	// --- SHARED PARTICLE SIMULATION / RENDER RESOURCES ---
+	uint3 m_gridSizeDim{};
 	EuclidRenderer* m_renderer = nullptr;
 
-	EuclidRenderer::DisplayMode m_displayMode =
-		EuclidRenderer::PARTICLE_SPHERES;
+	// WORKSPACE RESOURCE OWNERSHIP BRANCH:
+	//
+	// SIMCAD_4D / PARTICLE_SIMULATION:
+	ParticleSystem* m_particleSimSystem = nullptr;
+	std::vector<float> m_particleSimRadii;
 
+	uint m_particleSimCapacity = kParticleSimCapacity;
+	// Reserved until ParticleSystem supports allocated capacity
+	// separately from active simulation count.
+	uint m_particleSimActiveCount = kParticleSimCapacity;
+
+	//
+	// GRID_3D / SINGLE_PARTICLE_MCAD:
+	ParticleSystem* m_singleParticleSystem = nullptr;
+	std::vector<float> m_singleParticleRadii;
+	//
+	// --- SINGLE_PARTICLE_MCAD / VOLUME / MESH RESOURCES ---
+	GLuint m_pbo = 0;
+	GLuint m_tex = 0;
+	MarchingCubes* m_marchingCubes = nullptr;
+	struct cudaGraphicsResource* m_cudaPboResource = nullptr;
+	//
+	float m_volumeFrameTheta = 0.0f;
+	float m_volumeFramePhi = 0.0f;
+	float m_volumeThreshold = 0.0f;
+	float m_volumeSliceDistance = 0.0f;
+	bool m_singleParticlePlaced = false;
+	// --- SINGLE_PARTICLE_MCAD SUB COMPONENT:
+	// --- OBJ EXPORT JOB ---
 	ViewPort::ObjExportPanelData m_objExportPanel;
 	ObjExportStage m_objExportStage = ObjExportStage::NONE;
-
-	// --- PARTICLE RADIUS BUFFER DATA ---
-	std::vector<float> m_rad;
-
-	// --- EXPORT .OBJ BUFFER DATA ---
-	std::future<bool> m_objExportFuture;
-	std::string m_objExportPath =
-		"SINGLE_PARTICLE_DATA/p0.obj";
-
-	// --- ENGINE STATE ---
-	bool m_displayEnabled = true;
-	bool m_sysMode = false;
-	bool m_exiting = false;
-	bool m_cleaned = false;
-
-	bool m_displaySliders = false;
-	bool m_singleParticlePlaced = false;
-	bool m_mcMeshGenerated = false;
-	bool m_mcRevealAnimating = false;
+	//
 	bool m_objExportFutureActive = false;
-
-	// --- GLUT / CUDA SDK SUPPORT ---
-	int m_menuId = 0;
-	int m_fpsCount = 0;
-	int m_fpsLimit = 1;
-
 	int m_objExportNextStepMs = 0;
 	int m_objExportLastSpinnerMs = 0;
 	int m_objExportCompleteUntilMs = 0;
-
-	uint m_numParticles = 0;
-	uint3 m_gridSizeDim{};
-
-	float m_volumeFrameTheta = 0.0f;
-	float m_volumeFramePhi = 0.0f;
-	// Scroll target. Mouse wheel modifies this,
-	// then m_volumeFrameZs eases toward it.
-
-	float m_volumeThreshold = 0.0f;
-	float m_volumeSliceDistance = 0.0f;
-
-	float m_mcRevealT = 0.0f;
-
-	GLuint m_pbo = 0;
-	GLuint m_tex = 0;
-	struct cudaGraphicsResource* m_cudaPboResource = nullptr;
-
-	ParamListGL* m_params = nullptr;
+	//
+	std::future<bool> m_objExportFuture;
+	std::string m_objExportPath = "SINGLE_PARTICLE_DATA/p0.obj";
+	//
+	// --- RUNTIME STATE / GLUT SUPPORT ---
+	bool m_displayEnabled = true;
+	bool m_exiting = false;
+	bool m_cleaned = false;
+	int m_menuId = 0;
+	int m_fpsCount = 0;
+	int m_fpsLimit = 1;
 	StopWatchInterface* m_timer = nullptr;
 };
 #endif

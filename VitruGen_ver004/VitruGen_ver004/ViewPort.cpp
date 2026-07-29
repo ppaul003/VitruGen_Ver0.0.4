@@ -190,10 +190,10 @@ void ViewPort::updateSubLayerPanelAnimation(bool visible) {
 }
 
 void ViewPort::drawOverlay(
-	const TheArbiter& arbiter, 
+	const TheArbiter& arbiter,
 	const MarchingCubesPanelData* mcData,
 	const ObjExportPanelData* exportData,
-	bool paused, 
+	bool paused,
 	bool meshAvailable) {
 
 	updatePanelAnimation(!arbiter.isSimulationRunLayer());
@@ -631,7 +631,7 @@ void ViewPort::drawSubLayerPanel(const TheArbiter& arbiter, const MarchingCubesP
 
 		if (arbiter.hasInjectionVoxelSelected()) {
 
-			const bool editingVoxel1 = 
+			const bool editingVoxel1 =
 				arbiter.isEditingInjectionVoxel1();
 
 			drawSectionTitle(
@@ -1306,7 +1306,7 @@ void ViewPort::drawLayer0Menu(const TheArbiter& arbiter) {
 		line,
 		sizeof(line),
 		"[1]: ENVIRONMENT SELECTION { %s }",
-		arbiter.getEnvironmentName()
+		arbiter.getSelectedDomainDisplayName()
 	);
 
 	drawSelectableLine(95.0f, 245.0f, true, line);
@@ -1381,7 +1381,7 @@ void ViewPort::drawLayer1EnvironmentConfig(const TheArbiter& arbiter) {
 		line,
 		sizeof(line),
 		"[1]: %s SELECTION { %s }",
-		arbiter.getEnvironmentName(),
+		arbiter.getSelectedDomainDisplayName(),
 		arbiter.getSelectedWorkspaceDisplayName()
 	);
 
@@ -1453,7 +1453,7 @@ void ViewPort::drawLayer2ParticleConfig(const TheArbiter& arbiter, bool meshAvai
 		modeLine,
 		sizeof(modeLine),
 		"MODE: %s",
-		arbiter.getGridSelectionName()
+		arbiter.getSelectedWorkspaceDisplayName()
 	);
 	drawText2D(panelX(95.0f), 210.0f, modeLine, GLUT_BITMAP_HELVETICA_18);
 
@@ -1589,7 +1589,7 @@ void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 		modeLine,
 		sizeof(modeLine),
 		"LAYER 3 -> SIMULATION RUN (%s)",
-		arbiter.getGridSelectionName()
+		arbiter.getSelectedWorkspaceDisplayName()
 	);
 
 	drawText2D(40.0f, 52.0f, modeLine, GLUT_BITMAP_HELVETICA_18);
