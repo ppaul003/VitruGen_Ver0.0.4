@@ -38,6 +38,21 @@ public:
 	// --- WORKSPACE PIPELINE CONTEXTS ---
 	using WorkspaceId = TheArbiter::WorkspaceId;
 
+	struct WorkspaceSpatialDomain {
+		float boxSize = 4.0f;
+		int collisionCellsPerAxis = 64;
+
+		// show one visual line for every four collision cells
+		int visualGridStride = 4;
+		bool drawMinorGrid = false;
+	};
+
+	struct WorkspaceGridVisualConfig {
+		// 64 logical cells / stride 8 = 8 visible divisions.
+		int majorStride = 8;
+		bool drawMinor = false;
+	};
+
 	// Reserved extension point shared by all workspace update pipelines.
 	struct WorkspaceUpdateContext {};
 
@@ -104,15 +119,18 @@ public:
 	// --- GLOBAL SHELL ANIMATION ---
 	float getPreviewRotation() const { return m_previewRotation; }
 	float getSliceAnimation() const { return m_sliceAnimation; }
+
 	bool consumeCameraFocusRequest();
-	bool isTransitioningToWorkspace() const {
-		return m_animTransition != ANIM_TRANS_NONE;
-	}
-	bool isOrientingToWorkspace() const {
-		return m_animPhase == ANIM_PHASE_ORIENT_TO_WORKSPACE;
-	}
+	bool isTransitioningToWorkspace() const { return m_animTransition != ANIM_TRANS_NONE; }
+	bool isOrientingToWorkspace() const { return m_animPhase == ANIM_PHASE_ORIENT_TO_WORKSPACE; }
+
 	void beginAnimTransition(TesseractAnimTransition transition, float timeS);
 	void updateAnimBehavior(float timeS);
+
+	const WorkspaceGridVisualConfig& getWorkspaceGridVisualConfig() const { return m_workspaceGridVisual; }
+
+	bool applyWorkspaceBoundaryGridVisual();
+	int getWorkspaceGridHalfSliceRange() const;
 
 	// --- ACTIVE WORKSPACE LIFECYCLE ---
 	WorkspaceId getActiveWorkspace() const { return m_activeWorkspace; }
@@ -193,29 +211,38 @@ public:
 		m_volumeDirty = true;
 		m_volumeBoundarySensorReady = false;
 	}
+
 	void clearVolumeBinding() {
 		m_dWorkingVolume = nullptr;
 		m_volumeDirty = true;
 		m_volumeBoundarySensorReady = false;
 	}
+
 	void bindCommittedVolume(float* dVolume);
+
 	void bindBrushVolume(float* dVolume) {
 		m_dBrushVolume = dVolume;
 		m_volumeDirty = true;
 	}
+
 	void clearCommittedVolumeBinding();
 	void clearSPCommittedVolume();
+
 	void clearBrushVolumeBinding() {
 		m_dBrushVolume = nullptr;
 		m_volumeDirty = true;
 	}
+
 	void copyCommittedVolumeToPreview();
+
 	void markVolumeDirty() {
 		m_volumeDirty = true;
 		m_volumeBoundarySensorReady = false;
 	}
+
 	bool commitSPWorkingVolume(const TheArbiter& arbiter);
 	void regenerateSPVolumeField(const TheArbiter& arbiter);
+
 	void bindSPCadVolumeResource(
 		struct cudaGraphicsResource** cudaPboResourceSlot
 	);
@@ -226,12 +253,9 @@ public:
 		float isoValue = 0.0f,
 		float safetyBand = 0.0f
 	);
-	bool isSPVolumeBoundarySensorReady() const {
-		return m_volumeBoundarySensorReady;
-	}
-	unsigned int getSPVolumeBoundaryUnsafeCount() const {
-		return m_volumeBoundaryUnsafeCount;
-	}
+
+	bool isSPVolumeBoundarySensorReady() const { return m_volumeBoundarySensorReady; }
+	unsigned int getSPVolumeBoundaryUnsafeCount() const { return m_volumeBoundaryUnsafeCount; }
 	void releaseSPVolumeBoundarySensor();
 
 private:
@@ -390,6 +414,8 @@ private:
 	float m_startSliceAnimation = 0.0f;
 	float m_previewRotation = 0.0f;
 	float m_sliceAnimation = 0.5f;
+
+	WorkspaceGridVisualConfig m_workspaceGridVisual;
 
 	// --- WORKSPACE INSTANCES ---
 	WorkspaceId m_activeWorkspace = WorkspaceId::NONE;

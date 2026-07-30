@@ -262,6 +262,12 @@ void EuclidEngine::initParticleSystems() {
 		true
 	);
 
+	// Establish the authoritative 4 × 4 × 4 domain before
+	// the menu or any workspace attempts to render the grid.
+	m_particleSimSystem->setSimulationDomain(
+		m_tesseract.getPSConfig().simulationBoxSize
+	);
+
 	m_particleSimSystem->setUniformParticleColor(1.0f, 0.0, 0.0f, 1.0f);
 
 	m_particleSimSystem->reset(
@@ -1380,32 +1386,11 @@ void EuclidEngine::freeMarchingCubes() {
 // =============================================================================
 
 void EuclidEngine::drawTesseractGridAndPlane() {
-	if (!m_renderer) return;
+	if (!m_tesseract.applyWorkspaceBoundaryGridVisual() || 
+		!m_renderer) return;
 
-	// ---------------------------------------------------------
-	// Restore the global diagnostic Tesseract grid.
-	//
-	// The shared renderer may be reconfigured by individual
-	// workspaces, so the global presentation restores its own
-	// grid geometry before drawing.
-	// ---------------------------------------------------------
-	constexpr int diagGridDim = 16;
-
-	const float simBoxSize =
-		m_tesseract.getPSConfig().simulationBoxSize;
-
-	const float halfBox = simBoxSize * 0.5f;
-
-	const float diagCellSize =
-		simBoxSize / static_cast<float>(diagGridDim);
-
-	m_renderer->setGrid(
-		ivec3(diagGridDim, diagGridDim, diagGridDim),
-		vec3(-halfBox, -halfBox, -halfBox),
-		vec3(diagCellSize, diagCellSize, diagCellSize)
-	);
-
-	m_renderer->setGridStyle(4, false);
+	const Tesseract::WorkspaceGridVisualConfig& gridConfig =
+		m_tesseract.getWorkspaceGridVisualConfig();
 
 	// Draw the full 3D Tesseract boundary/grid.
 	m_renderer->setGridMode3D();
@@ -1415,11 +1400,11 @@ void EuclidEngine::drawTesseractGridAndPlane() {
 	// Menu-layer moving diagnostic slice.
 	// ---------------------------------------------------------
 
-
 	if (m_arbiter.isMenuLayer() ||
 		m_tesseract.isTransitioningToWorkspace()) {
 
-		const int halfSlice = diagGridDim / 2;
+		const int halfSlice =
+			m_tesseract.getWorkspaceGridHalfSliceRange();
 
 		const float cycle =
 			m_tesseract.getSliceAnimation();
@@ -1457,10 +1442,11 @@ void EuclidEngine::drawTesseractGridAndPlane() {
 
 		m_renderer->displayGrid();
 
-		// Never leave shared renderer state in GRID_2D mode.
+		// Restore the shared renderer's default state.
 		m_renderer->setGridMode3D();
 	}
 }
+
 // =============================================================================
 // PARTICLE_SIM WORKSPACE SUPPORT (SIMCAD_4D)
 // =============================================================================

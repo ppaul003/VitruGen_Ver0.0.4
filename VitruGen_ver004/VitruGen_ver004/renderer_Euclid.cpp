@@ -260,10 +260,12 @@ void EuclidRenderer::setPositions(float* pos, int numParticles) {
     m_pos = pos;
     m_numParticles = numParticles;
 }
+
 void EuclidRenderer::setVertexBuffer(unsigned int vbo, int numParticles) {
     m_vbo = vbo;
     m_numParticles = numParticles;
 }
+
 void EuclidRenderer::setRadius(
     float* radiusData,
     int numParticles) {
@@ -1495,221 +1497,462 @@ void EuclidRenderer::drawActiveVoxelCellWire(
     glEnd();
 }
 
+// --- <TESSERACT OBJECT> ---
 void EuclidRenderer::displayGrid() {
     if (!m_gridEnabled) return;
-    if (m_gridDim.x <= 0 || m_gridDim.y <= 0 || m_gridDim.z <= 0) return;
-
+    
+    if (m_gridDim.x <= 0 ||
+        m_gridDim.y <= 0 ||
+        m_gridDim.z <= 0) return;
+    
     glUseProgram(0);
     glDisable(GL_POINT_SPRITE_ARB);
     glDisable(GL_TEXTURE_2D);
-
+    
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
+    
     const vec3 mn = m_gridOrigin;
-    const vec3 mx = m_gridOrigin + glm::vec3(
-        m_cellSize.x * (float)m_gridDim.x,
-        m_cellSize.y * (float)m_gridDim.y,
-        m_cellSize.z * (float)m_gridDim.z
-    );
-
+    const vec3 mx = m_gridOrigin + vec3(
+            m_cellSize.x * (float)m_gridDim.x,
+            m_cellSize.y * (float)m_gridDim.y,
+            m_cellSize.z * (float)m_gridDim.z
+        );
+    
     // Axes at origin
     if (m_drawAxes) {
         glLineWidth(2.0f);
         glBegin(GL_LINES);
-        glColor4f(1, 0, 0, 1); glVertex3f(0, 0, 0); glVertex3f(0.35f, 0, 0);
-        glColor4f(0, 1, 0, 1); glVertex3f(0, 0, 0); glVertex3f(0, 0.35f, 0);
-        glColor4f(0, 0, 1, 1); glVertex3f(0, 0, 0); glVertex3f(0, 0, 0.35f);
+        
+        glColor4f(1, 0, 0, 1);
+        glVertex3f(0, 0, 0);
+        glVertex3f(0.35f, 0, 0);
+        
+        glColor4f(0, 1, 0, 1);
+        glVertex3f(0, 0, 0);
+        glVertex3f(0, 0.35f, 0);
+        
+        glColor4f(0, 0, 1, 1);
+        glVertex3f(0, 0, 0);
+        glVertex3f(0, 0, 0.35f);
+        
         glEnd();
     }
-
-    const int major = std::max(1, m_gridMajorEvery);
-
+    
+    const int major =
+        std::max(1, m_gridMajorEvery);
+    
     if (m_gridMode == GRID_3D) {
         // bounding box
         glLineWidth(2.0f);
         glColor4f(1, 1, 1, 0.35f);
         RenderUtils::draw_aabb_wire(mn, mx);
-
+        
         // major lattice (sparse)
         glLineWidth(1.0f);
         glColor4f(1, 1, 1, 0.12f);
+        
         glBegin(GL_LINES);
-
+        
         // X-parallel
-        for (int yi = 0; yi <= m_gridDim.y; ++yi) {
-            if (!RenderUtils::is_major(yi, major)) continue;
-            float y = mn.y + yi * m_cellSize.y;
-            for (int zi = 0; zi <= m_gridDim.z; ++zi) {
-                if (!RenderUtils::is_major(zi, major)) continue;
-                float z = mn.z + zi * m_cellSize.z;
-                glVertex3f(mn.x, y, z); glVertex3f(mx.x, y, z);
+        for (int yi = 0; yi <= m_gridDim.y; yi++) {
+            if (!RenderUtils::is_major(yi, major)) 
+                continue;
+            
+            float y = mn.y +
+                yi * m_cellSize.y;
+            
+            for (int zi = 0; zi <= m_gridDim.z; zi++) {
+                if (!RenderUtils::is_major(zi, major))
+                    continue;
+                
+                float z = mn.z +
+                    zi * m_cellSize.z;
+                
+                glVertex3f(mn.x, y, z);
+                glVertex3f(mx.x, y, z);
             }
         }
+        
         // Y-parallel
-        for (int xi = 0; xi <= m_gridDim.x; ++xi) {
-            if (!RenderUtils::is_major(xi, major)) continue;
-            float x = mn.x + xi * m_cellSize.x;
-            for (int zi = 0; zi <= m_gridDim.z; ++zi) {
-                if (!RenderUtils::is_major(zi, major)) continue;
-                float z = mn.z + zi * m_cellSize.z;
-                glVertex3f(x, mn.y, z); glVertex3f(x, mx.y, z);
+        for (int xi = 0; xi <= m_gridDim.x; xi++) {
+            if (!RenderUtils::is_major(xi, major))
+                continue;
+            
+            float x = mn.x +
+                xi * m_cellSize.x;
+            
+            for (int zi = 0; zi <= m_gridDim.z; zi++) {
+                if (!RenderUtils::is_major(zi, major))
+                    continue;
+                
+                float z = mn.z +
+                    zi * m_cellSize.z;
+                
+                glVertex3f(x, mn.y, z);
+                glVertex3f(x, mx.y, z);
             }
         }
+        
         // Z-parallel
-        for (int xi = 0; xi <= m_gridDim.x; ++xi) {
-            if (!RenderUtils::is_major(xi, major)) continue;
-            float x = mn.x + xi * m_cellSize.x;
-            for (int yi = 0; yi <= m_gridDim.y; ++yi) {
-                if (!RenderUtils::is_major(yi, major)) continue;
-                float y = mn.y + yi * m_cellSize.y;
-                glVertex3f(x, y, mn.z); glVertex3f(x, y, mx.z);
+        for (int xi = 0; xi <= m_gridDim.x; xi++) {
+            if (!RenderUtils::is_major(xi, major))
+                continue;
+            
+            float x = mn.x +
+                xi * m_cellSize.x;
+            
+            for (int yi = 0; yi <= m_gridDim.y; yi++) {
+                if (!RenderUtils::is_major(yi, major))
+                    continue;
+                
+                float y = mn.y +
+                    yi * m_cellSize.y;
+                
+                glVertex3f(x, y, mn.z);
+                glVertex3f(x, y, mx.z);
             }
         }
+        
         glEnd();
-
+        
         // optional minor grid (dense)
         if (m_drawMinorGrid) {
+        
+            glLineWidth(1.0f);
             glColor4f(1, 1, 1, 0.04f);
+            
             glBegin(GL_LINES);
-            for (int yi = 0; yi <= m_gridDim.y; ++yi) {
-                float y = mn.y + yi * m_cellSize.y;
-                for (int zi = 0; zi <= m_gridDim.z; ++zi) {
-                    float z = mn.z + zi * m_cellSize.z;
-                    glVertex3f(mn.x, y, z); glVertex3f(mx.x, y, z);
+            
+            for (int yi = 0; yi <= m_gridDim.y; yi++) {
+            
+                float y = mn.y +
+                    yi * m_cellSize.y;
+                
+                for (int zi = 0; zi <= m_gridDim.z; zi++) {
+                    
+                    float z = mn.z +
+                        zi * m_cellSize.z;
+                    
+                    glVertex3f(mn.x, y, z);
+                    glVertex3f(mx.x, y, z);
                 }
             }
-            for (int xi = 0; xi <= m_gridDim.x; ++xi) {
-                float x = mn.x + xi * m_cellSize.x;
-                for (int zi = 0; zi <= m_gridDim.z; ++zi) {
-                    float z = mn.z + zi * m_cellSize.z;
-                    glVertex3f(x, mn.y, z); glVertex3f(x, mx.y, z);
+            
+            for (int xi = 0; xi <= m_gridDim.x; xi++) {
+                
+                float x = mn.x +
+                    xi * m_cellSize.x;
+                
+                for (int zi = 0; zi <= m_gridDim.z; zi++) {
+                    
+                    float z = mn.z +
+                        zi * m_cellSize.z;
+                    
+                    glVertex3f(x, mn.y, z);
+                    glVertex3f(x, mx.y, z);
                 }
             }
-            for (int xi = 0; xi <= m_gridDim.x; ++xi) {
-                float x = mn.x + xi * m_cellSize.x;
-                for (int yi = 0; yi <= m_gridDim.y; ++yi) {
-                    float y = mn.y + yi * m_cellSize.y;
-                    glVertex3f(x, y, mn.z); glVertex3f(x, y, mx.z);
+            
+            for (int xi = 0; xi <= m_gridDim.x; xi++) {
+            
+                float x = mn.x +
+                    xi * m_cellSize.x;
+                
+                for (int yi = 0; yi <= m_gridDim.y; yi++) {
+                    
+                    float y = mn.y +
+                        yi * m_cellSize.y;
+                    
+                    glVertex3f(x, y, mn.z);
+                    glVertex3f(x, y, mx.z);
                 }
             }
+            
             glEnd();
         }
     }
     else {
-        // 2D slice: thick boundary + thick major + thin cell lines
+        // =========================================================
+        // 2D DIAGNOSTIC SLICE
+        //
+        // Boundary and major lines are always visible.
+        // Minor collision-cell lines are optional.
+        // =========================================================
         if (m_workPlane == PLANE_XY) {
+
             const int mid = m_gridDim.z / 2;
-            const int sliceIndex = RenderUtils::clampi(mid + m_sliceOffset, 0, m_gridDim.z);
-            const float z = mn.z + sliceIndex * m_cellSize.z;
 
+            const int sliceIndex =
+                RenderUtils::clampi(
+                    mid + m_sliceOffset, 
+                    0, 
+                    m_gridDim.z
+                );
+
+            const float z =
+                mn.z + sliceIndex * m_cellSize.z;
+
+            // -----------------------------------------------------
+            // Plane boundary — always visible.
+            // -----------------------------------------------------
             glLineWidth(3.0f);
-            glColor4f(1, 1, 1, 0.9f);
-            RenderUtils::draw_rect_wire_xy(mn.x, mn.y, mx.x, mx.y, z);
+            glColor4f(1.0f, 1.0f, 1.0f, 0.90f);
 
+            RenderUtils::draw_rect_wire_xy(
+                mn.x,
+                mn.y,
+                mx.x,
+                mx.y,
+                z
+            );
+
+            // -----------------------------------------------------
+            // Major grid lines — always visible.
+            // -----------------------------------------------------
             glLineWidth(2.0f);
-            glColor4f(1, 1, 1, 0.35f);
+            glColor4f(1.0f, 1.0f, 1.0f, 0.35f);
+
             glBegin(GL_LINES);
-            for (int xi = 0; xi <= m_gridDim.x; ++xi) if (RenderUtils::is_major(xi, major)) {
-                float x = mn.x + xi * m_cellSize.x;
-                glVertex3f(x, mn.y, z); glVertex3f(x, mx.y, z);
+
+            for (int xi = 0; xi <= m_gridDim.x; xi++) {
+                if (!RenderUtils::is_major(xi, major))
+                    continue;
+
+                const float x =
+                    mn.x + xi * m_cellSize.x;
+
+                glVertex3f(x, mn.y, z);
+                glVertex3f(x, mx.y, z);
             }
-            for (int yi = 0; yi <= m_gridDim.y; ++yi) if (RenderUtils::is_major(yi, major)) {
-                float y = mn.y + yi * m_cellSize.y;
-                glVertex3f(mn.x, y, z); glVertex3f(mx.x, y, z);
+
+            for (int yi = 0; yi <= m_gridDim.y; yi++) {
+                if (!RenderUtils::is_major(yi, major))
+                    continue;
+
+                const float y =
+                    mn.y + yi * m_cellSize.y;
+
+                glVertex3f(mn.x, y, z);
+                glVertex3f(mx.x, y, z);
             }
+
             glEnd();
 
-            glLineWidth(1.0f);
-            glColor4f(1, 1, 1, 0.18f);
-            glBegin(GL_LINES);
-            for (int xi = 0; xi <= m_gridDim.x; ++xi) {
-                float x = mn.x + xi * m_cellSize.x;
-                glVertex3f(x, mn.y, z); glVertex3f(x, mx.y, z);
+            if (m_drawMinorGrid) {
+
+                glLineWidth(1.0f);
+                glColor4f(1, 1, 1, 0.08f);
+
+                glBegin(GL_LINES);
+
+                for (int xi = 0; xi <= m_gridDim.x; xi++) {
+                    // Major lines where already rendered above
+                    if (RenderUtils::is_major(xi, major))
+                        continue;
+
+                    const float x =
+                        mn.x + xi * m_cellSize.x;
+
+                    glVertex3f(x, mn.y, z);
+                    glVertex3f(x, mx.y, z);
+                }
+
+                for (int yi = 0; yi <= m_gridDim.y; yi++) {
+                    if (RenderUtils::is_major(yi, major))
+                        continue;
+
+                    const float y =
+                        mn.y + yi * m_cellSize.y;
+
+                    glVertex3f(mn.x, y, z);
+                    glVertex3f(mx.x, y, z);
+                }
+
+                glEnd();
             }
-            for (int yi = 0; yi <= m_gridDim.y; ++yi) {
-                float y = mn.y + yi * m_cellSize.y;
-                glVertex3f(mn.x, y, z); glVertex3f(mx.x, y, z);
-            }
-            glEnd();
         }
-
         else if (m_workPlane == PLANE_XZ) {
+            
             const int mid = m_gridDim.y / 2;
-            const int sliceIndex = RenderUtils::clampi(mid + m_sliceOffset, 0, m_gridDim.y);
-            const float y = mn.y + sliceIndex * m_cellSize.y;
-
+            
+            const int sliceIndex =
+                RenderUtils::clampi(
+                    mid + m_sliceOffset, 
+                    0, 
+                    m_gridDim.y
+                );
+            
+            const float y = mn.y + 
+                sliceIndex * m_cellSize.y;
+            
+            // Plane boundary — always visible.
             glLineWidth(3.0f);
-            glColor4f(1, 1, 1, 0.9f);
-            RenderUtils::draw_rect_wire_xz(mn.x, mn.z, mx.x, mx.z, y);
+            glColor4f(1.0f, 1.0f, 1.0f, 0.90f);
 
+            RenderUtils::draw_rect_wire_xz(
+                mn.x,
+                mn.z,
+                mx.x,
+                mx.z,
+                y
+            );
+
+            // Major grid lines — always visible.
             glLineWidth(2.0f);
-            glColor4f(1, 1, 1, 0.35f);
-            glBegin(GL_LINES);
-            for (int xi = 0; xi <= m_gridDim.x; ++xi) if (RenderUtils::is_major(xi, major)) {
-                float x = mn.x + xi * m_cellSize.x;
-                glVertex3f(x, y, mn.z); glVertex3f(x, y, mx.z);
-            }
-            for (int zi = 0; zi <= m_gridDim.z; ++zi) if (RenderUtils::is_major(zi, major)) {
-                float z = mn.z + zi * m_cellSize.z;
-                glVertex3f(mn.x, y, z); glVertex3f(mx.x, y, z);
-            }
-            glEnd();
+            glColor4f(1.0f, 1.0f, 1.0f, 0.35f);
 
-            glLineWidth(1.0f);
-            glColor4f(1, 1, 1, 0.18f);
             glBegin(GL_LINES);
+
             for (int xi = 0; xi <= m_gridDim.x; ++xi) {
-                float x = mn.x + xi * m_cellSize.x;
-                glVertex3f(x, y, mn.z); glVertex3f(x, y, mx.z);
+                if (!RenderUtils::is_major(xi, major)) 
+                    continue;
+                
+
+                const float x =
+                    mn.x + xi * m_cellSize.x;
+
+                glVertex3f(x, y, mn.z);
+                glVertex3f(x, y, mx.z);
             }
+
             for (int zi = 0; zi <= m_gridDim.z; ++zi) {
-                float z = mn.z + zi * m_cellSize.z;
-                glVertex3f(mn.x, y, z); glVertex3f(mx.x, y, z);
+                if (!RenderUtils::is_major(zi, major)) 
+                    continue;
+                
+
+                const float z =
+                    mn.z + zi * m_cellSize.z;
+
+                glVertex3f(mn.x, y, z);
+                glVertex3f(mx.x, y, z);
             }
+
             glEnd();
+
+            if (m_drawMinorGrid) {
+
+                glLineWidth(1.0f);
+                glColor4f(1, 1, 1, 0.08f);
+
+                glBegin(GL_LINES);
+
+                for (int xi = 0; xi <= m_gridDim.x; xi++) {
+                    if (RenderUtils::is_major(xi, major))
+                        continue;
+
+                    const float x = 
+                        mn.x + xi * m_cellSize.x;
+
+                    glVertex3f(x, y, mn.z);
+                    glVertex3f(x, y, mx.z);
+                }
+
+                for (int zi = 0; zi <= m_gridDim.z; zi++) {
+                    if (RenderUtils::is_major(zi, major))
+                        continue;
+
+                    const float z = 
+                        mn.z + zi * m_cellSize.z;
+                    
+                    glVertex3f(mn.x, y, z);
+                    glVertex3f(mx.x, y, z);
+                }
+
+                glEnd();
+            }
         }
-
         else if (m_workPlane == PLANE_YZ) {
+            
             const int mid = m_gridDim.x / 2;
-            const int sliceIndex = RenderUtils::clampi(mid + m_sliceOffset, 0, m_gridDim.x);
-            const float x = mn.x + sliceIndex * m_cellSize.x;
-
+            
+            const int sliceIndex =
+                RenderUtils::clampi(mid + m_sliceOffset, 0, m_gridDim.x);
+            
+            const float x = mn.x +
+                sliceIndex * m_cellSize.x;
+            
+            // Plane boundary — always visible.
             glLineWidth(3.0f);
-            glColor4f(1, 1, 1, 0.9f);
-            RenderUtils::draw_rect_wire_yz(mn.y, mn.z, mx.y, mx.z, x);
+            glColor4f(1.0f, 1.0f, 1.0f, 0.90f);
 
+            RenderUtils::draw_rect_wire_yz(
+                mn.y,
+                mn.z,
+                mx.y,
+                mx.z,
+                x
+            );
+
+            // Major grid lines — always visible.
             glLineWidth(2.0f);
-            glColor4f(1, 1, 1, 0.35f);
+            glColor4f(1.0f, 1.0f, 1.0f, 0.35f);
+
             glBegin(GL_LINES);
-            for (int yi = 0; yi <= m_gridDim.y; ++yi) if (RenderUtils::is_major(yi, major)) {
-                float y = mn.y + yi * m_cellSize.y;
-                glVertex3f(x, y, mn.z); glVertex3f(x, y, mx.z);
+
+            for (int yi = 0; yi <= m_gridDim.y; yi++) {
+                if (!RenderUtils::is_major(yi, major)) 
+                    continue;
+                
+
+                const float y =
+                    mn.y + yi * m_cellSize.y;
+
+                glVertex3f(x, y, mn.z);
+                glVertex3f(x, y, mx.z);
             }
-            for (int zi = 0; zi <= m_gridDim.z; ++zi) if (RenderUtils::is_major(zi, major)) {
-                float z = mn.z + zi * m_cellSize.z;
-                glVertex3f(x, mn.y, z); glVertex3f(x, mx.y, z);
+
+            for (int zi = 0; zi <= m_gridDim.z; zi++) {
+                if (!RenderUtils::is_major(zi, major)) 
+                    continue;
+                
+
+                const float z =
+                    mn.z + zi * m_cellSize.z;
+
+                glVertex3f(x, mn.y, z);
+                glVertex3f(x, mx.y, z);
             }
+
             glEnd();
 
-            glLineWidth(1.0f);
-            glColor4f(1, 1, 1, 0.18f);
-            glBegin(GL_LINES);
-            for (int yi = 0; yi <= m_gridDim.y; ++yi) {
-                float y = mn.y + yi * m_cellSize.y;
-                glVertex3f(x, y, mn.z); glVertex3f(x, y, mx.z);
+            if (m_drawMinorGrid) {
+                glLineWidth(1.0f);
+                glColor4f(1, 1, 1, 0.18f);
+
+                glBegin(GL_LINES);
+
+                for (int yi = 0; yi <= m_gridDim.y; yi++) {
+                    if (!RenderUtils::is_major(yi, major))
+                        continue;
+
+                    const float y =
+                        mn.y + yi * m_cellSize.y;
+
+                    glVertex3f(x, y, mn.z);
+                    glVertex3f(x, y, mx.z);
+                }
+
+                for (int zi = 0; zi <= m_gridDim.z; zi++) {
+                    if (!RenderUtils::is_major(zi, major))
+                        continue;
+
+                    const float z =
+                        mn.z + zi * m_cellSize.z;
+
+                    glVertex3f(x, mn.y, z);
+                    glVertex3f(x, mx.y, z);
+                }
+
+                glEnd();
             }
-            for (int zi = 0; zi <= m_gridDim.z; ++zi) {
-                float z = mn.z + zi * m_cellSize.z;
-                glVertex3f(x, mn.y, z); glVertex3f(x, mx.y, z);
-            }
-            glEnd();
         }
     }
-
+    
     glDisable(GL_BLEND);
     glLineWidth(1.0f);
 }
+// --- <\TESSERACT OBJECT> ---
 
 void EuclidRenderer::displayParticleWorkspace(
     float thetaRad,
@@ -3707,6 +3950,7 @@ void EuclidRenderer::display(DisplayMode mode) {
 
     }
 }
+
 void EuclidRenderer::displayVolumeTexture() {
     if (!m_tex) return;
 
@@ -3956,6 +4200,7 @@ bool EuclidRenderer::loadParticleMeshOBJ(const char* filename) {
 
     return true;
 }
+
 bool EuclidRenderer::particleIntersectsSlice(const ParticleProxy3D& p, int slice) const {
     const float s = kWorkspaceHalfBox;
     const int sliceRange = 64;

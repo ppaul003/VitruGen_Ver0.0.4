@@ -32,20 +32,19 @@ typedef unsigned char uchar;
 #endif
 
 struct SimParams {
-
 	uint numCells;
 	uint numBodies;
 	uint maxParticlesPerCell;
-
+    
     uint3 gridSize;
-
+    
     float3 gravity;
     float3 cellSize;
     float3 worldOrigin;
-
+    
     float globalDamping ;
     float particleRadius;
-
+    
     float shear;
     float spring;
     float damping;
@@ -57,9 +56,9 @@ struct SimParams {
 struct MarchingCubesParams {
 	uint3 volumeSize;
 	float3 voxelSize;
-
+    
 	float isoValue;
-
+    
 	uint numCells;
 	uint maxVerts;
 };

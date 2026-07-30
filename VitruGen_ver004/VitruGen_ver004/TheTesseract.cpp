@@ -187,6 +187,56 @@ bool Tesseract::consumeCameraFocusRequest() {
 	return true;
 }
 
+bool Tesseract::applyWorkspaceBoundaryGridVisual() {
+	if (!m_renderer ||
+		!m_particleSimSystem) 
+		return false;
+
+	const uint3 gridSize =
+		m_particleSimSystem->getGridSize();
+
+	const float3 worldOrigin =
+		m_particleSimSystem->getWorldOrigin();
+
+	const float3 cellSize =
+		m_particleSimSystem->getCellSize();
+
+	m_renderer->setGrid(
+		glm::ivec3(
+			static_cast<int>(gridSize.x), 
+			static_cast<int>(gridSize.y), 
+			static_cast<int>(gridSize.z)
+		),
+		glm::vec3(
+			worldOrigin.x, 
+			worldOrigin.y, 
+			worldOrigin.z
+		),
+		glm::vec3(
+			cellSize.x, 
+			cellSize.y, 
+			cellSize.z
+		)
+	);
+
+	m_renderer->setGridStyle(
+		m_workspaceGridVisual.majorStride,
+		m_workspaceGridVisual.drawMinor
+	);
+
+	return true;
+}
+
+int Tesseract::getWorkspaceGridHalfSliceRange() const {
+	if (!m_particleSimSystem)
+		return 0;
+
+	const uint3 gridSize =
+		m_particleSimSystem->getGridSize();
+
+	return static_cast<int>(gridSize.x) / 2;
+}
+
 // =============================================================================
 // ACTIVE WORKSPACE LIFECYCLE / INPUT ROUTING
 // =============================================================================
@@ -460,6 +510,26 @@ void Tesseract::updatePSWorkspace(const WorkspaceUpdateContext& ctx) {
 	advanceParticleSimSTEP();
 }
 //
+void Tesseract::applyPSConfig() {
+	if (!m_particleSimSystem) return;
+
+	const PSSimulationConfig& config =
+		m_PSWorkspace.config;
+
+	m_particleSimSystem->setIterations(config.solverIterations);
+	m_particleSimSystem->setDamping(config.globalDamping);
+	m_particleSimSystem->setGravity(-config.gravityMagnitude);
+	m_particleSimSystem->setCollideSpring(config.collisionSpring);
+	m_particleSimSystem->setCollideDamping(config.collisionDamping);
+	m_particleSimSystem->setCollideShear(config.collisionShear);
+	m_particleSimSystem->setCollideAttraction(config.collisionAttraction);
+	m_particleSimSystem->setSimulationDomain(config.simulationBoxSize);
+
+	// Keep the universal visual boundary aligned with
+	// the currently configured simulation boundary.
+	m_workspaceGridVisual.majorStride = config.simulationBoxSize;
+}
+//
 void Tesseract::syncPSRendering() {
 	if (!m_particleSimSystem ||
 		!m_particleSimRadii ||
@@ -477,37 +547,7 @@ void Tesseract::syncPSRendering() {
 	m_renderer->setGridMode3D();
 	m_renderer->setParticleHighlighted(false);
 
-	const int vizGridDim = 16;
-
-	const float simBoxSize =
-		m_PSWorkspace.config.simulationBoxSize;
-
-	const float vizCellSize =
-		simBoxSize / static_cast<float>(vizGridDim);
-
-	const float halfBox = simBoxSize * 0.5f;
-
-	m_renderer->setGrid(
-		glm::ivec3(vizGridDim, vizGridDim, vizGridDim),
-		glm::vec3(-halfBox, -halfBox, -halfBox),
-		glm::vec3(vizCellSize, vizCellSize, vizCellSize)
-	);
-}
-//
-void Tesseract::applyPSConfig() {
-	if (!m_particleSimSystem) return;
-
-	const PSSimulationConfig& config =
-		m_PSWorkspace.config;
-
-	m_particleSimSystem->setIterations(config.solverIterations);
-	m_particleSimSystem->setDamping(config.globalDamping);
-	m_particleSimSystem->setGravity(-config.gravityMagnitude);
-	m_particleSimSystem->setCollideSpring(config.collisionSpring);
-	m_particleSimSystem->setCollideDamping(config.collisionDamping);
-	m_particleSimSystem->setCollideShear(config.collisionShear);
-	m_particleSimSystem->setCollideAttraction(config.collisionAttraction);
-	m_particleSimSystem->setSimBoundary(config.simulationBoxSize * 0.5f);
+	applyWorkspaceBoundaryGridVisual();
 }
 //
 void Tesseract::renderParticleSimulation(
