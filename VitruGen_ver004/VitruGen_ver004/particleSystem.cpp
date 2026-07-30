@@ -8,11 +8,13 @@
 
 #include <assert.h>
 #include <math.h>
+#include <algorithm>
+#include <cmath>
 #include <vector>
 #include <memory.h>
 #include <cstdio>
 #include <cstdlib>
-#include <algorithm>
+
 #include <GL/glew.h>
 
 #ifndef CUDART_PI_F
@@ -20,6 +22,66 @@
 #endif
 
 using namespace std;
+
+namespace {
+
+	inline float lerpColor(float a, float b, float t) {
+
+		return a + t * (b - a);
+	}
+
+	void colorRamp(float t, float* color) {
+		static constexpr int kColorCount = 7;
+
+		static constexpr float colors[kColorCount][3] = {
+			{ 1.0f, 0.0f, 0.0f },
+			{ 1.0f, 0.5f, 0.0f },
+			{ 1.0f, 1.0f, 0.0f },
+			{ 0.0f, 1.0f, 0.0f },
+			{ 0.0f, 1.0f, 1.0f },
+			{ 0.0f, 0.0f, 1.0f },
+			{ 1.0f, 0.0f, 1.0f }
+		};
+
+		t = (std::max)(0.0f, (std::min)(1.0f, t));
+
+		const float scaled =
+			t * static_cast<float>(kColorCount - 1);
+
+		int index =
+			static_cast<int>(floor(scaled));
+
+		// color[index + 1] must remain valid,
+		// including when t == 1.0.
+		index = (std::min)(index, kColorCount - 2);
+
+		const float localT =
+			scaled -
+			static_cast<float>(index);
+
+		color[0] =
+			lerpColor(
+				colors[index][0],
+				colors[index + 1][0],
+				localT
+			);
+
+		color[1] =
+			lerpColor(
+				colors[index][1],
+				colors[index + 1][1],
+				localT
+			);
+
+		color[2] =
+			lerpColor(
+				colors[index][2],
+				colors[index + 1][2],
+				localT
+			);
+
+	}
+}
 
 ParticleSystem::ParticleSystem(
 	uint numParticles,
@@ -436,6 +498,44 @@ void ParticleSystem::setArray(ParticleArray array, const float* data, int start,
 		copyArrayToDevice(m_dAcc, data, start * 4 * sizeof(float), count * 4 * sizeof(float));
 		break;
 	}
+}
+
+void ParticleSystem::setDefaultColorRamp() {
+
+	if (!m_bInitialized ||
+		m_colorVBO == 0 ||
+		m_numParticles == 0) return;
+
+	vector<float> colors(
+		m_numParticles * 4,
+		1.0f
+	);
+
+	for (uint i = 0; i < m_numParticles; i++) {
+
+		const float t =
+			m_numParticles > 1
+			? static_cast<float>(i) / static_cast<float>(m_numParticles - 1)
+			: 0.0f;
+
+		float* particleColor =
+			colors.data() + i * 4;
+
+		colorRamp(t, particleColor);
+
+		particleColor[3] = 1.0f;
+	}
+
+	glBindBufferARB(GL_ARRAY_BUFFER, m_colorVBO);
+
+	glBufferSubData(
+		GL_ARRAY_BUFFER,
+		0,
+		static_cast<GLsizeiptr>(colors.size() * sizeof(float)),
+		colors.data()
+	);
+
+	glBindBufferARB(GL_ARRAY_BUFFER, 0);
 }
 
 void ParticleSystem::setUniformParticleColor(float r, float g, float b, float a) {

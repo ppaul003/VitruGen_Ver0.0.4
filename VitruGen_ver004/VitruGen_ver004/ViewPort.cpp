@@ -1050,7 +1050,7 @@ void ViewPort::drawSubLayerPanel(const TheArbiter& arbiter, const MarchingCubesP
 						labelX,
 						y0 + 674.0f,
 						activeItem ==
-							TheArbiter::INJECTION_OFFSET_LIST_APPLY_TO_BASE,
+						TheArbiter::INJECTION_OFFSET_LIST_APPLY_TO_BASE,
 						applyLine,
 						alpha
 					);
@@ -1071,7 +1071,7 @@ void ViewPort::drawSubLayerPanel(const TheArbiter& arbiter, const MarchingCubesP
 					labelX,
 					y0 + 716.0f,
 					activeItem ==
-						TheArbiter::INJECTION_OFFSET_LIST_EDIT_OBJECT,
+					TheArbiter::INJECTION_OFFSET_LIST_EDIT_OBJECT,
 					"[6] Edit Object",
 					alpha
 				);
@@ -1232,7 +1232,7 @@ void ViewPort::drawSubLayerPanel(const TheArbiter& arbiter, const MarchingCubesP
 	// Node 3: traversal/loop placeholder.
 	// ---------------------------------------------------------------------
 	else if (arbiter.getVolumeAssemblyNode() == TheArbiter::VOLUME_NODE_APPLY_TO_BASE) {
-	char operationLine[160];
+		char operationLine[160];
 
 		snprintf(
 			operationLine,
@@ -1367,6 +1367,10 @@ void ViewPort::drawLayer0Menu(const TheArbiter& arbiter) {
 	drawWorkspaceFrame(0.30f);
 }
 void ViewPort::drawLayer1EnvironmentConfig(const TheArbiter& arbiter) {
+	if (arbiter.isParticleSimLayer1PanelContext()) {
+		drawParticleSimLayer1Config(arbiter);
+		return;
+	}
 
 	drawPanelBackground();
 	glColor4f(1.0f, 1.0f, 1.0f, m_panelSlide);
@@ -1442,7 +1446,141 @@ void ViewPort::drawLayer1EnvironmentConfig(const TheArbiter& arbiter) {
 
 	drawWorkspaceFrame(0.20f, nullptr);
 }
+void ViewPort::drawParticleSimLayer1Config(
+	const TheArbiter& arbiter) {
+
+	drawPanelBackground();
+
+	glColor4f(1.0f, 1.0f, 1.0f, m_panelSlide);
+	drawText2D(
+		panelX(95.0f),
+		180.0f,
+		"LAYER 1 -> SIMCAD_4D WORKSPACE CONFIGURATION",
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	char modeLine[128];
+	snprintf(
+		modeLine,
+		sizeof(modeLine),
+		"MODE: %s",
+		arbiter.getSelectedWorkspaceDisplayName()
+	);
+
+	drawText2D(
+		panelX(95.0f),
+		215.0f,
+		modeLine,
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	const TheArbiter::ParticleSimLayer1Item selected =
+		arbiter.getParticleSimLayer1Selection();
+
+	char workspaceLine[256];
+	snprintf(
+		workspaceLine,
+		sizeof(workspaceLine),
+		"[1] WORKSPACE { %s }",
+		arbiter.getSelectedWorkspaceDisplayName()
+	);
+
+	drawSelectableLine(
+		95.0f,
+		280.0f,
+		selected ==
+		TheArbiter::ParticleSimLayer1Item::Workspace,
+		workspaceLine
+	);
+
+	char gridLine[256];
+	snprintf(
+		gridLine,
+		sizeof(gridLine),
+		"[2] GRID LAYOUT { %s }",
+		arbiter.getParticleGridLayoutName()
+	);
+
+	drawSelectableLine(
+		95.0f,
+		335.0f,
+		selected ==
+		TheArbiter::ParticleSimLayer1Item::GridLayout,
+		gridLine
+	);
+
+	char colorLine[256];
+	snprintf(
+		colorLine,
+		sizeof(colorLine),
+		"[3] COLOR MODE { %s }",
+		arbiter.getParticleColorModeName()
+	);
+
+	drawSelectableLine(
+		95.0f,
+		390.0f,
+		selected ==
+		TheArbiter::ParticleSimLayer1Item::ColorMode,
+		colorLine
+	);
+
+	char radiusLine[256];
+	snprintf(
+		radiusLine,
+		sizeof(radiusLine),
+		"[4] PARTICLE RADIUS { %s }",
+		arbiter.getParticleRadiusModeName()
+	);
+
+	drawSelectableLine(
+		95.0f,
+		445.0f,
+		selected ==
+		TheArbiter::ParticleSimLayer1Item::RadiusMode,
+		radiusLine
+	);
+
+	drawSelectableLine(
+		95.0f,
+		500.0f,
+		selected ==
+		TheArbiter::ParticleSimLayer1Item::Configure,
+		"[5] PRESS E TO CONFIGURE SIM"
+	);
+
+	if (arbiter.isParticleSimulationSelected()) {
+		glColor4f(0.45f, 1.0f, 0.65f, m_panelSlide);
+		drawText2D(
+			panelX(95.0f),
+			565.0f,
+			"PARTICLE_SIM draft configuration ready.",
+			GLUT_BITMAP_HELVETICA_18
+		);
+	}
+	else {
+		glColor4f(1.0f, 0.82f, 0.45f, m_panelSlide);
+		drawText2D(
+			panelX(95.0f),
+			565.0f,
+			"SANDBOX_SIM runtime remains reserved.",
+			GLUT_BITMAP_HELVETICA_18
+		);
+	}
+
+	drawHelpFooter(
+		"W / S: Select list     A / D: Change value",
+		"E: Activate selected row     Q: Back one layer"
+	);
+
+	drawWorkspaceFrame(0.20f, nullptr);
+}
 void ViewPort::drawLayer2ParticleConfig(const TheArbiter& arbiter, bool meshAvailable) {
+	if (arbiter.isParticleSimulationSelected()) {
+		drawParticleSimLayer2Config(arbiter);
+		return;
+	}
+
 	drawPanelBackground();
 
 	glColor4f(1.0f, 1.0f, 1.0f, m_panelSlide);
@@ -1565,6 +1703,304 @@ void ViewPort::drawLayer2ParticleConfig(const TheArbiter& arbiter, bool meshAvai
 	drawHelpFooter("W / S: Select list     A / D: Change value", "E: Run when LIST 3 selected     Q: Back one layer");
 	drawWorkspaceFrame(0.20f, nullptr);
 }
+
+void ViewPort::drawParticleSimLayer2Config(
+	const TheArbiter& arbiter) {
+
+	drawPanelBackground();
+
+	glColor4f(1.0f, 1.0f, 1.0f, m_panelSlide);
+	drawText2D(
+		panelX(95.0f),
+		180.0f,
+		"LAYER 2 -> PARTICLE_SIM CONFIGURATION",
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	char headerLine[128];
+	snprintf(
+		headerLine,
+		sizeof(headerLine),
+		"MODE: PARTICLE_SIM"
+	);
+	drawText2D(
+		panelX(95.0f),
+		210.0f,
+		headerLine,
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	snprintf(
+		headerLine,
+		sizeof(headerLine),
+		"COLOR MODE: %s",
+		arbiter.getParticleColorModeName()
+	);
+	drawText2D(
+		panelX(95.0f),
+		240.0f,
+		headerLine,
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	snprintf(
+		headerLine,
+		sizeof(headerLine),
+		"RADIUS MODE: %s",
+		arbiter.getParticleRadiusModeName()
+	);
+	drawText2D(
+		panelX(95.0f),
+		270.0f,
+		headerLine,
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	const TheArbiter::ParticleSimDraftConfig& draft =
+		arbiter.getParticleSimDraftConfig();
+
+	const int selected =
+		arbiter.getParticleSimLayer2Selection();
+
+	const bool rgbMode =
+		draft.colorMode ==
+		TheArbiter::ParticleColorMode::RGB;
+
+	const bool randomRadius =
+		draft.radiusMode ==
+		TheArbiter::ParticleRadiusMode::Random;
+
+	const bool countEntryActive =
+		arbiter.isTextEntryActive() &&
+		arbiter.getTextEntryMode() ==
+		TextEntryMode::UnsignedInteger;
+
+	const char* entryBuffer =
+		arbiter.getTextEntryBuffer().c_str();
+
+	char line[256];
+	if (rgbMode) {
+		unsigned int selectedCount = draft.redCount;
+
+		switch (draft.selectedColorChannel) {
+		case TheArbiter::ParticleColorChannel::Green:
+			selectedCount = draft.greenCount;
+			break;
+
+		case TheArbiter::ParticleColorChannel::Blue:
+			selectedCount = draft.blueCount;
+			break;
+
+		default:
+		case TheArbiter::ParticleColorChannel::Red:
+		case TheArbiter::ParticleColorChannel::Count:
+			break;
+		}
+
+		if (countEntryActive) {
+
+			snprintf(
+				line,
+				sizeof(line),
+				"[1] PARTICLE AMOUNT { %s } [ :=%s ]",
+				arbiter.getParticleColorChannelName(),
+				entryBuffer
+			);
+		}
+		else {
+
+			snprintf(
+				line,
+				sizeof(line),
+				"[1] PARTICLE AMOUNT { %s } [ %u ]",
+				arbiter.getParticleColorChannelName(),
+				selectedCount
+			);
+		}
+
+	}
+	else {
+
+		if (countEntryActive) {
+
+			snprintf(
+				line,
+				sizeof(line),
+				"[1] PARTICLE AMOUNT { :=%s / %u }",
+				entryBuffer,
+				TheArbiter::kParticleSimCapacity
+			);
+		}
+		else {
+
+			snprintf(
+				line,
+				sizeof(line),
+				"[1] PARTICLE AMOUNT { %u / %u }",
+				draft.defaultParticleCount,
+				TheArbiter::kParticleSimCapacity
+			);
+		}
+	}
+
+	drawSelectableLine(
+		95.0f,
+		330.0f,
+		selected == 0,
+		line
+	);
+
+	snprintf(
+		line,
+		sizeof(line),
+		"[2] PARTICLE RESET MODE { %s }",
+		arbiter.getParticleSimResetModeName()
+	);
+
+	drawSelectableLine(
+		95.0f,
+		385.0f,
+		selected == 1,
+		line
+	);
+
+	if (randomRadius) {
+		snprintf(
+			line,
+			sizeof(line),
+			"[3] MIN RADIUS { %.4f }",
+			draft.minimumRadius
+		);
+
+		drawSelectableLine(
+			95.0f,
+			440.0f,
+			selected == 2,
+			line
+		);
+
+		snprintf(
+			line,
+			sizeof(line),
+			"[4] MAX RADIUS { %.4f }",
+			draft.maximumRadius
+		);
+
+		drawSelectableLine(
+			95.0f,
+			495.0f,
+			selected == 3,
+			line
+		);
+
+		drawSelectableLine(
+			95.0f,
+			550.0f,
+			selected == 4,
+			"[5] PRESS E TO RUN PARTICLES"
+		);
+	}
+	else {
+		snprintf(
+			line,
+			sizeof(line),
+			"[3] PARTICLE RADIUS { %.4f }",
+			draft.uniformRadius
+		);
+
+		drawSelectableLine(
+			95.0f,
+			440.0f,
+			selected == 2,
+			line
+		);
+
+		drawSelectableLine(
+			95.0f,
+			495.0f,
+			selected == 3,
+			"[4] PRESS E TO RUN PARTICLES"
+		);
+	}
+
+	float statusY = randomRadius ? 610.0f : 555.0f;
+
+	if (rgbMode) {
+		glColor4f(0.72f, 0.78f, 0.82f, m_panelSlide);
+
+		snprintf(
+			line,
+			sizeof(line),
+			"RED %u | GREEN %u | BLUE %u",
+			draft.redCount,
+			draft.greenCount,
+			draft.blueCount
+		);
+
+		drawText2D(
+			panelX(95.0f),
+			statusY,
+			line,
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		snprintf(
+			line,
+			sizeof(line),
+			"TOTAL %u / %u",
+			arbiter.getParticleSimRGBTotal(),
+			TheArbiter::kParticleSimCapacity
+		);
+
+		drawText2D(
+			panelX(95.0f),
+			statusY + 32.0f,
+			line,
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		statusY += 78.0f;
+	}
+
+	if (arbiter.isTextEntryActive()) {
+
+		glColor4f(0.45f, 1.0f, 0.65f, m_panelSlide);
+
+		drawText2D(
+			panelX(95.0f),
+			statusY,
+			arbiter.getTextEntryPrompt().c_str(),
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		glColor4f(1.0f, 0.82f, 0.45f, m_panelSlide);
+
+		drawText2D(
+			panelX(95.0f),
+			statusY + 30.0f,
+			arbiter.getTextEntryStatusMessage().c_str(),
+			GLUT_BITMAP_HELVETICA_12
+		);
+	}
+
+	if (arbiter.isTextEntryActive()) {
+
+		drawHelpFooter(
+			"NUMBER KEYS: Enter particle amount",
+			"BACKSPACE: Delete    ENTER: Commit    ESC: Cancel"
+		);
+	}
+	else {
+
+		drawHelpFooter(
+			"W / S: Select list     A / D: Change value",
+			"E / ENTER: Activate     Q: Back one layer"
+		);
+	}
+
+	drawWorkspaceFrame(0.20f, nullptr);
+}
+
 void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 	drawWorkspaceFrame(0.22f, nullptr);
 

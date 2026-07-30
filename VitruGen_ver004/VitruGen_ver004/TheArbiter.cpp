@@ -86,9 +86,78 @@ namespace {
 
 	static_assert(
 		kWorkspaceCatalogCount ==
-			static_cast<int>(TheArbiter::WorkspaceId::COUNT),
+		static_cast<int>(TheArbiter::WorkspaceId::COUNT),
 		"Every WorkspaceId must have exactly one catalog entry."
-	);
+		);
+
+	constexpr float kParticleSimRadiusPresets[] = {
+		0.0039f,
+		0.0046f,
+		0.0054f,
+		0.0061f,
+		0.0068f,
+		0.0076f,
+		0.0083f,
+		0.0091f,
+		0.0098f,
+		0.0105f,
+		0.0113f,
+		0.0120f,
+		0.0127f,
+		0.0135f,
+		0.0142f,
+		0.0149f,
+		0.0156f
+	};
+
+	constexpr int kParticleSimRadiusPresetCount =
+		static_cast<int>(
+			sizeof(kParticleSimRadiusPresets) /
+			sizeof(kParticleSimRadiusPresets[0])
+			);
+
+	int wrapIndex(int current, int count, int dir) {
+		if (count <= 0 || dir == 0) return current;
+
+		const int step = dir < 0 ? -1 : 1;
+		return (current + step + count) % count;
+	}
+
+	int findClosestParticleRadiusPreset(float value) {
+		int closestIndex = 0;
+		float closestDistance =
+			std::abs(value - kParticleSimRadiusPresets[0]);
+
+		for (int index = 1;
+			index < kParticleSimRadiusPresetCount;
+			index++) {
+
+			const float distance =
+				std::abs(value - kParticleSimRadiusPresets[index]);
+
+			if (distance < closestDistance) {
+				closestIndex = index;
+				closestDistance = distance;
+			}
+		}
+
+		return closestIndex;
+	}
+
+	void adjustParticleRadiusPreset(float& value, int dir) {
+		const int currentIndex =
+			findClosestParticleRadiusPreset(value);
+
+		const int nextIndex = (std::max)(
+			0,
+			(std::min)(
+				kParticleSimRadiusPresetCount - 1,
+				currentIndex + (dir < 0 ? -1 : 1)
+				)
+			);
+
+		value = kParticleSimRadiusPresets[nextIndex];
+	}
 
 	constexpr float kOffsetIncrementValues[] = {
 		0.01f, 0.012f, 0.02f, 0.025f, 0.05f,
@@ -240,12 +309,12 @@ void TheArbiter::validateNavigationState() const {
 	assert(
 		static_cast<int>(m_navigation.layer) >= 0 &&
 		static_cast<int>(m_navigation.layer) <
-			static_cast<int>(ApplicationLayer::COUNT)
+		static_cast<int>(ApplicationLayer::COUNT)
 	);
 	assert(
 		static_cast<int>(m_navigation.globalShellSelection) >= 0 &&
 		static_cast<int>(m_navigation.globalShellSelection) <
-			static_cast<int>(GlobalShellSelection::COUNT)
+		static_cast<int>(GlobalShellSelection::COUNT)
 	);
 	assert(
 		m_navigation.selectedDomain == WorkspaceDomain::GRID_2D ||
@@ -450,6 +519,330 @@ void TheArbiter::decreaseParticleRadius() {
 	}
 }
 
+bool TheArbiter::isParticleSimLayer1PanelContext() const {
+	if (m_navigation.layer != ApplicationLayer::DOMAIN_SELECTION ||
+		m_navigation.selectedDomain != WorkspaceDomain::SIMCAD_4D) {
+
+		return false;
+	}
+
+	const WorkspaceId workspace = getSelectedWorkspace();
+	return workspace == WorkspaceId::PARTICLE_SIMULATION ||
+		workspace == WorkspaceId::SANDBOX_SIM;
+}
+
+int TheArbiter::getParticleSimLayer2RowCount() const {
+	return m_particleSimDraftConfig.radiusMode ==
+		ParticleRadiusMode::Random
+		? 5 : 4;
+}
+
+unsigned int TheArbiter::getParticleSimRGBTotal() const {
+	return m_particleSimDraftConfig.redCount +
+		m_particleSimDraftConfig.greenCount +
+		m_particleSimDraftConfig.blueCount;
+}
+
+bool TheArbiter::isParticleSimLayer2RunSelected() const {
+	return m_particleSimLayer2Selection ==
+		getParticleSimLayer2RowCount() - 1;
+}
+
+void TheArbiter::cycleParticleSimPanelWorkspace(int dir) {
+	if (dir == 0) return;
+
+	const WorkspaceId workspace = getSelectedWorkspace();
+	const WorkspaceId nextWorkspace =
+		workspace == WorkspaceId::PARTICLE_SIMULATION
+		? WorkspaceId::SANDBOX_SIM
+		: WorkspaceId::PARTICLE_SIMULATION;
+
+	setWorkspaceSelection(
+		WorkspaceDomain::SIMCAD_4D,
+		nextWorkspace
+	);
+}
+
+void TheArbiter::moveParticleSimLayer1Cursor(int dir) {
+	const int count =
+		static_cast<int>(ParticleSimLayer1Item::Count);
+
+	const int current =
+		static_cast<int>(m_particleSimLayer1Selection);
+
+	m_particleSimLayer1Selection =
+		static_cast<ParticleSimLayer1Item>(
+			wrapIndex(current, count, dir)
+			);
+}
+
+void TheArbiter::moveParticleSimLayer2Cursor(int dir) {
+	m_particleSimLayer2Selection = wrapIndex(
+		m_particleSimLayer2Selection,
+		getParticleSimLayer2RowCount(),
+		dir
+	);
+}
+
+void TheArbiter::clampParticleSimLayer2Selection() {
+	const int lastRow =
+		getParticleSimLayer2RowCount() - 1;
+
+	m_particleSimLayer2Selection = (std::max)(
+		0,
+		(std::min)(m_particleSimLayer2Selection, lastRow)
+		);
+}
+
+void TheArbiter::adjustParticleSimDefaultCount(int dir) {
+	const unsigned int step = 100;
+	unsigned int& count =
+		m_particleSimDraftConfig.defaultParticleCount;
+
+	if (dir < 0) {
+		count = count > step ? count - step : 0;
+	}
+	else if (dir > 0) {
+		count = (std::min)(
+			kParticleSimCapacity,
+			count + step
+			);
+	}
+}
+
+void TheArbiter::cycleParticleSimGridLayout(int dir) {
+	const int current =
+		static_cast<int>(m_particleSimDraftConfig.gridLayout);
+
+	const int count =
+		static_cast<int>(ParticleGridLayout::Count);
+
+	m_particleSimDraftConfig.gridLayout =
+		static_cast<ParticleGridLayout>(
+			wrapIndex(current, count, dir));
+}
+
+void TheArbiter::cycleParticleSimColorMode(int dir) {
+	const int current =
+		static_cast<int>(m_particleSimDraftConfig.colorMode);
+
+	const int count =
+		static_cast<int>(ParticleColorMode::Count);
+
+	m_particleSimDraftConfig.colorMode =
+		static_cast<ParticleColorMode>(
+			wrapIndex(current, count, dir)
+			);
+
+	clampParticleSimLayer2Selection();
+}
+
+void TheArbiter::cycleParticleSimRadiusMode(int dir) {
+	const int current =
+		static_cast<int>(m_particleSimDraftConfig.radiusMode);
+
+	const int count =
+		static_cast<int>(ParticleRadiusMode::Count);
+
+	m_particleSimDraftConfig.radiusMode =
+		static_cast<ParticleRadiusMode>(
+			wrapIndex(current, count, dir)
+			);
+
+	clampParticleSimLayer2Selection();
+}
+
+void TheArbiter::cycleParticleSimColorChannel(int dir) {
+	const int current =
+		static_cast<int>(
+			m_particleSimDraftConfig.selectedColorChannel
+			);
+
+	const int count =
+		static_cast<int>(ParticleColorChannel::Count);
+
+	m_particleSimDraftConfig.selectedColorChannel =
+		static_cast<ParticleColorChannel>(
+			wrapIndex(current, count, dir));
+}
+
+void TheArbiter::cycleParticleSimResetMode(int dir) {
+	const int current =
+		static_cast<int>(m_particleSimDraftConfig.resetMode);
+
+	const int count =
+		static_cast<int>(ParticleSimResetMode::Count);
+
+	m_particleSimDraftConfig.resetMode =
+		static_cast<ParticleSimResetMode>(
+			wrapIndex(current, count, dir)
+			);
+}
+
+void TheArbiter::adjustParticleSimUniformRadius(int dir) {
+	adjustParticleRadiusPreset(
+		m_particleSimDraftConfig.uniformRadius,
+		dir
+	);
+}
+
+void TheArbiter::adjustParticleSimMinimumRadius(int dir) {
+	adjustParticleRadiusPreset(
+		m_particleSimDraftConfig.minimumRadius,
+		dir
+	);
+
+	m_particleSimDraftConfig.minimumRadius =
+		(std::min)(
+			m_particleSimDraftConfig.minimumRadius,
+			m_particleSimDraftConfig.maximumRadius);
+}
+
+void TheArbiter::adjustParticleSimMaximumRadius(int dir) {
+	adjustParticleRadiusPreset(
+		m_particleSimDraftConfig.maximumRadius,
+		dir
+	);
+
+	m_particleSimDraftConfig.maximumRadius =
+		(std::max)(
+			m_particleSimDraftConfig.maximumRadius,
+			m_particleSimDraftConfig.minimumRadius);
+}
+
+void TheArbiter::handleParticleSimLayer1Adjust(
+	int dir,
+	ArbiterResult& result) {
+
+	switch (m_particleSimLayer1Selection) {
+	case ParticleSimLayer1Item::Workspace:
+		cycleParticleSimPanelWorkspace(dir);
+		break;
+
+	case ParticleSimLayer1Item::GridLayout:
+		cycleParticleSimGridLayout(dir);
+		break;
+
+	case ParticleSimLayer1Item::ColorMode:
+		cycleParticleSimColorMode(dir);
+		break;
+
+	case ParticleSimLayer1Item::RadiusMode:
+		cycleParticleSimRadiusMode(dir);
+		break;
+
+	default:
+	case ParticleSimLayer1Item::Configure:
+	case ParticleSimLayer1Item::Count:
+		break;
+	}
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+}
+
+void TheArbiter::handleParticleSimLayer2Adjust(
+	int dir,
+	ArbiterResult& result) {
+
+	switch (m_particleSimLayer2Selection) {
+	case 0:
+		if (m_particleSimDraftConfig.colorMode ==
+			ParticleColorMode::Default) {
+
+			adjustParticleSimDefaultCount(dir);
+		}
+		else {
+			cycleParticleSimColorChannel(dir);
+		}
+		break;
+
+	case 1:
+		cycleParticleSimResetMode(dir);
+		break;
+
+	case 2:
+		if (m_particleSimDraftConfig.radiusMode ==
+			ParticleRadiusMode::Uniform) {
+
+			adjustParticleSimUniformRadius(dir);
+		}
+		else {
+			adjustParticleSimMinimumRadius(dir);
+		}
+		break;
+
+	case 3:
+		if (m_particleSimDraftConfig.radiusMode ==
+			ParticleRadiusMode::Random) {
+
+			adjustParticleSimMaximumRadius(dir);
+		}
+		break;
+
+	default:
+		break;
+	}
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+}
+
+void TheArbiter::requestParticleCountEntry(
+	ArbiterResult& result) {
+
+	if (m_particleSimDraftConfig.colorMode ==
+		ParticleColorMode::Default) {
+
+		beginDefaultParticleCountEntry(result);
+	}
+	else {
+		beginSelectedRGBCountEntry(result);
+	}
+}
+
+void TheArbiter::activateParticleSimLayer1Item(
+	ArbiterResult& result) {
+
+	if (m_particleSimLayer1Selection ==
+		ParticleSimLayer1Item::Configure &&
+		isParticleSimulationSelected()) {
+
+		setApplicationLayer(
+			ApplicationLayer::WORKSPACE_CONFIGURATION
+		);
+
+		clampParticleSimLayer2Selection();
+	}
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+}
+
+void TheArbiter::activateParticleSimLayer2Item(
+	ArbiterResult& result) {
+
+	if (m_particleSimLayer2Selection == 0) {
+		requestParticleCountEntry(result);
+		return;
+	}
+
+	if (isParticleSimLayer2RunSelected()) {
+		// TODO(PARTICLE_SIM_DRAFT_APPLICATION):
+		// Draft count, RGB and radius values intentionally remain
+		// presentation-only until the later runtime integration sprint.
+		setApplicationLayer(ApplicationLayer::ACTIVE_WORKSPACE);
+		result.command = CMD_START_PARTICLE_SIMULATION;
+		result.requestRedraw = true;
+		return;
+	}
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+}
+
 // =============================================================================
 // SINGLE_PARTICLE_MCAD EDIT SELECTIONS
 // =============================================================================
@@ -502,6 +895,7 @@ void TheArbiter::cycleRotationAngleIncrement(float dir) {
 			(m_rotationAngleIncrementIndex + 1) % kIncrementCount;
 	}
 }
+
 void TheArbiter::cycleOffsetVectorSelection(float dir) {
 	int value = static_cast<int>(m_offsetVectorSelection);
 	const int count = static_cast<int>(OFFSET_VECTOR_COUNT);
@@ -514,6 +908,7 @@ void TheArbiter::cycleOffsetVectorSelection(float dir) {
 	m_offsetVectorSelection =
 		static_cast<OffsetVector>(value);
 }
+
 void TheArbiter::cycleOffsetIncrement(float dir) {
 
 	if (dir < 0.0f) {
@@ -530,6 +925,7 @@ void TheArbiter::cycleOffsetIncrement(float dir) {
 	m_offsetIncrement =
 		kOffsetIncrementValues[m_offsetIncrementIndex];
 }
+
 void TheArbiter::cycleInjectionVoxelSelection(float dir) {
 	int currentIndex = 0;
 	for (int i = 0; i < kInjectionVoxelCycleCount; i++) {
@@ -1136,6 +1532,16 @@ void TheArbiter::updateHoverFromScreen(int x, int y, int w, int h) {
 // =============================================================================
 TheArbiter::ArbiterResult
 TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
+
+	// ---------------------------------------------------------
+	// GLOBAL MODAL INPUT GATE
+	//
+	// While TextEntrySession is active, every raw key belongs
+	// exclusively to the text-entry session.
+	// ---------------------------------------------------------
+	if (m_textEntry.isActive())
+		return handleTextEntryKeyboard(event);
+
 	ArbiterResult result;
 
 	if (event.signal == KeyboardInput::KEY_ESCAPE) {
@@ -1452,6 +1858,41 @@ void TheArbiter::handleGlobalShellKeyboard(
 void TheArbiter::handleDomainSelectionKeyboard(
 	const KeyboardInput::KeyEvent& event,
 	ArbiterResult& result) {
+
+	if (isParticleSimLayer1PanelContext()) {
+		switch (event.signal) {
+		case KeyboardInput::KEY_W:
+			moveParticleSimLayer1Cursor(-1);
+			result.command = CMD_REDRAW;
+			result.requestRedraw = true;
+			break;
+
+		case KeyboardInput::KEY_S:
+			moveParticleSimLayer1Cursor(+1);
+			result.command = CMD_REDRAW;
+			result.requestRedraw = true;
+			break;
+
+		case KeyboardInput::KEY_A:
+			handleParticleSimLayer1Adjust(-1, result);
+			break;
+
+		case KeyboardInput::KEY_D:
+			handleParticleSimLayer1Adjust(+1, result);
+			break;
+
+		case KeyboardInput::KEY_E:
+		case KeyboardInput::KEY_ENTER:
+			activateParticleSimLayer1Item(result);
+			break;
+
+		default:
+			break;
+		}
+
+		return;
+	}
+
 	switch (event.signal) {
 	case KeyboardInput::KEY_A:
 		cycleWorkspaceSelection(-1);
@@ -1476,6 +1917,41 @@ void TheArbiter::handleDomainSelectionKeyboard(
 void TheArbiter::handleWorkspaceConfigurationKeyboard(
 	const KeyboardInput::KeyEvent& event,
 	ArbiterResult& result) {
+
+	if (isParticleSimulationSelected()) {
+		switch (event.signal) {
+		case KeyboardInput::KEY_W:
+			moveParticleSimLayer2Cursor(-1);
+			result.command = CMD_REDRAW;
+			result.requestRedraw = true;
+			break;
+
+		case KeyboardInput::KEY_S:
+			moveParticleSimLayer2Cursor(+1);
+			result.command = CMD_REDRAW;
+			result.requestRedraw = true;
+			break;
+
+		case KeyboardInput::KEY_A:
+			handleParticleSimLayer2Adjust(-1, result);
+			break;
+
+		case KeyboardInput::KEY_D:
+			handleParticleSimLayer2Adjust(+1, result);
+			break;
+
+		case KeyboardInput::KEY_E:
+		case KeyboardInput::KEY_ENTER:
+			activateParticleSimLayer2Item(result);
+			break;
+
+		default:
+			break;
+		}
+
+		return;
+	}
+
 	switch (event.signal) {
 	case KeyboardInput::KEY_W:
 		moveParticleConfigCursorUp();
@@ -1672,6 +2148,80 @@ const char* TheArbiter::getParticleResetModeName() const {
 
 	default:
 		return "UNKNOWN_RESET_MODE";
+	}
+}
+const char* TheArbiter::getParticleGridLayoutName() const {
+	switch (m_particleSimDraftConfig.gridLayout) {
+	case ParticleGridLayout::None:
+		return "NONE";
+
+	case ParticleGridLayout::Minimal:
+		return "MINIMAL";
+
+	case ParticleGridLayout::Full:
+		return "FULL";
+
+	case ParticleGridLayout::Dynamic:
+		return "DYNAMIC";
+
+	default:
+	case ParticleGridLayout::Count:
+		return "UNKNOWN";
+	}
+}
+const char* TheArbiter::getParticleColorModeName() const {
+	switch (m_particleSimDraftConfig.colorMode) {
+	case ParticleColorMode::Default:
+		return "DEFAULT";
+
+	case ParticleColorMode::RGB:
+		return "RGB";
+
+	default:
+	case ParticleColorMode::Count:
+		return "UNKNOWN";
+	}
+}
+const char* TheArbiter::getParticleRadiusModeName() const {
+	switch (m_particleSimDraftConfig.radiusMode) {
+	case ParticleRadiusMode::Uniform:
+		return "UNIFORM";
+
+	case ParticleRadiusMode::Random:
+		return "RANDOM";
+
+	default:
+	case ParticleRadiusMode::Count:
+		return "UNKNOWN";
+	}
+}
+const char* TheArbiter::getParticleColorChannelName() const {
+	switch (m_particleSimDraftConfig.selectedColorChannel) {
+	case ParticleColorChannel::Red:
+		return "RED";
+
+	case ParticleColorChannel::Green:
+		return "GREEN";
+
+	case ParticleColorChannel::Blue:
+		return "BLUE";
+
+	default:
+	case ParticleColorChannel::Count:
+		return "UNKNOWN";
+	}
+}
+const char* TheArbiter::getParticleSimResetModeName() const {
+	switch (m_particleSimDraftConfig.resetMode) {
+	case ParticleSimResetMode::Default:
+		return "DEFAULT";
+
+	case ParticleSimResetMode::Random:
+		return "RANDOM";
+
+	default:
+	case ParticleSimResetMode::Count:
+		return "UNKNOWN";
 	}
 }
 const char* TheArbiter::getSingleParticleSubLayerName() const {
@@ -2293,22 +2843,7 @@ void TheArbiter::enterCurrentSelection(ArbiterResult& result) {
 
 		// PARTICLE_SIM path migrated from the legacy PARTICLES_3D mode.
 		if (isParticleSimulationSelected()) {
-			if (m_activeParticleConfigList ==
-				PARTICLE_LIST_RUN) {
-
-				setApplicationLayer(
-					ApplicationLayer::ACTIVE_WORKSPACE
-				);
-
-				result.command =
-					CMD_START_PARTICLE_SIMULATION;
-			}
-			else {
-
-				result.command = CMD_REDRAW;
-			}
-
-			result.requestRedraw = true;
+			activateParticleSimLayer2Item(result);
 			return;
 		}
 
@@ -3170,6 +3705,244 @@ bool TheArbiter::canApplyVolumeToBase() const {
 	return isVolumeBoundarySafe();
 }
 
+unsigned int
+TheArbiter::getAvailableRGBCountForSelectedChannel() const {
+
+	const unsigned int capacity =
+		kParticleSimCapacity;
+
+	const ParticleSimDraftConfig& draft =
+		m_particleSimDraftConfig;
+
+	unsigned int occupiedByOtherChannels = 0;
+
+	switch (draft.selectedColorChannel) {
+
+	case ParticleColorChannel::Red:
+		occupiedByOtherChannels =
+			draft.greenCount +
+			draft.blueCount;
+		break;
+
+	case ParticleColorChannel::Green:
+		occupiedByOtherChannels =
+			draft.redCount +
+			draft.blueCount;
+		break;
+
+	case ParticleColorChannel::Blue:
+		occupiedByOtherChannels =
+			draft.redCount +
+			draft.greenCount;
+		break;
+
+	default:
+	case ParticleColorChannel::Count:
+		return 0;
+	}
+
+	if (occupiedByOtherChannels >= capacity)
+		return 0;
+
+
+	return capacity - occupiedByOtherChannels;
+}
+
+void TheArbiter::beginSelectedRGBCountEntry(
+	ArbiterResult& result) {
+
+	const unsigned int maximum =
+		getAvailableRGBCountForSelectedChannel();
+
+	unsigned int currentValue = 0;
+
+	const char* prompt =
+		"ENTER PARTICLE AMOUNT";
+
+	switch (m_particleSimDraftConfig.selectedColorChannel) {
+
+	case ParticleColorChannel::Red:
+
+		m_textEntryTarget =
+			TextEntryTarget::ParticleRedCount;
+
+		currentValue =
+			m_particleSimDraftConfig.redCount;
+
+		prompt = "ENTER RED PARTICLE AMOUNT";
+		break;
+
+	case ParticleColorChannel::Green:
+
+		m_textEntryTarget =
+			TextEntryTarget::ParticleGreenCount;
+
+		currentValue =
+			m_particleSimDraftConfig.greenCount;
+
+		prompt ="ENTER GREEN PARTICLE AMOUNT";
+		break;
+
+	case ParticleColorChannel::Blue:
+
+		m_textEntryTarget =
+			TextEntryTarget::ParticleBlueCount;
+
+		currentValue =
+			m_particleSimDraftConfig.blueCount;
+
+		prompt = "ENTER BLUE PARTICLE AMOUNT";
+		break;
+
+	default:
+	case ParticleColorChannel::Count:
+
+		m_textEntryTarget =
+			TextEntryTarget::None;
+
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return;
+	}
+
+	const bool started =
+		m_textEntry.beginUnsignedInteger(
+			prompt,
+			0,
+			maximum,
+			currentValue
+		);
+
+	if (!started) {
+		m_textEntryTarget =
+			TextEntryTarget::None;
+	}
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+}
+
+void TheArbiter::beginDefaultParticleCountEntry(
+	ArbiterResult& result) {
+
+	m_textEntryTarget =
+		TextEntryTarget::ParticleDefaultCount;
+
+	const bool started =
+		m_textEntry.beginUnsignedInteger(
+			"ENTER PARTICLE AMOUNT",
+			0,
+			kParticleSimCapacity,
+			m_particleSimDraftConfig.defaultParticleCount
+		);
+
+	if (!started) {
+		m_textEntryTarget =
+			TextEntryTarget::None;
+	}
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+}
+
+void TheArbiter::applyCommittedTextEntry(
+	ArbiterResult& result) {
+
+	unsigned int value = 0;
+
+	if (!m_textEntry.tryGetCommittedUnsigned(value)) {
+
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return;
+	}
+
+	switch (m_textEntryTarget) {
+
+	case TextEntryTarget::ParticleDefaultCount:
+
+		m_particleSimDraftConfig.defaultParticleCount =
+			value;
+		break;
+
+	case TextEntryTarget::ParticleRedCount:
+
+		m_particleSimDraftConfig.redCount =
+			value;
+		break;
+
+	case TextEntryTarget::ParticleGreenCount:
+
+		m_particleSimDraftConfig.greenCount =
+			value;
+		break;
+
+	case TextEntryTarget::ParticleBlueCount:
+
+		m_particleSimDraftConfig.blueCount =
+			value;
+		break;
+
+	case TextEntryTarget::SingleParticleAssetName:
+
+		// Reserved for later asset-save integration.
+		break;
+
+	default:
+	case TextEntryTarget::None:
+		break;
+	}
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::handleTextEntryKeyboard(
+	const KeyboardInput::KeyEvent& event) {
+
+	ArbiterResult result;
+
+	const TextEntryAction action =
+		m_textEntry.handleRawKey(event.rawKey);
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+
+	switch (action) {
+
+	case TextEntryAction::Changed:
+		// ViewPort reads and displays the changed buffer.
+		break;
+
+	case TextEntryAction::Rejected:
+		// Session remains active.
+		// ViewPort displays the rejection status.
+		break;
+
+	case TextEntryAction::Cancelled:
+
+		m_textEntryTarget =
+			TextEntryTarget::None;
+		break;
+
+	case TextEntryAction::Committed:
+
+		applyCommittedTextEntry(result);
+
+		m_textEntryTarget =
+			TextEntryTarget::None;
+		break;
+
+	default:
+	case TextEntryAction::None:
+		break;
+	}
+
+	return result;
+}
+
 int TheArbiter::getInjectionVoxelDX() const {
 	switch (m_volumeInjectionVoxel) {
 
@@ -3199,6 +3972,7 @@ int TheArbiter::getInjectionVoxelDX() const {
 		return 0;
 	}
 }
+
 int TheArbiter::getInjectionVoxelDY() const {
 	switch (m_volumeInjectionVoxel) {
 
@@ -3228,6 +4002,7 @@ int TheArbiter::getInjectionVoxelDY() const {
 		return 0;
 	}
 }
+
 int TheArbiter::getInjectionVoxelDZ() const {
 	switch (m_volumeInjectionVoxel) {
 
@@ -3257,6 +4032,7 @@ int TheArbiter::getInjectionVoxelDZ() const {
 		return 0;
 	}
 }
+
 int TheArbiter::getRotationAngleIncrementDeg() const {
 	switch (m_rotationAngleIncrementIndex) {
 	case 1: return 20;

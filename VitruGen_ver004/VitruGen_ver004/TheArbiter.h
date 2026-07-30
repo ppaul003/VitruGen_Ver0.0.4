@@ -2,6 +2,7 @@
 #define __ARBITER_SYS_H__
 
 #include "Interactions.h"
+#include "TextEntry.h"
 
 class TheArbiter {
 public:
@@ -13,11 +14,13 @@ public:
 		ACTIVE_WORKSPACE,
 		COUNT
 	};
+
 	enum class GlobalShellSelection {
 		IDLE = 0,
 		WORKSPACE_DOMAINS,
 		COUNT
 	};
+
 	enum class WorkspaceDomain {
 		NONE = 0,
 		GRID_2D,
@@ -25,6 +28,7 @@ public:
 		SIMCAD_4D,
 		COUNT
 	};
+
 	enum class WorkspaceId {
 		NONE = 0,
 
@@ -54,17 +58,30 @@ public:
 		RESERVED
 	};
 
+	enum class TextEntryTarget {
+		None = 0,
+
+		ParticleDefaultCount,
+		ParticleRedCount,
+		ParticleGreenCount,
+		ParticleBlueCount,
+
+		SingleParticleAssetName
+	};
+
 	struct WorkspaceDescriptor {
 		WorkspaceId id;
 		WorkspaceDomain domain;
 		WorkspaceAvailability availability;
 		const char* canonicalName;
 	};
+
 	struct DomainWorkspaceSelections {
 		WorkspaceId grid2D = WorkspaceId::GRAPH_2D;
 		WorkspaceId grid3D = WorkspaceId::GRAPH_3D;
 		WorkspaceId simcad4D = WorkspaceId::PARTICLE_SIMULATION;
 	};
+
 	struct NavigationState {
 		ApplicationLayer layer = ApplicationLayer::GLOBAL_SHELL;
 		GlobalShellSelection globalShellSelection = GlobalShellSelection::IDLE;
@@ -86,10 +103,81 @@ public:
 		PARTICLE_COLOR_BLUE = 1,
 		PARTICLE_COLOR_GREEN = 2
 	};
+
 	enum ParticleResetMode {
 		PARTICLE_RESET_DEFAULT = 0,
 		PARTICLE_RESET_RANDOM = 1
 	};
+
+	enum class ParticleGridLayout {
+		None = 0,
+		Minimal,
+		Full,
+		Dynamic,
+		Count
+	};
+
+	enum class ParticleColorMode {
+		Default = 0,
+		RGB,
+		Count
+	};
+
+	enum class ParticleRadiusMode {
+		Uniform = 0,
+		Random,
+		Count
+	};
+
+	enum class ParticleColorChannel {
+		Red = 0,
+		Green,
+		Blue,
+		Count
+	};
+
+	enum class ParticleSimResetMode {
+		Default = 0,
+		Random,
+		Count
+	};
+
+	enum class ParticleSimLayer1Item {
+		Workspace = 0,
+		GridLayout,
+		ColorMode,
+		RadiusMode,
+		Configure,
+		Count
+	};
+
+	struct ParticleSimDraftConfig {
+		ParticleGridLayout gridLayout =
+			ParticleGridLayout::Dynamic;
+
+		ParticleColorMode colorMode =
+			ParticleColorMode::Default;
+
+		ParticleRadiusMode radiusMode =
+			ParticleRadiusMode::Uniform;
+
+		unsigned int defaultParticleCount = 4200;
+
+		unsigned int redCount = 0;
+		unsigned int greenCount = 0;
+		unsigned int blueCount = 0;
+
+		ParticleColorChannel selectedColorChannel =
+			ParticleColorChannel::Red;
+
+		ParticleSimResetMode resetMode =
+			ParticleSimResetMode::Default;
+
+		float uniformRadius = 0.0120f;
+		float minimumRadius = 0.0098f;
+		float maximumRadius = 0.0156f;
+	};
+
 	enum ParticleConfigList {
 		PARTICLE_LIST_COLOR = 0,
 
@@ -102,6 +190,7 @@ public:
 		PARTICLE_LIST_RUN = 3,
 		PARTICLE_LIST_COUNT = 4
 	};
+
 	// --- SINGLE_PARTICLE_MCAD WORKFLOW ---
 	enum ObjectEditMode {
 		EDIT_SCALE_WHOLE = 0,
@@ -109,11 +198,13 @@ public:
 		EDIT_SCALE_Y,
 		EDIT_SCALE_X
 	};
+
 	enum ObjectRotationMode {
 		ROTATE_PITCH = 0,
 		ROTATE_YAW,
 		ROTATE_ROLL
 	};
+
 	enum ObjectTransformMode {
 		TRANSFORM_SCALE = 0,
 		TRANSFORM_ROTATION
@@ -124,10 +215,12 @@ public:
 		OFFSET_VECTOR_Z,
 		OFFSET_VECTOR_COUNT
 	};
+
 	enum ParticleRenderMode {
 		PARTICLE_RENDER_DEFAULT = 0,
 		PARTICLE_RENDER_MESH = 1
 	};
+
 	enum SingleParticleSubLayer {
 		SP_SUB_LAYER_REFERENCE = 0,
 		SP_SUB_LAYER_SHAPE_EDIT,
@@ -135,6 +228,7 @@ public:
 		SP_SUB_LAYER_MARCHING_CUBES,
 		SP_SUB_LAYER_COUNT
 	};
+
 	enum VolumePrimitive {
 		VOLUME_PRIMITIVE_BASE = 0,
 		VOLUME_PRIMITIVE_SPHERE,
@@ -147,12 +241,14 @@ public:
 
 		VOLUME_PRIMITIVE_COUNT
 	};
+
 	enum PreviewPanelItem {
 		PREVIEW_LIST_INJECTION_MODE = 0,
 		PREVIEW_LIST_EDIT_OBJECT,
 		PREVIEW_LIST_RUN_MC,
 		PREVIEW_LIST_COUNT
 	};
+
 	enum EditObjectPanelItem {
 		EDIT_LIST_OBJECT = 0,
 		EDIT_LIST_ROTATION_INCREMENT,
@@ -160,6 +256,7 @@ public:
 		EDIT_LIST_PREVIEW_OBJECT,
 		EDIT_LIST_COUNT
 	};
+
 	enum InjectionEditObjectPanelItem {
 		// Dynamic Node_1 panel, used when Injection Voxels != None.
 		INJECTION_EDIT_LIST_TARGET = 0,
@@ -176,6 +273,7 @@ public:
 		INJECTION_EDIT_LIST_MIRROR = 3,
 		INJECTION_EDIT_LIST_VOXEL1_COUNT = 4
 	};
+
 	enum OffsetObjectPanelItem {
 		OFFSET_LIST_VECTOR = 0,
 		OFFSET_LIST_DISTANCE,
@@ -183,6 +281,7 @@ public:
 		OFFSET_LIST_EDIT_OBJECT,
 		OFFSET_LIST_COUNT
 	};
+
 	enum InjectionOffsetObjectPanelItem {
 		// Dynamic Node_2 panel, used when Injection Voxels != None.
 		INJECTION_OFFSET_LIST_TARGET = 0,
@@ -199,6 +298,7 @@ public:
 		INJECTION_OFFSET_LIST_MODE = 3,
 		INJECTION_OFFSET_LIST_VOXEL1_COUNT = 4
 	};
+
 	enum VolumeAssemblyNode {
 		VOLUME_NODE_PREVIEW = 0,
 		VOLUME_NODE_EDIT_OBJECT,
@@ -206,6 +306,7 @@ public:
 		VOLUME_NODE_APPLY_TO_BASE,
 		VOLUME_NODE_COUNT
 	};
+
 	enum VolumeInjectionVoxel {
 		INJECTION_VOXEL_NONE = 0,
 		INJECTION_VOXEL_211, // +X
@@ -243,22 +344,26 @@ public:
 
 		INJECTION_VOXEL_COUNT
 	};
+
 	enum VolumeInjectionMode {
 		VOLUME_FUSE = 0,
 		VOLUME_CUT,
 		VOLUME_MODE_COUNT
 	};
+
 	enum VolumeEditTarget {
 		VOLUME_EDIT_TARGET_VOXEL_0 = 0,
 		VOLUME_EDIT_TARGET_VOXEL_1,
 		VOLUME_EDIT_TARGET_COUNT
 	};
+
 	enum ApplyToBasePanelItem {
 		APPLY_LIST_COMMIT = 0,
 		APPLY_LIST_OFFSET_OBJECT,
 		APPLY_LIST_CANCEL_TO_PREVIEW,
 		APPLY_LIST_COUNT
 	};
+
 	enum MarchingCubesPanelItem {
 		MC_LIST_EXPORT_OBJ = 0,
 		MC_LIST_TO_SUB_LAYER_2,
@@ -284,11 +389,13 @@ public:
 		float y;
 		float z;
 	};
+
 	struct ObjectBasis {
 		BasisVector xAxis;
 		BasisVector yAxis;
 		BasisVector zAxis;
 	};
+
 	struct VolumeObjectState {
 		TheArbiter::VolumePrimitive primitive =
 			TheArbiter::VOLUME_PRIMITIVE_SPHERE;
@@ -320,6 +427,7 @@ public:
 		float offsetY = 0.0f;
 		float offsetZ = 0.0f;
 	};
+
 	struct ArbiterResult {
 		ArbiterCommand command = CMD_NONE;
 		bool requestRedraw = false;
@@ -340,6 +448,7 @@ public:
 	static constexpr float kParticleRadiusMin = 0.25f * kParticleRadiusMax;
 	static constexpr float kParticleRadiusDefault = 0.5f * (kParticleRadiusMin + kParticleRadiusMax);
 	static constexpr float kParticleRadiusStep = (kParticleRadiusMax - kParticleRadiusMin) / 16.0f;
+	static constexpr unsigned int kParticleSimCapacity = 16384;
 
 	TheArbiter();
 	~TheArbiter() = default;
@@ -393,6 +502,12 @@ public:
 	ParticleColorSelection getParticleColorSelection() const { return m_particleColorSelection; }
 	ParticleResetMode getParticleResetMode() const { return m_particleResetMode; }
 	ParticleConfigList getActiveParticleConfigList() const { return m_activeParticleConfigList; }
+	const ParticleSimDraftConfig& getParticleSimDraftConfig() const { return m_particleSimDraftConfig; }
+
+	ParticleSimLayer1Item getParticleSimLayer1Selection() const { return m_particleSimLayer1Selection; }
+	int getParticleSimLayer2Selection() const { return m_particleSimLayer2Selection; }
+	int getParticleSimLayer2RowCount() const;
+	unsigned int getParticleSimRGBTotal() const;
 
 	VolumeAssemblyNode getVolumeAssemblyNode() const { return m_volumeAssemblyNode; }
 	VolumeInjectionMode getVolumeInjectionMode() const { return m_volumeInjectionMode; }
@@ -427,8 +542,10 @@ public:
 	bool isIdleSelected() const { return m_navigation.globalShellSelection == GlobalShellSelection::IDLE; }
 	bool isWorkspaceDomainsSelected() const { return m_navigation.globalShellSelection == GlobalShellSelection::WORKSPACE_DOMAINS; }
 
-	bool isSingleParticleSelected() const { return getSelectedWorkspace() == WorkspaceId::SINGLE_PARTICLE_MCAD;}
+	bool isSingleParticleSelected() const { return getSelectedWorkspace() == WorkspaceId::SINGLE_PARTICLE_MCAD; }
 	bool isParticleSimulationSelected() const { return getSelectedWorkspace() == WorkspaceId::PARTICLE_SIMULATION; }
+	bool isParticleSimLayer1PanelContext() const;
+	bool isParticleSimLayer2RunSelected() const;
 	bool isVolumeBoundarySensorReady() const { return m_volumeBoundarySensorReady; }
 	bool isVolumeBoundarySafe() const { return m_volumeBoundarySensorReady && m_volumeBoundaryUnsafeCount == 0; }
 	bool isEditingInjectionVoxel0() const { return m_volumeEditTarget == VOLUME_EDIT_TARGET_VOXEL_0; }
@@ -459,6 +576,11 @@ public:
 
 	const char* getParticleColorName() const;
 	const char* getParticleResetModeName() const;
+	const char* getParticleGridLayoutName() const;
+	const char* getParticleColorModeName() const;
+	const char* getParticleRadiusModeName() const;
+	const char* getParticleColorChannelName() const;
+	const char* getParticleSimResetModeName() const;
 	const char* getParticleRenderModeName() const;
 	const char* getSingleParticleSubLayerName() const;
 	const char* getVolumePrimitiveName() const;
@@ -477,35 +599,77 @@ public:
 	void updateHoverFromScreen(int x, int y, int w, int h);
 	void finalizeVoxelBaseCommit();
 
+	bool isTextEntryActive() const { return m_textEntry.isActive(); }
+
+	TextEntryMode getTextEntryMode() const { return m_textEntry.getMode(); }
+	TextEntryTarget getTextEntryTarget() const { return m_textEntryTarget; }
+
+	const std::string& getTextEntryPrompt() const { return m_textEntry.getPrompt(); }
+	const std::string& getTextEntryBuffer() const { return m_textEntry.getBuffer(); }
+	const std::string& getTextEntryStatusMessage() const { return m_textEntry.getStatusMessage(); }
+
+	unsigned int getAvailableRGBCountForSelectedChannel() const;
+	void beginSelectedRGBCountEntry(ArbiterResult& result);
+
 private:
 	// --- NAVIGATION TRANSITIONS / INPUT ROUTING ---
 	void setApplicationLayer(ApplicationLayer layer);
+
 	void setWorkspaceSelection(
 		WorkspaceDomain domain,
 		WorkspaceId workspace
 	);
+
 	void validateNavigationState() const;
+
 	void handleGlobalShellKeyboard(
 		const KeyboardInput::KeyEvent& event,
 		ArbiterResult& result
 	);
+
 	void handleDomainSelectionKeyboard(
 		const KeyboardInput::KeyEvent& event,
 		ArbiterResult& result
 	);
+
 	void handleWorkspaceConfigurationKeyboard(
 		const KeyboardInput::KeyEvent& event,
 		ArbiterResult& result
 	);
 
+	ArbiterResult handleTextEntryKeyboard(
+		const KeyboardInput::KeyEvent& event
+	);
+
+	void applyCommittedTextEntry(ArbiterResult& result);
+	void beginDefaultParticleCountEntry(ArbiterResult& result);
+
 	// --- PARTICLE / WORKSPACE SELECTION ---
 	void cycleGlobalShellSelection(int dir);
 	void cycleWorkspaceSelection(int dir);
+	void cycleParticleSimPanelWorkspace(int dir);
 	void toggleParticleColorSelection();
 	void toggleParticleResetMode();
 
 	void moveParticleConfigCursorUp();
 	void moveParticleConfigCursorDown();
+	void moveParticleSimLayer1Cursor(int dir);
+	void moveParticleSimLayer2Cursor(int dir);
+	void handleParticleSimLayer1Adjust(int dir, ArbiterResult& result);
+	void handleParticleSimLayer2Adjust(int dir, ArbiterResult& result);
+	void activateParticleSimLayer1Item(ArbiterResult& result);
+	void activateParticleSimLayer2Item(ArbiterResult& result);
+	void requestParticleCountEntry(ArbiterResult& result);
+	void clampParticleSimLayer2Selection();
+	void adjustParticleSimDefaultCount(int dir);
+	void cycleParticleSimGridLayout(int dir);
+	void cycleParticleSimColorMode(int dir);
+	void cycleParticleSimRadiusMode(int dir);
+	void cycleParticleSimColorChannel(int dir);
+	void cycleParticleSimResetMode(int dir);
+	void adjustParticleSimUniformRadius(int dir);
+	void adjustParticleSimMinimumRadius(int dir);
+	void adjustParticleSimMaximumRadius(int dir);
 
 	void toggleParticleRenderMode();
 
@@ -611,12 +775,24 @@ private:
 	// --- NAVIGATION ---
 	NavigationState m_navigation;
 
+	TextEntrySession m_textEntry;
+	TextEntryTarget m_textEntryTarget =
+		TextEntryTarget::None;
+
 	// --- PARTICLE WORKSPACE CONFIGURATION ---
 	ParticleColorSelection m_particleColorSelection = PARTICLE_COLOR_RED;
 	ParticleResetMode m_particleResetMode = PARTICLE_RESET_DEFAULT;
 	ParticleConfigList m_activeParticleConfigList = PARTICLE_LIST_COLOR;
 	ParticleRenderMode m_particleRenderMode = PARTICLE_RENDER_DEFAULT;
+
 	float m_particleRadius = kParticleRadiusDefault;
+
+	ParticleSimDraftConfig m_particleSimDraftConfig;
+
+	ParticleSimLayer1Item m_particleSimLayer1Selection =
+		ParticleSimLayer1Item::Workspace;
+
+	int m_particleSimLayer2Selection = 0;
 
 	// --- SINGLE_PARTICLE_MCAD WORKFLOW ---
 	SingleParticleSubLayer m_singleParticleSubLayer = SP_SUB_LAYER_REFERENCE;

@@ -81,6 +81,7 @@ public:
 	
 	void update(float deltaTime);
 	void reset(ParticleConfig config);
+	void setDefaultColorRamp();
 	void setUniformParticleColor(float r, float g, float b, float a = 1.0f);
 	void setParticle(ParticleArray array, int index, float* data);
 	void setArray(ParticleArray array, const float* data, int start, int count);

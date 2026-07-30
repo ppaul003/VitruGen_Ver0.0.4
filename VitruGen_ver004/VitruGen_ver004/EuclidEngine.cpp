@@ -268,7 +268,7 @@ void EuclidEngine::initParticleSystems() {
 		m_tesseract.getPSConfig().simulationBoxSize
 	);
 
-	m_particleSimSystem->setUniformParticleColor(1.0f, 0.0, 0.0f, 1.0f);
+	m_particleSimSystem->setDefaultColorRamp();
 
 	m_particleSimSystem->reset(
 		ParticleSystem::CNFG_DEFAULT_RESTART
@@ -1467,20 +1467,23 @@ void EuclidEngine::applyParticleSelectionsToSystem() {
 void EuclidEngine::applyPSSelectedParticleColorToSystem() {
 	if (!m_particleSimSystem) return;
 
-	switch (m_arbiter.getParticleColorSelection()) {
-	case TheArbiter::PARTICLE_COLOR_BLUE:
-		m_particleSimSystem->setUniformParticleColor(0.0f, 0.25f, 1.0f, 1.0f);
-		break;
+	const TheArbiter::ParticleSimDraftConfig& draft =
+		m_arbiter.getParticleSimDraftConfig();
 
-	case TheArbiter::PARTICLE_COLOR_GREEN:
-		m_particleSimSystem->setUniformParticleColor(0.0f, 1.0f, 0.25f, 1.0f);
-		break;
+	if (draft.colorMode == TheArbiter::ParticleColorMode::Default) {
 
-	default:
-	case TheArbiter::PARTICLE_COLOR_RED:
-		m_particleSimSystem->setUniformParticleColor(1.0f, 0.05f, 0.0f, 1.0f);
-		break;
+		m_particleSimSystem->setDefaultColorRamp();
+
+		return;
 	}
+
+	// RGB runtime assignment is implemented in the later
+	// active-count / RGB allocation sprint.
+	//
+	// For now, do not pretend the RGB draft values have been
+	// applied.
+
+	m_particleSimSystem->setDefaultColorRamp();
 }
 // =============================================================================
 // GLOBAL TESSERACT PRESENTATION

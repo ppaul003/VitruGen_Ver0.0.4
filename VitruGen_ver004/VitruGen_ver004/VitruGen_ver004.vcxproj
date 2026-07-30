@@ -87,6 +87,7 @@
     <ClCompile Include="marchingCubes.cpp" />
     <ClCompile Include="particleSystem.cpp" />
     <ClCompile Include="renderer_Euclid.cpp" />
+    <ClCompile Include="TextEntry.cpp" />
     <ClCompile Include="TheArbiter.cpp" />
     <ClCompile Include="TheTesseract.cpp" />
     <ClCompile Include="ViewPort.cpp" />
@@ -112,6 +113,7 @@
     <ClInclude Include="renderer_Euclid.h" />
     <ClInclude Include="render_utils.h" />
     <ClInclude Include="tables.h" />
+    <ClInclude Include="TextEntry.h" />
     <ClInclude Include="TheArbiter.h" />
     <ClInclude Include="TheTesseract.h" />
     <ClInclude Include="ViewPort.h" />

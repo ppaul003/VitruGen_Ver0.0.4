@@ -1449,6 +1449,7 @@ void EuclidRenderer::drawMarchingCubesVoxelGridWire(
     glLineWidth(1.0f);
     glDepthMask(GL_TRUE);
 }
+
 void EuclidRenderer::drawActiveVoxelCellWire(
     uint voxelID,
     int gridX,

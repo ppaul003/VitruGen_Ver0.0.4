@@ -92,7 +92,9 @@ private:
 
 	void drawLayer0Menu(const TheArbiter& arbiter);
 	void drawLayer1EnvironmentConfig(const TheArbiter& arbiter);
+	void drawParticleSimLayer1Config(const TheArbiter& arbiter);
 	void drawLayer2ParticleConfig(const TheArbiter& arbiter, bool meshAvailable);
+	void drawParticleSimLayer2Config(const TheArbiter& arbiter);
 	void drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused);
 
 	void drawObjExportPanel(const ObjExportPanelData& data);
