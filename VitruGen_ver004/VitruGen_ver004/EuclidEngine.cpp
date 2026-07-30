@@ -1386,12 +1386,16 @@ void EuclidEngine::freeMarchingCubes() {
 // SHARED PARTICLE CONFIGURATION
 // =============================================================================
 
-void EuclidEngine::drawTesseractGridAndPlane() {
-	if (!m_tesseract.applyWorkspaceBoundaryGridVisual() || 
-		!m_renderer) return;
+void EuclidEngine::drawTesseractGridAndPlane(
+	bool particleSimPreview) {
 
-	const Tesseract::WorkspaceGridVisualConfig& gridConfig =
-		m_tesseract.getWorkspaceGridVisualConfig();
+	const bool gridVisualReady =
+		particleSimPreview
+		? m_tesseract.applyPSGridVisual()
+		: m_tesseract.applyWorkspaceBoundaryGridVisual();
+
+	if (!gridVisualReady ||
+		!m_renderer) return;
 
 	// Draw the full 3D Tesseract boundary/grid.
 	m_renderer->setGridMode3D();
@@ -1401,8 +1405,9 @@ void EuclidEngine::drawTesseractGridAndPlane() {
 	// Menu-layer moving diagnostic slice.
 	// ---------------------------------------------------------
 
-	if (m_arbiter.isMenuLayer() ||
-		m_tesseract.isTransitioningToWorkspace()) {
+	if (!particleSimPreview &&
+		(m_arbiter.isMenuLayer() ||
+			m_tesseract.isTransitioningToWorkspace())) {
 
 		const int halfSlice =
 			m_tesseract.getWorkspaceGridHalfSliceRange();
@@ -1448,6 +1453,27 @@ void EuclidEngine::drawTesseractGridAndPlane() {
 	}
 }
 
+void EuclidEngine::applyPSGridLayoutToWorkspace(
+	bool forceDiagnostic) {
+
+	const TheArbiter::ParticleGridLayout layout =
+		m_arbiter.getParticleSimDraftConfig().gridLayout;
+
+	const bool changed =
+		m_tesseract.setPSGridLayout(layout);
+
+	if (!changed && !forceDiagnostic)
+		return;
+
+	printf(
+		"[PARTICLE_SIM] Grid layout applied: %s%s\n",
+		m_arbiter.getParticleGridLayoutName(),
+		layout == TheArbiter::ParticleGridLayout::Dynamic
+		? " (FULL fallback)"
+		: ""
+	);
+}
+
 // =============================================================================
 // PARTICLE_SIM WORKSPACE SUPPORT (SIMCAD_4D)
 // =============================================================================
@@ -1467,9 +1493,30 @@ bool EuclidEngine::applyParticleSelectionsToSystem() {
 		runtimeConfig)) {
 
 		printf(
-			"[PARTICLE_SIM] Configuration rejected: requested count "
-			"exceeds capacity %u.\n",
-			capacity
+			"[PARTICLE_SIM] Configuration rejected: count or radius "
+			"is outside the supported runtime limits "
+			"(capacity %u, maximum radius %.4f).\n",
+			capacity,
+			ParticleSimRuntimeConfig::kMaximumSupportedRadius
+		);
+
+		printf(
+			"  requested count = %u\n",
+			draft.colorMode == TheArbiter::ParticleColorMode::Default
+			? draft.defaultParticleCount
+			: m_arbiter.getParticleSimRGBTotal()
+		);
+		printf(
+			"  requested radius mode = %s\n",
+			draft.radiusMode == TheArbiter::ParticleRadiusMode::Random
+			? "RANDOM"
+			: "UNIFORM"
+		);
+		printf(
+			"  requested radius = %.4f / %.4f - %.4f\n",
+			draft.uniformRadius,
+			draft.minimumRadius,
+			draft.maximumRadius
 		);
 
 		return false;
@@ -1490,6 +1537,13 @@ bool EuclidEngine::applyParticleSelectionsToSystem() {
 		return false;
 	}
 
+	// Reset placement must use a radius large enough for every active
+	// particle. RANDOM mode therefore places with maximumRadius before
+	// assigning the individual velocity.w values.
+	m_particleSimSystem->setParticleRadius(
+		runtimeConfig.placementRadius
+	);
+
 	const ParticleSystem::ParticleConfig resetConfig =
 		draft.resetMode == TheArbiter::ParticleSimResetMode::Random
 		? ParticleSystem::CNFG_RANDOM_RESTART
@@ -1498,12 +1552,15 @@ bool EuclidEngine::applyParticleSelectionsToSystem() {
 	if (!m_tesseract.resetPSWorkspace(resetConfig))
 		return false;
 
+	if (!applyPSRadiusModeToSystem())
+		return false;
+
 	if (!applyPSColorModeToSystem())
 		return false;
 
 	syncRenderingWithParticleSystem();
 
-	printf("[PARTICLE_SIM] Applied configuration:\n");
+	printf("[PARTICLE_SIM] Applied radius configuration:\n");
 	printf("  capacity     = %u\n", capacity);
 	printf("  active       = %u\n", m_particleSimActiveCount);
 	printf(
@@ -1520,6 +1577,27 @@ bool EuclidEngine::applyParticleSelectionsToSystem() {
 	}
 
 	printf(
+		"  radiusMode   = %s\n",
+		draft.radiusMode == TheArbiter::ParticleRadiusMode::Random
+		? "RANDOM"
+		: "UNIFORM"
+	);
+
+	if (draft.radiusMode == TheArbiter::ParticleRadiusMode::Random) {
+		printf("  minimumRadius = %.4f\n", draft.minimumRadius);
+		printf("  maximumRadius = %.4f\n", draft.maximumRadius);
+		printf("  seed         = %u\n", 1973u);
+	}
+	else {
+		printf("  radius       = %.4f\n", draft.uniformRadius);
+	}
+
+	printf(
+		"  placementRadius = %.4f\n",
+		runtimeConfig.placementRadius
+	);
+
+	printf(
 		"  resetMode    = %s\n",
 		draft.resetMode == TheArbiter::ParticleSimResetMode::Random
 		? "RANDOM"
@@ -1527,6 +1605,33 @@ bool EuclidEngine::applyParticleSelectionsToSystem() {
 	);
 
 	return true;
+}
+
+bool EuclidEngine::applyPSRadiusModeToSystem() {
+	if (!m_particleSimSystem) return false;
+
+	const TheArbiter::ParticleSimDraftConfig& draft =
+		m_arbiter.getParticleSimDraftConfig();
+
+	if (draft.radiusMode == TheArbiter::ParticleRadiusMode::Uniform) {
+		return m_particleSimSystem->setUniformActiveRadii(
+			draft.uniformRadius
+		);
+	}
+
+	if (draft.radiusMode == TheArbiter::ParticleRadiusMode::Random) {
+		return m_particleSimSystem->setRandomActiveRadii(
+			draft.minimumRadius,
+			draft.maximumRadius,
+			1973u
+		);
+	}
+
+	printf(
+		"[PARTICLE_SIM] Unsupported radius mode was not applied.\n"
+	);
+
+	return false;
 }
 
 bool EuclidEngine::applyPSColorModeToSystem() {
@@ -1927,12 +2032,22 @@ void EuclidEngine::onDisplay() {
 		m_tesseract.getActiveWorkspace() ==
 		TheArbiter::WorkspaceId::PARTICLE_SIMULATION;
 
+	const bool particleSimulationPreviewActive =
+		m_arbiter.isParticleSimulationSelected() &&
+		(m_arbiter.isParticleSimLayer1PanelContext() ||
+			m_arbiter.isParticleConfigLayer());
+
 	// The global diagnostic grid is used by the menu and configuration
 	// layers. Active particle workspaces own their local render context.
 	if (!singleParticleWorkspaceActive &&
 		!particleSimulationWorkspaceActive) {
 
-		drawTesseractGridAndPlane();
+		if (particleSimulationPreviewActive)
+			applyPSGridLayoutToWorkspace();
+
+		drawTesseractGridAndPlane(
+			particleSimulationPreviewActive
+		);
 	}
 
 	if (particleSimulationWorkspaceActive ||
@@ -2300,6 +2415,8 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 
 		m_singleParticlePlaced = false;
 		m_tesseract.clearSPPlacement();
+
+		applyPSGridLayoutToWorkspace(true);
 
 		if (!applyParticleSelectionsToSystem()) {
 			printf(

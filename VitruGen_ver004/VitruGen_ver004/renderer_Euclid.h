@@ -85,6 +85,12 @@ public:
 	void setWindowSize(int w, int h) { m_window_w = w; m_window_h = h; }
 	void setFOV(float fov) { m_fov = fov; }
 	void setGridStyle(int majorEvery, bool drawMinor);
+	void setWorkspaceGridVisibility(
+		bool drawBoundary,
+		bool drawMajor,
+		bool drawMinor,
+		bool drawAxes
+	);
 	void setGridMode3D();
 	void setGridMode2D(WorkPlane plane, int sliceOffset);
 	void setRadius(float* r, int numParticles);
@@ -256,7 +262,8 @@ protected:
 	);
 
 	void drawAxes();
-	void drawWorkspaceBox();
+	void drawWorkspaceBoundary();
+	void drawWorkspaceMajorGrid();
 	void drawVolumeAxes(
 		VolumeAxisGuideMode guideMode,
 		const VolumeObjectBasis& bakedBasis,
@@ -326,6 +333,8 @@ private:
 
 	bool m_bInitialized;
 	bool m_gridEnabled = true;
+	bool m_drawBoundaryGrid = true;
+	bool m_drawMajorGrid = true;
 	bool m_drawMinorGrid = false;
 	bool m_drawAxes = true;
 	bool m_particleMeshLoaded = false;

@@ -97,7 +97,9 @@ private:
 	void onClose();
 
 	// --- WORKSPACE ROUTING / GLOBAL PRESENTATION ---
-	void drawTesseractGridAndPlane();
+	void drawTesseractGridAndPlane(
+		bool particleSimPreview = false
+	);
 	void syncTesseractWorkspaceFromArbiter();
 	void syncCameraBehaviorFromArbiter();
 
@@ -110,6 +112,10 @@ private:
 	// --- PARTICLE_SIM WORKSPACE (SIMCAD_4D) ---
 	bool applyParticleSelectionsToSystem();
 	bool applyPSColorModeToSystem();
+	bool applyPSRadiusModeToSystem();
+	void applyPSGridLayoutToWorkspace(
+		bool forceDiagnostic = false
+	);
 
 	// --- SINGLE_PARTICLE_MCAD WORKSPACE (GRID_3D) ---
 	void initVolumeField();

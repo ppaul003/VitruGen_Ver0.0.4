@@ -153,7 +153,7 @@ public:
 
 	struct ParticleSimDraftConfig {
 		ParticleGridLayout gridLayout =
-			ParticleGridLayout::Dynamic;
+			ParticleGridLayout::Full;
 
 		ParticleColorMode colorMode =
 			ParticleColorMode::Default;

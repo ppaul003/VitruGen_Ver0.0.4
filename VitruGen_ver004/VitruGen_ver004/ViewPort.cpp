@@ -1551,10 +1551,23 @@ void ViewPort::drawParticleSimLayer1Config(
 
 	if (arbiter.isParticleSimulationSelected()) {
 		glColor4f(0.45f, 1.0f, 0.65f, m_panelSlide);
+
+		char previewStatus[256];
+		snprintf(
+			previewStatus,
+			sizeof(previewStatus),
+			"PARTICLE_SIM grid preview: %s%s",
+			arbiter.getParticleGridLayoutName(),
+			arbiter.getParticleSimDraftConfig().gridLayout ==
+			TheArbiter::ParticleGridLayout::Dynamic
+			? " (FULL fallback; hash debug reserved)"
+			: ""
+		);
+
 		drawText2D(
 			panelX(95.0f),
 			565.0f,
-			"PARTICLE_SIM draft configuration ready.",
+			previewStatus,
 			GLUT_BITMAP_HELVETICA_18
 		);
 	}
@@ -2004,6 +2017,19 @@ void ViewPort::drawParticleSimLayer2Config(
 void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 	drawWorkspaceFrame(0.22f, nullptr);
 
+	const bool particleSimLayer =
+		!arbiter.isSingleParticleSelected();
+
+	const bool dynamicGridLayout =
+		particleSimLayer &&
+		arbiter.getParticleSimDraftConfig().gridLayout ==
+		TheArbiter::ParticleGridLayout::Dynamic;
+
+	const float panelBottom =
+		particleSimLayer
+		? (dynamicGridLayout ? 236.0f : 210.0f)
+		: 184.0f;
+
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_TEXTURE_2D);
 	glUseProgram(0);
@@ -2015,8 +2041,8 @@ void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 	glBegin(GL_QUADS);
 	glVertex2f(24.0f, 24.0f);
 	glVertex2f(1120.0f, 24.0f);
-	glVertex2f(1120.0f, 158.0f);
-	glVertex2f(24.0f, 158.0f);
+	glVertex2f(1120.0f, panelBottom);
+	glVertex2f(24.0f, panelBottom);
 	glEnd();
 
 	glColor3f(0.85f, 0.95f, 1.0f);
@@ -2139,6 +2165,21 @@ void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 		? draft.defaultParticleCount
 		: arbiter.getParticleSimRGBTotal();
 
+	char gridLine[256];
+	snprintf(
+		gridLine,
+		sizeof(gridLine),
+		"GRID LAYOUT: %s",
+		arbiter.getParticleGridLayoutName()
+	);
+
+	drawText2D(
+		40.0f,
+		82.0f,
+		gridLine,
+		GLUT_BITMAP_HELVETICA_18
+	);
+
 	char colorLine[256];
 	if (draft.colorMode == TheArbiter::ParticleColorMode::RGB) {
 		snprintf(
@@ -2160,7 +2201,7 @@ void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 
 	drawText2D(
 		40.0f,
-		82.0f,
+		108.0f,
 		colorLine,
 		GLUT_BITMAP_HELVETICA_18
 	);
@@ -2180,10 +2221,45 @@ void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 
 	drawText2D(
 		40.0f,
-		108.0f,
+		134.0f,
 		statusLine,
 		GLUT_BITMAP_HELVETICA_18
 	);
+
+	char radiusLine[256];
+	if (draft.radiusMode == TheArbiter::ParticleRadiusMode::Random) {
+		snprintf(
+			radiusLine,
+			sizeof(radiusLine),
+			"RADIUS MODE: RANDOM     RADIUS RANGE: %.4f - %.4f",
+			draft.minimumRadius,
+			draft.maximumRadius
+		);
+	}
+	else {
+		snprintf(
+			radiusLine,
+			sizeof(radiusLine),
+			"RADIUS MODE: UNIFORM     RADIUS: %.4f",
+			draft.uniformRadius
+		);
+	}
+
+	drawText2D(
+		40.0f,
+		160.0f,
+		radiusLine,
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	if (dynamicGridLayout) {
+		drawText2D(
+			40.0f,
+			186.0f,
+			"HASH DEBUG: RESERVED     VISUAL FALLBACK: FULL",
+			GLUT_BITMAP_HELVETICA_18
+		);
+	}
 
 	char controlsLine[256];
 	snprintf(
@@ -2195,7 +2271,7 @@ void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 
 	drawText2D(
 		40.0f,
-		134.0f,
+		dynamicGridLayout ? 212.0f : 186.0f,
 		controlsLine,
 		GLUT_BITMAP_HELVETICA_18
 	);
