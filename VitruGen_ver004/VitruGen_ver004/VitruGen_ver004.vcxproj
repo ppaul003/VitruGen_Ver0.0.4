@@ -109,6 +109,7 @@
     <ClInclude Include="kernel_impl.cuh" />
     <ClInclude Include="marchingCubes.h" />
     <ClInclude Include="params_kernel.cuh" />
+    <ClInclude Include="ParticleSimRuntimeConfig.h" />
     <ClInclude Include="particleSystem.h" />
     <ClInclude Include="renderer_Euclid.h" />
     <ClInclude Include="render_utils.h" />
