@@ -274,6 +274,8 @@ public:
 	// ---------------------------------------------------------
 	enum SPSubLayer0PanelItem {
 		SP0_LIST_COLLISION_SHAPE = 0,
+		SP0_LIST_LOAD_STATIC_PARTICLE,
+		SP0_LIST_SAVE_ACTIVE_PARTICLE,
 		SP0_LIST_RENDERING_SETUP,
 		SP0_LIST_COUNT
 	};
@@ -442,7 +444,9 @@ public:
 	};
 
 	enum MarchingCubesPanelItem {
-		MC_LIST_EXPORT_OBJ = 0,
+		MC_LIST_SAVE_STATIC_PARTICLE = 0,
+		MC_LIST_SAVE_STATIC_PARTICLE_AS,
+		MC_LIST_EXPORT_OBJ,
 		MC_LIST_TO_SUB_LAYER_2,
 		MC_LIST_TO_SUB_LAYER_0,
 		MC_LIST_COUNT
@@ -513,6 +517,10 @@ public:
 
 		bool enterMarchingCubes = false;
 		bool exportObjRequested = false;
+		bool saveStaticParticleRequested = false;
+		bool saveStaticParticleAsRequested = false;
+		bool loadStaticParticleRequested = false;
+		std::string staticParticleAssetName;
 
 		// Volume CAD action.
 		bool commitVolumeFuse = false;
@@ -732,6 +740,9 @@ public:
 	void updateHoverFromScreen(int x, int y, int w, int h);
 	void finalizeVoxelBaseCommit();
 	void beginSelectedRGBCountEntry(ArbiterResult& result);
+	void beginSingleParticleAssetNameEntry(
+		ArbiterResult& result,
+		const std::string& initialName = "Static Particle");
 
 
 	TextEntryMode getTextEntryMode() const { return m_textEntry.getMode(); }

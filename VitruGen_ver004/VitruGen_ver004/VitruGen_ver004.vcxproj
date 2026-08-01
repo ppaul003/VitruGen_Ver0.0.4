@@ -46,13 +46,14 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
+	  <LanguageStandard>stdcpp17</LanguageStandard>
       <PreprocessorDefinitions>WIN32;WIN64;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>C:\Users\richa\cuda-samples-master\Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cudart_static.lib;windowscodecs.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
@@ -62,6 +63,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>MaxSpeed</Optimization>
+	  <LanguageStandard>stdcpp17</LanguageStandard>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;WIN64;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -72,7 +74,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cudart_static.lib;windowscodecs.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
@@ -83,9 +85,18 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />
+	<ClCompile Include="AssetPathResolver.cpp" />
     <ClCompile Include="EuclidEngine.cpp" />
+	<ClCompile Include="JsonValue.cpp" />
 	<ClCompile Include="MeshGeometry.cpp" />
 	<ClCompile Include="MeshProcessor.cpp" />
+	<ClCompile Include="MeshUVGenerator.cpp" />
+	<ClCompile Include="ObjMtlImporter.cpp" />
+	<ClCompile Include="PngImage.cpp" />
+	<ClCompile Include="ProjectAssetRepository.cpp" />
+	<ClCompile Include="StaticParticleAsset.cpp" />
+	<ClCompile Include="StaticParticleAssetIO.cpp" />
+	<ClCompile Include="VspaManifest.cpp" />
     <ClCompile Include="marchingCubes.cpp" />
     <ClCompile Include="particleSystem.cpp" />
     <ClCompile Include="renderer_Euclid.cpp" />
@@ -105,6 +116,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h" />
+	<ClInclude Include="AssetPathResolver.h" />
     <ClInclude Include="EuclidEngine.h" />
     <ClInclude Include="Interactions.h" />
     <ClInclude Include="kernel.h" />
@@ -112,6 +124,10 @@
     <ClInclude Include="marchingCubes.h" />
 	<ClInclude Include="MeshGeometry.h" />
 	<ClInclude Include="MeshProcessor.h" />
+	<ClInclude Include="MeshUVGenerator.h" />
+	<ClInclude Include="ObjMtlImporter.h" />
+	<ClInclude Include="PngImage.h" />
+	<ClInclude Include="ProjectAssetRepository.h" />
     <ClInclude Include="params_kernel.cuh" />
     <ClInclude Include="ParticleSimRuntimeConfig.h" />
     <ClInclude Include="particleSystem.h" />
@@ -119,9 +135,13 @@
     <ClInclude Include="render_utils.h" />
     <ClInclude Include="tables.h" />
     <ClInclude Include="TextEntry.h" />
+	<ClInclude Include="StaticParticleAsset.h" />
+	<ClInclude Include="StaticParticleAssetIO.h" />
     <ClInclude Include="TheArbiter.h" />
     <ClInclude Include="TheTesseract.h" />
     <ClInclude Include="ViewPort.h" />
+	<ClInclude Include="VspaManifest.h" />
+	<ClInclude Include="JsonValue.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="VitruGen_Ver004.ico" />

@@ -28,6 +28,13 @@ Release/
 # Generated application assets
 **/SINGLE_PARTICLE_DATA/
 
+# VitruGen local/private compatibility inputs and generated asset bundles.
+# Third-party model sources remain local unless redistribution is authorized.
+/VitruGen_ver004/VitruGen_ver004/INPUTS/MasterChief/**
+/VitruGen_ver004/VitruGen_ver004/OUTPUT/**
+!/VitruGen_ver004/VitruGen_ver004/OUTPUT/.gitkeep
+!/VitruGen_ver004/VitruGen_ver004/OUTPUT/README.md
+
 # Windows temporary files
 Thumbs.db
 Desktop.ini
@@ -36,3 +43,14 @@ Desktop.ini
 
 /VitruGen_ver004_rev_a/
 /VitruGen_TEST/
+
+# VitruGen local third-party compatibility assets
+# Do not publish imported copyrighted meshes, materials, textures, or notes.
+VitruGen_ver004/VitruGen_ver004/INPUTS/MasterChief/**
+
+# Generated VitruGen asset bundles
+VitruGen_ver004/VitruGen_ver004/OUTPUT/**
+
+# Preserve the public output directory contract
+!VitruGen_ver004/VitruGen_ver004/OUTPUT/.gitkeep
+!VitruGen_ver004/VitruGen_ver004/OUTPUT/README.md

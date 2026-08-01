@@ -101,6 +101,7 @@ static const char* lightFragShader = STRINGIFY(
 //
 //     location 0 -> position
 //     location 1 -> normal
+//     queried      -> texcoord
 //
 // Lighting is evaluated in eye space because gl_NormalMatrix transforms
 // object-space normals into the current model-view coordinate system.
@@ -109,11 +110,14 @@ static const char* lightFragShader = STRINGIFY(
 static const char* modelVertexShader = STRINGIFY(
 	attribute vec3 position;
 	attribute vec3 normal;
+	attribute vec2 texcoord;
 
 	varying vec3 vNormalEye;
+	varying vec2 vTexcoord;
 
 	void main() {
 		vNormalEye = normalize(gl_NormalMatrix * normal);
+		vTexcoord = texcoord;
 
 		gl_Position = gl_ModelViewProjectionMatrix *
 			vec4(position, 1.0);
@@ -122,10 +126,15 @@ static const char* modelVertexShader = STRINGIFY(
 
 static const char* modelFragmentShader = STRINGIFY(
 	varying vec3 vNormalEye;
+	varying vec2 vTexcoord;
 	
 	uniform vec4 uColor;
 	uniform vec3 uLightDir;
 	uniform float uAmbient;
+	uniform sampler2D uBaseColorTexture;
+	uniform int uUseBaseColorTexture;
+	uniform int uAlphaMask;
+	uniform float uAlphaCutoff;
 
 	void main() {
 		vec3 N = normalize(vNormalEye);
@@ -133,8 +142,13 @@ static const char* modelFragmentShader = STRINGIFY(
 
 		float diffuse = max(dot(N, L), 0.0);
 		float lighting = clamp(uAmbient + (1.0 - uAmbient) * diffuse, 0.0, 1.0);
+		vec4 sampledBaseColor = uUseBaseColorTexture != 0
+			? texture2D(uBaseColorTexture, vTexcoord)
+			: vec4(1.0);
+		vec4 surfaceColor = sampledBaseColor * uColor;
+		if (uAlphaMask != 0 && surfaceColor.a < uAlphaCutoff) discard;
 
-		gl_FragColor = vec4(uColor.rgb * lighting, uColor.a);
+		gl_FragColor = vec4(surfaceColor.rgb * lighting, surfaceColor.a);
 
 	}
 

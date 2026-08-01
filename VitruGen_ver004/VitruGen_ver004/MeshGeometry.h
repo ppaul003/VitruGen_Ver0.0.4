@@ -30,8 +30,11 @@ struct MeshBounds {
 struct MeshGeometry {
 	std::vector<Vec3> positions;
 	std::vector<Vec3> normals;
-	// Intentionally empty until a real UV policy is authored.
 	std::vector<Vec2> uvs;
+	// Reserved for future baked-light/lightmap coordinates.
+	std::vector<Vec2> uvs1;
+	// Reserved for future normal-map rendering.
+	std::vector<Vec3> tangents;
 	std::vector<std::uint32_t> indices;
 	MeshBounds bounds;
 

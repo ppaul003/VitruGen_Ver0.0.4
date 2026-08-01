@@ -4,11 +4,13 @@
 #endif
 #include <Windows.h>
 #endif
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <string>
 
 #include "marchingCubes.h"
+#include "MeshUVGenerator.h"
 
 using namespace std;
 
@@ -110,6 +112,11 @@ bool MarchingCubes::exportOBJ(const char* filename, bool writeNormals) {
 	}
 	const bool normalsAvailable = writeNormals &&
 		m_canonicalMesh.normals.size() == m_canonicalMesh.positions.size();
+	const bool uvsAvailable =
+		m_canonicalMesh.uvs.size() == m_canonicalMesh.positions.size();
+	const std::filesystem::path objPath(filename);
+	std::filesystem::path mtlPath = objPath;
+	mtlPath.replace_extension(".mtl");
 
 	ofstream out(filename);
 
@@ -125,6 +132,7 @@ bool MarchingCubes::exportOBJ(const char* filename, bool writeNormals) {
 	out << "# Volume-workspace export with authored placement preserved\n";
 	out << "# vertices: " << m_canonicalMesh.positions.size() << "\n";
 	out << "# triangles: " << m_canonicalMesh.triangleCount() << "\n";
+	out << "mtllib " << mtlPath.filename().generic_string() << "\n";
 	out << "o SP_MCAD_MESH\n";
 	out << "\n";
 
@@ -143,13 +151,26 @@ bool MarchingCubes::exportOBJ(const char* filename, bool writeNormals) {
 
 		out << "\n";
 	}
+	if (uvsAvailable) {
+		for (const vitru::Vec2& uv : m_canonicalMesh.uvs) {
+			out << "vt " << uv.x << " " << uv.y << "\n";
+		}
+		out << "\n";
+	}
+	out << "usemtl VITRUGEN_DEFAULT\n";
 
 	for (size_t tri = 0; tri < m_canonicalMesh.triangleCount(); ++tri) {
 		const uint32_t i0 = m_canonicalMesh.indices[tri * 3u] + 1u;
 		const uint32_t i1 = m_canonicalMesh.indices[tri * 3u + 1u] + 1u;
 		const uint32_t i2 = m_canonicalMesh.indices[tri * 3u + 2u] + 1u;
 
-		if (normalsAvailable) {
+		if (normalsAvailable && uvsAvailable) {
+			out << "f "
+				<< i0 << "/" << i0 << "/" << i0 << " "
+				<< i1 << "/" << i1 << "/" << i1 << " "
+				<< i2 << "/" << i2 << "/" << i2 << "\n";
+		}
+		else if (normalsAvailable) {
 			out << "f "
 				<< i0 << "//" << i0 << " "
 				<< i1 << "//" << i1 << " "
@@ -164,13 +185,25 @@ bool MarchingCubes::exportOBJ(const char* filename, bool writeNormals) {
 	}
 
 	out.close();
+	{
+		ofstream material(mtlPath);
+		if (material.is_open()) {
+			material << "# VitruGen generated material\n"
+				<< "newmtl VITRUGEN_DEFAULT\n"
+				<< "Ka 0.15 0.15 0.15\n"
+				<< "Kd 0.75 0.78 0.82\n"
+				<< "Ks 0.0 0.0 0.0\n"
+				<< "d 1.0\nillum 2\n";
+		}
+	}
 
 	printf(
-		"[MarchingCubes3D] exportOBJ success: '%s' vertices=%zu triangles=%zu normals=%s indexed=YES\n",
+		"[MarchingCubes3D] exportOBJ success: '%s' vertices=%zu triangles=%zu normals=%s uvs=%s indexed=YES\n",
 		filename,
 		m_canonicalMesh.positions.size(),
 		m_canonicalMesh.triangleCount(),
-		normalsAvailable ? "YES" : "NO"
+		normalsAvailable ? "YES" : "NO",
+		uvsAvailable ? "YES" : "NO"
 	);
 
 	return true;
@@ -189,6 +222,17 @@ void MarchingCubes::rebuildCanonicalMesh() {
 	options.degenerateAreaEpsilon = options.weldEpsilon * options.weldEpsilon;
 	m_meshProcessingReport = vitru::MeshProcessor::processTriangleSoup(
 		raw, m_canonicalMesh, options);
+	if (m_meshProcessingReport.success) {
+		const vitru::MeshUVGenerationReport uvReport =
+			vitru::generateBoxAtlasUVs(m_canonicalMesh);
+		if (!uvReport.success) {
+			printf("[MarchingCubes3D] WARNING: BOX_ATLAS_6_DIRECTION UV generation failed.\n");
+		}
+		else {
+			printf("[MarchingCubes3D] UV atlas: policy=%s renderV=%zu seamDuplicates=%zu\n",
+				uvReport.policy.c_str(), uvReport.outputVertices, uvReport.seamDuplicates);
+		}
+	}
 
 	if (m_canonicalMesh.bounds.valid) {
 		const vitru::MeshBounds& b = m_canonicalMesh.bounds;

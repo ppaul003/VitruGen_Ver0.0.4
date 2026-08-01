@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <vector>
 #include <future>
+#include <filesystem>
 #include <string>
 
 #include "Interactions.h"
@@ -32,6 +33,7 @@
 #include "marchingCubes.h"
 #include "particleSystem.h"
 #include "renderer_Euclid.h"
+#include "StaticParticleAssetIO.h"
 
 class EuclidEngine {
 public:
@@ -44,6 +46,12 @@ public:
 
 private:
 	// --- ENGINE-LOCAL TYPES ---
+	enum class StaticAssetJobKind { None = 0, Save, Load };
+	struct StaticAssetAsyncResult {
+		bool success = false;
+		vitru::StaticParticleAsset asset;
+		vitru::StaticAssetOperationReport report;
+	};
 	enum class ObjExportStage {
 		NONE = 0,
 
@@ -145,6 +153,18 @@ private:
 	bool isObjExportModalActive() const;
 	bool isObjExportWorking() const;
 
+	// --- NAMED STATIC PARTICLE ASSET JOBS ---
+	void openStaticParticleLoadPanel();
+	void openStaticParticleSaveConfirm(const std::string& displayName);
+	void beginStaticParticleAssetJob();
+	void advanceStaticParticleAssetJob();
+	void closeStaticParticleAssetPanel();
+	bool handleStaticParticleAssetModalKeyboard(
+		const KeyboardInput::KeyEvent& event);
+	bool isStaticParticleAssetModalActive() const;
+	bool makeCurrentStaticParticleAsset(vitru::StaticParticleAsset& output) const;
+	void handleStaticParticleRequests(const TheArbiter::ArbiterResult& result);
+
 	// --- CONSTANTS ---
 	static constexpr uint kWidth = 1920;
 	static constexpr uint kHeight = 1080;
@@ -169,6 +189,8 @@ private:
 	static constexpr int MENU_GO_BACK_SUBLAYER = 'q';
 	static constexpr int MENU_QUIT = 27;
 	static constexpr int MENU_EXPORT_OBJ = 1001;
+	static constexpr int MENU_SAVE_STATIC_PARTICLE = 1004;
+	static constexpr int MENU_SAVE_STATIC_PARTICLE_AS = 1005;
 	// SUB_LAYER_3 Marching Cubes navigation.
 	// These deliberately reuse the existing keyboard transition paths.
 	static constexpr int MENU_MC_TO_SUB_LAYER_2 = 1002;
@@ -212,6 +234,8 @@ private:
 	static constexpr int MENU_SP_COLLISION_DEFORMABLE_SPHERE = 2006;
 	static constexpr int MENU_SP_RENDERING_SETUP = 2007;
 	static constexpr int MENU_SP_RETURN_TO_LAYER_2 = 2008;
+	static constexpr int MENU_SP_LOAD_STATIC_PARTICLE = 2009;
+	static constexpr int MENU_SP_SAVE_ACTIVE_PARTICLE = 2010;
 	// SUB_LAYER_1 rendering setup.
 	static constexpr int MENU_SP_RENDER_SOURCE_PARTICLE = 2101;
 	static constexpr int MENU_SP_RENDER_SOURCE_MESH = 2102;
@@ -278,6 +302,18 @@ private:
 	//
 	std::future<bool> m_objExportFuture;
 	std::string m_objExportPath = "SINGLE_PARTICLE_DATA/p0.obj";
+
+	ViewPort::ObjExportPanelData m_staticAssetPanel;
+	StaticAssetJobKind m_staticAssetJobKind = StaticAssetJobKind::None;
+	std::future<StaticAssetAsyncResult> m_staticAssetFuture;
+	bool m_staticAssetFutureActive = false;
+	int m_staticAssetLastSpinnerMs = 0;
+	std::string m_pendingStaticAssetName;
+	std::vector<vitru::StaticAssetCatalogEntry> m_staticAssetCatalog;
+	vitru::ProjectAssetRepository m_assetRepository;
+	std::filesystem::path m_inputsRoot = "INPUTS";
+	std::filesystem::path m_outputRoot = "OUTPUT";
+	std::filesystem::path m_workspaceObj = "SINGLE_PARTICLE_DATA/p0.obj";
 	//
 	// --- RUNTIME STATE / GLUT SUPPORT ---
 	bool m_displayEnabled = true;

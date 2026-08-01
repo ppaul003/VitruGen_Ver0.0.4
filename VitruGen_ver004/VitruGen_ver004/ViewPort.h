@@ -13,6 +13,7 @@ public:
 
 	enum class ObjExportPanelMode {
 		HIDDEN = 0,
+		SELECT,
 		CONFIRM,
 		WORKING,
 		COMPLETE,
@@ -30,6 +31,10 @@ public:
 
 		std::string statusText;
 		std::vector<std::string> logLines;
+		std::string titleText;
+		std::string confirmText;
+		std::vector<std::string> selectionLines;
+		int selectedIndex = 0;
 	};
 
 	struct MarchingCubesPanelData {

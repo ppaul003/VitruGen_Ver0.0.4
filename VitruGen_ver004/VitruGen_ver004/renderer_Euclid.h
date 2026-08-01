@@ -23,6 +23,7 @@
 
 #include <vector_types.h>
 #include "particleSystem.h"
+#include "StaticParticleAsset.h"
 
 #ifndef M_PI
 #define M_PI 3.1415926535897932384626433832795
@@ -77,6 +78,18 @@ public:
 	struct ParticleMeshVertex {
 		glm::vec3 position{ 0.0f };
 		glm::vec3 normal{ 0.0f, 1.0f, 0.0f };
+		glm::vec2 texcoord{ 0.0f };
+	};
+
+	struct ParticleMeshDrawRange {
+		GLint firstVertex = 0;
+		GLsizei vertexCount = 0;
+		std::uint32_t materialIndex = 0;
+	};
+
+	struct ParticleMeshTexture {
+		std::string id;
+		GLuint handle = 0;
 	};
 
 	EuclidRenderer();
@@ -260,6 +273,7 @@ public:
 
 	bool hasParticleMeshOBJ() const { return m_particleMeshLoaded && m_particleMeshVBO != 0 && m_particleMeshVertexCount > 0; }
 	bool loadParticleMeshOBJ(const char* filename);
+	bool loadParticleStaticAsset(const vitru::StaticParticleAsset& asset);
 	bool particleIntersectsSlice(const ParticleProxy3D& p, int slice) const;
 	float getParticleMeshMaxExtent() const { return m_particleMeshMaxExtent; }
 	glm::vec3 getParticleMeshMin() const { return m_particleMeshMin; }
@@ -398,6 +412,11 @@ private:
 	GLint m_meshColorLocation;
 	GLint m_meshLightDirLocation;
 	GLint m_meshAmbientLocation;
+	GLint m_meshTexcoordAttributeLocation = -1;
+	GLint m_meshSamplerLocation = -1;
+	GLint m_meshUseTextureLocation = -1;
+	GLint m_meshAlphaMaskLocation = -1;
+	GLint m_meshAlphaCutoffLocation = -1;
 
 	GLuint m_vbo;
 	GLuint m_radVBO;
@@ -415,6 +434,11 @@ private:
 
 	std::vector<glm::vec3> m_particleMeshVerts;
 	std::vector<glm::vec3> m_particleMeshNorms;
+	std::vector<glm::vec2> m_particleMeshUVs;
+	std::vector<ParticleMeshDrawRange> m_particleMeshDrawRanges;
+	std::vector<vitru::MaterialSlot> m_particleMeshMaterials;
+	std::vector<ParticleMeshTexture> m_particleMeshTextures;
+	GLuint m_particleMeshWhiteTexture = 0;
 
 	glm::vec3 m_particleMeshMin{ 0.0f };
 	glm::vec3 m_particleMeshMax{ 0.0f };

@@ -3274,7 +3274,7 @@ TheArbiter::enterMarchingCubesFromPreview() {
 	m_subLayerPanelOpen = true;
 
 	m_activeSubLayerPanelItem =
-		MC_LIST_EXPORT_OBJ;
+		MC_LIST_SAVE_STATIC_PARTICLE;
 
 	result.command = CMD_REDRAW;
 	result.requestRedraw = true;
@@ -3294,7 +3294,7 @@ TheArbiter::activateMarchingCubesPanelItemFromMenu(MarchingCubesPanelItem item) 
 
 	const bool validItem =
 		itemValue >=
-		static_cast<int>(MC_LIST_EXPORT_OBJ) &&
+		static_cast<int>(MC_LIST_SAVE_STATIC_PARTICLE) &&
 		itemValue <
 		static_cast<int>(MC_LIST_COUNT);
 
@@ -4276,9 +4276,14 @@ void TheArbiter::activateSubLayerPanelItem(ArbiterResult& result) {
 // Sub-Layer 0 panel actions.
 // ---------------------------------------------------------
 	if (isSingleParticleReferenceSubLayer()) {
-
-		if (m_activeSubLayerPanelItem ==
-			SP0_LIST_RENDERING_SETUP) {
+		switch (m_activeSubLayerPanelItem) {
+		case SP0_LIST_LOAD_STATIC_PARTICLE:
+			result.loadStaticParticleRequested = true;
+			break;
+		case SP0_LIST_SAVE_ACTIVE_PARTICLE:
+			result.saveStaticParticleRequested = true;
+			break;
+		case SP0_LIST_RENDERING_SETUP:
 
 			m_singleParticleSubLayer =
 				SP_SUB_LAYER_SHAPE_EDIT;
@@ -4289,6 +4294,9 @@ void TheArbiter::activateSubLayerPanelItem(ArbiterResult& result) {
 				SP1_LIST_RENDER_SOURCE;
 
 			result.rebuildMenu = true;
+			break;
+		default:
+			break;
 		}
 
 		// Collision shape row is an adjustment row.
@@ -4391,6 +4399,14 @@ void TheArbiter::activateSubLayerPanelItem(ArbiterResult& result) {
 
 	if (isMarchingCubesSubLayer()) {
 		switch (m_activeSubLayerPanelItem) {
+		case MC_LIST_SAVE_STATIC_PARTICLE:
+			result.saveStaticParticleRequested = true;
+			break;
+
+		case MC_LIST_SAVE_STATIC_PARTICLE_AS:
+			beginSingleParticleAssetNameEntry(result);
+			return;
+
 		case MC_LIST_EXPORT_OBJ:
 			result.exportObjRequested = true;
 			break;
@@ -4437,7 +4453,7 @@ void TheArbiter::activateSubLayerPanelItem(ArbiterResult& result) {
 
 		case PREVIEW_LIST_RUN_MC:
 			m_singleParticleSubLayer = SP_SUB_LAYER_MARCHING_CUBES;
-			m_activeSubLayerPanelItem = MC_LIST_EXPORT_OBJ;
+			m_activeSubLayerPanelItem = MC_LIST_SAVE_STATIC_PARTICLE;
 			m_subLayerPanelOpen = true;
 			result.enterMarchingCubes = true;
 			result.rebuildMenu = true;
@@ -4905,8 +4921,31 @@ void TheArbiter::beginDefaultParticleCountEntry(
 	result.requestRedraw = true;
 }
 
+void TheArbiter::beginSingleParticleAssetNameEntry(
+	ArbiterResult& result,
+	const std::string& initialName) {
+	m_textEntryTarget = TextEntryTarget::SingleParticleAssetName;
+	if (!m_textEntry.beginAssetName(
+		"ENTER STATIC PARTICLE ASSET NAME",
+		initialName,
+		96u)) {
+		m_textEntryTarget = TextEntryTarget::None;
+	}
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+}
+
 void TheArbiter::applyCommittedTextEntry(
 	ArbiterResult& result) {
+	if (m_textEntryTarget == TextEntryTarget::SingleParticleAssetName) {
+		result.staticParticleAssetName = m_textEntry.getNormalizedText();
+		result.saveStaticParticleAsRequested =
+			!result.staticParticleAssetName.empty();
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		result.rebuildMenu = true;
+		return;
+	}
 
 	unsigned int value = 0;
 
@@ -4944,8 +4983,6 @@ void TheArbiter::applyCommittedTextEntry(
 		break;
 
 	case TextEntryTarget::SingleParticleAssetName:
-
-		// Reserved for later asset-save integration.
 		break;
 
 	default:

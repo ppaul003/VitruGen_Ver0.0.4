@@ -8,9 +8,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <algorithm>
+#include <filesystem>
 
 #include "renderer_Euclid.h"
 #include "render_utils.h"
+#include "ObjMtlImporter.h"
+#include "PngImage.h"
 
 using namespace std;
 using namespace glm;
@@ -2474,6 +2477,19 @@ void EuclidRenderer::clearParticleMeshOBJ() {
 
     m_particleMeshVerts.clear();
     m_particleMeshNorms.clear();
+    m_particleMeshUVs.clear();
+    m_particleMeshDrawRanges.clear();
+    m_particleMeshMaterials.clear();
+
+    for (ParticleMeshTexture& texture : m_particleMeshTextures) {
+        if (texture.handle) glDeleteTextures(1, &texture.handle);
+        texture.handle = 0;
+    }
+    m_particleMeshTextures.clear();
+    if (m_particleMeshWhiteTexture) {
+        glDeleteTextures(1, &m_particleMeshWhiteTexture);
+        m_particleMeshWhiteTexture = 0;
+    }
 
     m_particleMeshMin = vec3(0.0f);
     m_particleMeshMax = vec3(0.0f);
@@ -2503,6 +2519,9 @@ bool EuclidRenderer::uploadParticleMeshVBO() {
         return false;
     }
 
+    const bool uvsAvailable =
+        m_particleMeshUVs.size() == m_particleMeshVerts.size();
+
     vector<ParticleMeshVertex> packedVertices;
     packedVertices.resize(m_particleMeshVerts.size());
 
@@ -2520,6 +2539,9 @@ bool EuclidRenderer::uploadParticleMeshVBO() {
 
         packedVertices[i].position = m_particleMeshVerts[i];
         packedVertices[i].normal = normal;
+        packedVertices[i].texcoord = uvsAvailable
+            ? m_particleMeshUVs[i]
+            : vec2(0.0f);
     }
 
     if (!m_particleMeshVBO) {
@@ -3945,6 +3967,11 @@ void EuclidRenderer::_initGL() {
     m_meshColorLocation = -1;
     m_meshLightDirLocation = -1;
     m_meshAmbientLocation = -1;
+	m_meshTexcoordAttributeLocation = -1;
+	m_meshSamplerLocation = -1;
+	m_meshUseTextureLocation = -1;
+	m_meshAlphaMaskLocation = -1;
+	m_meshAlphaCutoffLocation = -1;
 
     if (m_meshProgram) {
 
@@ -3965,6 +3992,17 @@ void EuclidRenderer::_initGL() {
                 m_meshProgram,
                 "uAmbient"
             );
+
+		m_meshTexcoordAttributeLocation =
+			glGetAttribLocation(m_meshProgram, "texcoord");
+		m_meshSamplerLocation =
+			glGetUniformLocation(m_meshProgram, "uBaseColorTexture");
+		m_meshUseTextureLocation =
+			glGetUniformLocation(m_meshProgram, "uUseBaseColorTexture");
+		m_meshAlphaMaskLocation =
+			glGetUniformLocation(m_meshProgram, "uAlphaMask");
+		m_meshAlphaCutoffLocation =
+			glGetUniformLocation(m_meshProgram, "uAlphaCutoff");
 
         if (m_meshColorLocation < 0) {
             printf(
@@ -4018,15 +4056,21 @@ void EuclidRenderer::_initGL() {
                 0.15f
             );
         }
+		if (m_meshSamplerLocation >= 0) glUniform1i(m_meshSamplerLocation, 0);
+		if (m_meshUseTextureLocation >= 0) glUniform1i(m_meshUseTextureLocation, 0);
+		if (m_meshAlphaMaskLocation >= 0) glUniform1i(m_meshAlphaMaskLocation, 0);
+		if (m_meshAlphaCutoffLocation >= 0) glUniform1f(m_meshAlphaCutoffLocation, 0.5f);
 
         glUseProgram(0);
 
         printf(
             "[EuclidRenderer] OBJ mesh shader uniforms: "
-            "color=%d lightDir=%d ambient=%d\n",
+            "color=%d lightDir=%d ambient=%d texcoord=%d sampler=%d\n",
             m_meshColorLocation,
             m_meshLightDirLocation,
-            m_meshAmbientLocation
+            m_meshAmbientLocation,
+			m_meshTexcoordAttributeLocation,
+			m_meshSamplerLocation
         );
     }
 
@@ -4232,6 +4276,36 @@ bool EuclidRenderer::loadParticleMeshOBJ(const char* filename) {
         return true;
     }
 
+    // The production importer preserves the complete OBJ tuple identity and
+    // material ranges. Keep the legacy parser below only as a compatibility
+    // fallback for malformed historical workspace files.
+    {
+        const std::filesystem::path objectPath(filename);
+        std::filesystem::path assetRoot = objectPath.parent_path();
+        if (assetRoot.filename() == "geometry") assetRoot = assetRoot.parent_path();
+        vitru::StaticParticleAsset imported;
+        vitru::ObjImportReport importReport;
+        if (vitru::importObjStaticParticle(objectPath, assetRoot, imported, importReport)) {
+            for (vitru::TextureResource& texture : imported.textures) {
+                if (texture.type != vitru::TextureType::Texture2D || texture.sourcePath.empty()) continue;
+                vitru::ImageRGBA8 image;
+                std::string imageError;
+                if (vitru::loadPngImage(texture.sourcePath, image, &imageError, true)) {
+                    texture.width = image.width;
+                    texture.height = image.height;
+                    texture.channels = 4u;
+                    texture.pixels = std::move(image.pixels);
+                    texture.loaded = true;
+                    texture.valid = true;
+                }
+            }
+            if (loadParticleStaticAsset(imported)) {
+                m_particleMeshPath = filename;
+                return true;
+            }
+        }
+    }
+
     ifstream in(filename);
 
     if (!in.is_open()) {
@@ -4399,6 +4473,112 @@ bool EuclidRenderer::loadParticleMeshOBJ(const char* filename) {
         m_particleMeshMaxExtent
     );
 
+    return true;
+}
+
+bool EuclidRenderer::loadParticleStaticAsset(
+    const vitru::StaticParticleAsset& asset) {
+
+    if (asset.mesh.empty() ||
+        asset.mesh.normals.size() != asset.mesh.positions.size()) {
+        printf("[EuclidRenderer] Static particle load failed: invalid mesh.\n");
+        return false;
+    }
+
+    vector<vec3> outVerts;
+    vector<vec3> outNorms;
+    vector<vec2> outUVs;
+    outVerts.reserve(asset.mesh.indices.size());
+    outNorms.reserve(asset.mesh.indices.size());
+    outUVs.reserve(asset.mesh.indices.size());
+    const bool hasUVs = asset.mesh.uvs.size() == asset.mesh.positions.size();
+
+    for (std::uint32_t index : asset.mesh.indices) {
+        if (index >= asset.mesh.positions.size()) {
+            printf("[EuclidRenderer] Static particle load failed: invalid index.\n");
+            return false;
+        }
+        const vitru::Vec3& p = asset.mesh.positions[index];
+        const vitru::Vec3& n = asset.mesh.normals[index];
+        outVerts.emplace_back(p.x, p.y, p.z);
+        outNorms.emplace_back(n.x, n.y, n.z);
+        if (hasUVs) {
+            const vitru::Vec2& uv = asset.mesh.uvs[index];
+            outUVs.emplace_back(uv.x, uv.y);
+        }
+        else {
+            outUVs.emplace_back(0.0f);
+        }
+    }
+
+    clearParticleMeshOBJ();
+    m_particleMeshVerts = std::move(outVerts);
+    m_particleMeshNorms = std::move(outNorms);
+    m_particleMeshUVs = std::move(outUVs);
+    m_particleMeshMaterials = asset.materials;
+    if (m_particleMeshMaterials.empty()) m_particleMeshMaterials.emplace_back();
+
+    if (asset.submeshes.empty()) {
+        m_particleMeshDrawRanges.push_back({
+            0,
+            static_cast<GLsizei>(asset.mesh.indices.size()),
+            0u
+        });
+    }
+    else {
+        for (const vitru::SubMesh& submesh : asset.submeshes) {
+            if (submesh.firstIndex + submesh.indexCount > asset.mesh.indices.size() ||
+                submesh.materialIndex >= m_particleMeshMaterials.size()) continue;
+            m_particleMeshDrawRanges.push_back({
+                static_cast<GLint>(submesh.firstIndex),
+                static_cast<GLsizei>(submesh.indexCount),
+                submesh.materialIndex
+            });
+        }
+    }
+
+    computeParticleMeshBounds();
+    if (!uploadParticleMeshVBO()) {
+        clearParticleMeshOBJ();
+        return false;
+    }
+
+    auto uploadTexture = [](GLuint& handle, const std::uint8_t* pixels,
+        std::uint32_t width, std::uint32_t height, bool srgb) {
+        glGenTextures(1, &handle);
+        if (!handle) return false;
+        glBindTexture(GL_TEXTURE_2D, handle);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexImage2D(GL_TEXTURE_2D, 0, srgb ? GL_SRGB8_ALPHA8 : GL_RGBA8,
+            static_cast<GLsizei>(width), static_cast<GLsizei>(height), 0,
+            GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        return true;
+    };
+
+    const std::uint8_t white[4]{ 255u, 255u, 255u, 255u };
+    uploadTexture(m_particleMeshWhiteTexture, white, 1u, 1u, true);
+    for (const vitru::TextureResource& texture : asset.textures) {
+        if (texture.type != vitru::TextureType::Texture2D || !texture.loaded ||
+            texture.channels != 4u || texture.width == 0u || texture.height == 0u ||
+            texture.pixels.size() != static_cast<size_t>(texture.width) * texture.height * 4u) continue;
+        GLuint handle = 0;
+        if (uploadTexture(handle, texture.pixels.data(), texture.width, texture.height,
+            texture.colorSpace == vitru::TextureColorSpace::SRGB)) {
+            m_particleMeshTextures.push_back({ texture.id, handle });
+        }
+    }
+
+    m_particleMeshLoaded = true;
+    printf("[EuclidRenderer] Loaded StaticParticleAsset: name=%s renderV=%d tris=%d ranges=%zu textures=%zu UV=%s\n",
+        asset.name.c_str(), static_cast<int>(m_particleMeshVertexCount),
+        static_cast<int>(m_particleMeshVertexCount / 3),
+        m_particleMeshDrawRanges.size(), m_particleMeshTextures.size(),
+        hasUVs ? "YES" : "NO");
     return true;
 }
 
@@ -4728,6 +4908,71 @@ void EuclidRenderer::drawParticleMeshOBJ(
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(ParticleMeshVertex),
         reinterpret_cast<const GLvoid*>(offsetof(ParticleMeshVertex, normal)));
 
+    if (m_meshTexcoordAttributeLocation >= 0) {
+        glEnableVertexAttribArray(static_cast<GLuint>(m_meshTexcoordAttributeLocation));
+        glVertexAttribPointer(static_cast<GLuint>(m_meshTexcoordAttributeLocation),
+            2, GL_FLOAT, GL_FALSE, sizeof(ParticleMeshVertex),
+            reinterpret_cast<const GLvoid*>(offsetof(ParticleMeshVertex, texcoord)));
+    }
+
+    auto findTextureHandle = [&](const std::string& id) {
+        for (const ParticleMeshTexture& texture : m_particleMeshTextures) {
+            if (texture.id == id) return texture.handle;
+        }
+        return static_cast<GLuint>(0);
+    };
+
+    auto drawRanges = [&](bool selectionOverride) {
+        const bool ranged = !m_particleMeshDrawRanges.empty();
+        const size_t count = ranged ? m_particleMeshDrawRanges.size() : 1u;
+        for (size_t rangeIndex = 0; rangeIndex < count; ++rangeIndex) {
+            const ParticleMeshDrawRange fallback{ 0, m_particleMeshVertexCount, 0u };
+            const ParticleMeshDrawRange& range = ranged
+                ? m_particleMeshDrawRanges[rangeIndex]
+                : fallback;
+            const vitru::MaterialSlot* material =
+                range.materialIndex < m_particleMeshMaterials.size()
+                ? &m_particleMeshMaterials[range.materialIndex]
+                : nullptr;
+            GLuint textureHandle = material
+                ? findTextureHandle(material->baseColorTextureId)
+                : 0;
+            const bool useTexture = textureHandle != 0 &&
+                m_meshTexcoordAttributeLocation >= 0 && !selectionOverride;
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D,
+                useTexture ? textureHandle : m_particleMeshWhiteTexture);
+            if (m_meshUseTextureLocation >= 0)
+                glUniform1i(m_meshUseTextureLocation, useTexture ? 1 : 0);
+            if (m_meshSamplerLocation >= 0)
+                glUniform1i(m_meshSamplerLocation, 0);
+            if (m_meshAlphaMaskLocation >= 0)
+                glUniform1i(m_meshAlphaMaskLocation,
+                    material && material->alphaMode == vitru::AlphaMode::Mask &&
+                    !selectionOverride ? 1 : 0);
+            if (m_meshAlphaCutoffLocation >= 0)
+                glUniform1f(m_meshAlphaCutoffLocation,
+                    material ? material->alphaCutoff : 0.5f);
+            if (m_meshColorLocation >= 0) {
+                if (selectionOverride) {
+                    glUniform4f(m_meshColorLocation,
+                        1.0f, 0.55f, 0.06f, 0.95f);
+                }
+                else if (material) {
+                    const float tintR = useTexture ? 1.0f : color.x;
+                    const float tintG = useTexture ? 1.0f : color.y;
+                    const float tintB = useTexture ? 1.0f : color.z;
+                    glUniform4f(m_meshColorLocation,
+                        material->baseColorFactor[0] * tintR,
+                        material->baseColorFactor[1] * tintG,
+                        material->baseColorFactor[2] * tintB,
+                        material->baseColorFactor[3] * color.w);
+                }
+            }
+            glDrawArrays(GL_TRIANGLES, range.firstVertex, range.vertexCount);
+        }
+    };
+
     if (wireframe) {
         if (selected && m_meshColorLocation >= 0) {
             glUniform4f(
@@ -4745,12 +4990,12 @@ void EuclidRenderer::drawParticleMeshOBJ(
 
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         glLineWidth(selected ? 1.8f : 1.35f);
-        glDrawArrays(GL_TRIANGLES, 0, m_particleMeshVertexCount);
+        drawRanges(selected);
     }
     else {
         // Filled shaded mesh pass.
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-        glDrawArrays(GL_TRIANGLES, 0, m_particleMeshVertexCount);
+        drawRanges(false);
 
         // Selected mesh outline.
         if (selected) {
@@ -4777,7 +5022,7 @@ void EuclidRenderer::drawParticleMeshOBJ(
 
             glLineWidth(1.5f);
             glDepthFunc(GL_LEQUAL);
-            glDrawArrays(GL_TRIANGLES, 0, m_particleMeshVertexCount);
+            drawRanges(true);
 
             glDepthFunc(GL_LESS);
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -4785,6 +5030,9 @@ void EuclidRenderer::drawParticleMeshOBJ(
         }
     }
 
+    glBindTexture(GL_TEXTURE_2D, 0);
+    if (m_meshTexcoordAttributeLocation >= 0)
+        glDisableVertexAttribArray(static_cast<GLuint>(m_meshTexcoordAttributeLocation));
     glDisableVertexAttribArray(1);
     glDisableVertexAttribArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);

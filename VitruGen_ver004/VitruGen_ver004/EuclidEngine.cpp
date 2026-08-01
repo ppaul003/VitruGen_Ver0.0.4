@@ -7,6 +7,7 @@
 #endif
 
 #include <cstdio>
+#include <chrono>
 #include <fstream>
 #include <string>
 #include <sstream>
@@ -17,6 +18,7 @@
 
 using namespace std;
 using namespace glm;
+namespace fs = std::filesystem;
 
 EuclidEngine* EuclidEngine::s_instance = nullptr;
 
@@ -491,6 +493,10 @@ void EuclidEngine::shutdown() {
 		m_objExportFuture.wait();
 		m_objExportFutureActive = false;
 	}
+	if (m_staticAssetFutureActive && m_staticAssetFuture.valid()) {
+		m_staticAssetFuture.wait();
+		m_staticAssetFutureActive = false;
+	}
 
 	destroyPixelBuffer();
 	freeMarchingCubes();
@@ -620,6 +626,11 @@ void EuclidEngine::rebuildMenus() {
 			: "* Deformable Sphere { RESERVED }",
 			MENU_SP_COLLISION_DEFORMABLE_SPHERE
 		);
+
+		glutAddMenuEntry("=========================================", MENU_NOP);
+		glutAddMenuEntry("Static Particle Asset:", MENU_NOP);
+		glutAddMenuEntry("* Load Static Particle", MENU_SP_LOAD_STATIC_PARTICLE);
+		glutAddMenuEntry("* Save Active Particle", MENU_SP_SAVE_ACTIVE_PARTICLE);
 
 		glutAddMenuEntry("=========================================", MENU_NOP);
 		glutAddMenuEntry("Next Sub-Layer:", MENU_NOP);
@@ -1217,6 +1228,16 @@ void EuclidEngine::rebuildMenus() {
 		);
 
 		glutAddMenuEntry(
+			"* Save Static Particle",
+			MENU_SAVE_STATIC_PARTICLE
+		);
+
+		glutAddMenuEntry(
+			"* Save Static Particle As",
+			MENU_SAVE_STATIC_PARTICLE_AS
+		);
+
+		glutAddMenuEntry(
 			"* Export .Obj",
 			MENU_EXPORT_OBJ
 		);
@@ -1318,6 +1339,7 @@ void EuclidEngine::sMainMenu(int value) {
 		if (result.exportObjRequested) {
 			s_instance->exportCurrentMeshOBJ();
 		}
+		s_instance->handleStaticParticleRequests(result);
 
 		if (result.command ==
 			TheArbiter::CMD_PARTICLE_RENDER_MODE_CHANGED) {
@@ -1682,6 +1704,28 @@ void EuclidEngine::sMainMenu(int value) {
 	// =========================================================
 	case MENU_EXPORT_OBJ:
 		s_instance->exportCurrentMeshOBJ();
+		glutPostRedisplay();
+		return;
+
+	case MENU_SAVE_STATIC_PARTICLE:
+		s_instance->openStaticParticleSaveConfirm("");
+		glutPostRedisplay();
+		return;
+
+	case MENU_SAVE_STATIC_PARTICLE_AS: {
+		TheArbiter::ArbiterResult result;
+		s_instance->m_arbiter.beginSingleParticleAssetNameEntry(result);
+		applyArbiterMenuResult(result);
+		return;
+	}
+
+	case MENU_SP_LOAD_STATIC_PARTICLE:
+		s_instance->openStaticParticleLoadPanel();
+		glutPostRedisplay();
+		return;
+
+	case MENU_SP_SAVE_ACTIVE_PARTICLE:
+		s_instance->openStaticParticleSaveConfirm("");
 		glutPostRedisplay();
 		return;
 
@@ -2305,6 +2349,239 @@ void EuclidEngine::syncVolumeBoundaryStatusFromTesseract() {
 }
 
 // =============================================================================
+// NAMED STATIC PARTICLE ASSET JOBS
+// =============================================================================
+bool EuclidEngine::makeCurrentStaticParticleAsset(
+	vitru::StaticParticleAsset& output) const {
+	if (m_arbiter.isMarchingCubesSubLayer() && m_marchingCubes &&
+		m_marchingCubes->hasTriangleData() &&
+		!m_marchingCubes->getCanonicalMesh().empty()) {
+		output = vitru::StaticParticleAsset{};
+		output.name = "Static Particle";
+		output.mesh = m_marchingCubes->getCanonicalMesh();
+		output.materials.emplace_back();
+		output.source.kind = "NATIVE_SP_MCAD";
+		output.anchor.particleIndex = 0u;
+		output.anchor.pivotMode = vitru::ParticlePivotMode::GroundCenter;
+		output.anchor.fitMode = vitru::ParticleFitMode::CollisionSafe;
+		output.collision.shape = vitru::CollisionProxy::Shape::Sphere;
+		output.collision.radius = m_arbiter.getParticleRadius();
+		output.refreshDerivedData();
+		return true;
+	}
+	const vitru::StaticParticleAsset* active =
+		m_assetRepository.activeStaticParticle();
+	if (!active) return false;
+	output = *active;
+	return true;
+}
+
+void EuclidEngine::openStaticParticleLoadPanel() {
+	if (isObjExportModalActive() || m_staticAssetFutureActive) return;
+	m_staticAssetCatalog = vitru::enumerateStaticParticleAssets(
+		m_inputsRoot,
+		m_outputRoot / "STATIC_PARTICLES");
+	std::vector<vitru::StaticAssetCatalogEntry> valid;
+	for (const vitru::StaticAssetCatalogEntry& entry : m_staticAssetCatalog)
+		if (entry.valid) valid.push_back(entry);
+	m_staticAssetCatalog.swap(valid);
+	m_staticAssetPanel = ViewPort::ObjExportPanelData{};
+	m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::SELECT;
+	m_staticAssetPanel.titleText = "VITRUGEN STATIC PARTICLE LOAD";
+	m_staticAssetPanel.selectedIndex = 0;
+	for (const vitru::StaticAssetCatalogEntry& entry : m_staticAssetCatalog) {
+		m_staticAssetPanel.selectionLines.push_back(
+			entry.displayName + "  |  " + entry.source +
+			"  |  VALID  |  " + entry.manifestPath.generic_string());
+	}
+	m_staticAssetJobKind = StaticAssetJobKind::Load;
+	glutPostRedisplay();
+}
+
+void EuclidEngine::openStaticParticleSaveConfirm(
+	const std::string& displayName) {
+	if (isObjExportModalActive() || m_staticAssetFutureActive) return;
+	vitru::StaticParticleAsset asset;
+	if (!makeCurrentStaticParticleAsset(asset)) {
+		m_staticAssetPanel = ViewPort::ObjExportPanelData{};
+		m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::FAILED;
+		m_staticAssetPanel.titleText = "VITRUGEN STATIC PARTICLE SAVE";
+		m_staticAssetPanel.statusText = "No canonical mesh or active asset.";
+		m_staticAssetPanel.logLines.push_back("SAVE disabled: no valid StaticParticleAsset is active.");
+		return;
+	}
+	if (displayName.empty()) {
+		const vitru::StaticParticleAsset* active =
+			m_assetRepository.activeStaticParticle();
+		if (!active || active->name.empty()) {
+			m_staticAssetPanel = ViewPort::ObjExportPanelData{};
+			m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::FAILED;
+			m_staticAssetPanel.titleText = "VITRUGEN STATIC PARTICLE SAVE";
+			m_staticAssetPanel.statusText = "Use SAVE STATIC PARTICLE AS first.";
+			m_staticAssetPanel.logLines.push_back("SAVE disabled: active asset has no named output location.");
+			return;
+		}
+		m_pendingStaticAssetName = active->name;
+	}
+	else {
+		m_pendingStaticAssetName = displayName;
+	}
+	m_staticAssetPanel = ViewPort::ObjExportPanelData{};
+	m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::CONFIRM;
+	m_staticAssetPanel.titleText = "VITRUGEN STATIC PARTICLE SAVE";
+	m_staticAssetPanel.confirmText = "Save named asset: " + m_pendingStaticAssetName + " ?";
+	m_staticAssetPanel.yesSelected = true;
+	m_staticAssetJobKind = StaticAssetJobKind::Save;
+	glutPostRedisplay();
+}
+
+void EuclidEngine::beginStaticParticleAssetJob() {
+	if (m_staticAssetFutureActive) return;
+	StaticAssetJobKind kind = m_staticAssetJobKind;
+	vitru::StaticParticleAsset source;
+	fs::path manifest;
+	if (kind == StaticAssetJobKind::Save) {
+		if (!makeCurrentStaticParticleAsset(source)) {
+			m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::FAILED;
+			m_staticAssetPanel.statusText = "Active asset validation failed.";
+			return;
+		}
+	}
+	else if (kind == StaticAssetJobKind::Load) {
+		if (m_staticAssetCatalog.empty() || m_staticAssetPanel.selectedIndex < 0 ||
+			m_staticAssetPanel.selectedIndex >= static_cast<int>(m_staticAssetCatalog.size())) return;
+		manifest = m_staticAssetCatalog[static_cast<size_t>(m_staticAssetPanel.selectedIndex)].manifestPath;
+	}
+	else return;
+
+	m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::WORKING;
+	m_staticAssetPanel.progressPercent = 10;
+	m_staticAssetPanel.spinnerFrame = 0;
+	m_staticAssetPanel.statusText = kind == StaticAssetJobKind::Save
+		? "validating mesh" : "reading VSPA";
+	m_staticAssetPanel.logLines.clear();
+	m_staticAssetPanel.logLines.push_back(kind == StaticAssetJobKind::Save
+		? "[VSPA] validating mesh and material resources"
+		: "[VSPA] reading selected manifest");
+	const fs::path outputRoot = m_outputRoot;
+	const fs::path workspace = m_workspaceObj;
+	const std::string name = m_pendingStaticAssetName;
+	m_staticAssetFuture = std::async(std::launch::async,
+		[kind, source, manifest, outputRoot, workspace, name]() mutable {
+			StaticAssetAsyncResult result;
+			if (kind == StaticAssetJobKind::Save) {
+				result.success = vitru::saveStaticParticleBundle(
+					source, outputRoot, name, workspace, result.report);
+				if (result.success) {
+					vitru::StaticAssetOperationReport reopened;
+					result.success = vitru::loadStaticParticleBundle(
+						result.report.manifestPath, result.asset, reopened,
+						nullptr, workspace);
+					result.report.warnings.insert(result.report.warnings.end(),
+						reopened.warnings.begin(), reopened.warnings.end());
+					result.report.errors.insert(result.report.errors.end(),
+						reopened.errors.begin(), reopened.errors.end());
+				}
+			}
+			else {
+				result.success = vitru::loadStaticParticleBundle(
+					manifest, result.asset, result.report, nullptr, workspace);
+			}
+			return result;
+		});
+	m_staticAssetFutureActive = true;
+	m_staticAssetLastSpinnerMs = glutGet(GLUT_ELAPSED_TIME);
+}
+
+void EuclidEngine::advanceStaticParticleAssetJob() {
+	if (!m_staticAssetFutureActive || !m_staticAssetFuture.valid()) return;
+	const int now = glutGet(GLUT_ELAPSED_TIME);
+	if (now - m_staticAssetLastSpinnerMs >= 100) {
+		m_staticAssetPanel.spinnerFrame =
+			(m_staticAssetPanel.spinnerFrame + 1) % 4;
+		m_staticAssetPanel.progressPercent =
+			(std::min)(90, m_staticAssetPanel.progressPercent + 1);
+		m_staticAssetLastSpinnerMs = now;
+	}
+	if (m_staticAssetFuture.wait_for(std::chrono::milliseconds(0)) !=
+		std::future_status::ready) return;
+	StaticAssetAsyncResult result = m_staticAssetFuture.get();
+	m_staticAssetFutureActive = false;
+	for (const std::string& warning : result.report.warnings)
+		m_staticAssetPanel.logLines.push_back("[WARN] " + warning);
+	for (const std::string& error : result.report.errors)
+		m_staticAssetPanel.logLines.push_back("[ERROR] " + error);
+	if (!result.success) {
+		m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::FAILED;
+		m_staticAssetPanel.statusText = result.report.phase;
+		return;
+	}
+	const vitru::AssetId id = m_assetRepository.addStaticParticle(result.asset);
+	m_assetRepository.setActiveStaticParticle(id);
+	vitru::StaticParticleAsset* active = m_assetRepository.activeStaticParticle();
+	if (!active || !m_renderer || !m_renderer->loadParticleStaticAsset(*active)) {
+		m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::FAILED;
+		m_staticAssetPanel.statusText = "GPU asset upload failed.";
+		m_staticAssetPanel.logLines.push_back("[ERROR] renderer could not upload the loaded asset");
+		return;
+	}
+	m_arbiter.setParticleRenderMode(TheArbiter::PARTICLE_RENDER_MESH);
+	applySingleParticleConfigToSystem();
+	m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::COMPLETE;
+	m_staticAssetPanel.progressPercent = 100;
+	m_staticAssetPanel.statusText = "geometry, materials, textures and p0 ready";
+	m_staticAssetPanel.logLines.push_back("[VSPA] active repository and p0.obj refreshed");
+	m_staticAssetPanel.logLines.push_back("[EuclidRenderer] textured material ranges uploaded");
+	rebuildMenus();
+}
+
+void EuclidEngine::closeStaticParticleAssetPanel() {
+	if (m_staticAssetFutureActive) return;
+	m_staticAssetPanel = ViewPort::ObjExportPanelData{};
+	m_staticAssetCatalog.clear();
+	m_staticAssetJobKind = StaticAssetJobKind::None;
+	m_pendingStaticAssetName.clear();
+	glutPostRedisplay();
+}
+
+bool EuclidEngine::isStaticParticleAssetModalActive() const {
+	return m_staticAssetPanel.mode != ViewPort::ObjExportPanelMode::HIDDEN;
+}
+
+bool EuclidEngine::handleStaticParticleAssetModalKeyboard(
+	const KeyboardInput::KeyEvent& event) {
+	if (!isStaticParticleAssetModalActive()) return false;
+	using Mode = ViewPort::ObjExportPanelMode;
+	if (m_staticAssetPanel.mode == Mode::SELECT) {
+		if (event.signal == KeyboardInput::KEY_W && !m_staticAssetCatalog.empty())
+			m_staticAssetPanel.selectedIndex = (m_staticAssetPanel.selectedIndex - 1 + static_cast<int>(m_staticAssetCatalog.size())) % static_cast<int>(m_staticAssetCatalog.size());
+		else if (event.signal == KeyboardInput::KEY_S && !m_staticAssetCatalog.empty())
+			m_staticAssetPanel.selectedIndex = (m_staticAssetPanel.selectedIndex + 1) % static_cast<int>(m_staticAssetCatalog.size());
+		else if ((event.signal == KeyboardInput::KEY_E || event.signal == KeyboardInput::KEY_ENTER) && !m_staticAssetCatalog.empty()) beginStaticParticleAssetJob();
+		else if (event.signal == KeyboardInput::KEY_Q || event.signal == KeyboardInput::KEY_ESCAPE) closeStaticParticleAssetPanel();
+		glutPostRedisplay(); return true;
+	}
+	if (m_staticAssetPanel.mode == Mode::CONFIRM) {
+		if (event.signal == KeyboardInput::KEY_W || event.signal == KeyboardInput::KEY_S || event.signal == KeyboardInput::KEY_A || event.signal == KeyboardInput::KEY_D) m_staticAssetPanel.yesSelected = !m_staticAssetPanel.yesSelected;
+		else if (event.signal == KeyboardInput::KEY_E || event.signal == KeyboardInput::KEY_ENTER) { if (m_staticAssetPanel.yesSelected) beginStaticParticleAssetJob(); else closeStaticParticleAssetPanel(); }
+		else if (event.signal == KeyboardInput::KEY_Q || event.signal == KeyboardInput::KEY_ESCAPE) closeStaticParticleAssetPanel();
+		glutPostRedisplay(); return true;
+	}
+	if (m_staticAssetPanel.mode == Mode::WORKING) return true;
+	if (event.signal == KeyboardInput::KEY_E || event.signal == KeyboardInput::KEY_ENTER || event.signal == KeyboardInput::KEY_Q || event.signal == KeyboardInput::KEY_ESCAPE) closeStaticParticleAssetPanel();
+	return true;
+}
+
+void EuclidEngine::handleStaticParticleRequests(
+	const TheArbiter::ArbiterResult& result) {
+	if (result.loadStaticParticleRequested) openStaticParticleLoadPanel();
+	if (result.saveStaticParticleAsRequested)
+		openStaticParticleSaveConfirm(result.staticParticleAssetName);
+	else if (result.saveStaticParticleRequested)
+		openStaticParticleSaveConfirm("");
+}
+
+// =============================================================================
 // OBJ EXPORT MODAL INPUT
 // =============================================================================
 bool EuclidEngine::handleObjExportModalKeyboard(const KeyboardInput::KeyEvent& event) {
@@ -2544,7 +2821,10 @@ void EuclidEngine::onDisplay() {
 	}
 
 	const ViewPort::ObjExportPanelData* exportPanelDataPtr = nullptr;
-	if (m_objExportPanel.mode != ViewPort::ObjExportPanelMode::HIDDEN) {
+	if (m_staticAssetPanel.mode != ViewPort::ObjExportPanelMode::HIDDEN) {
+		exportPanelDataPtr = &m_staticAssetPanel;
+	}
+	else if (m_objExportPanel.mode != ViewPort::ObjExportPanelMode::HIDDEN) {
 
 		exportPanelDataPtr = &m_objExportPanel;
 	}
@@ -2563,7 +2843,7 @@ void EuclidEngine::onDisplay() {
 	glutSwapBuffers();
 }
 void EuclidEngine::onMouse(int button, int state, int x, int y) {
-	if (isObjExportModalActive()) return;
+	if (isObjExportModalActive() || isStaticParticleAssetModalActive()) return;
 
 	const bool isWheel = (button == 3 || button == 4);
 
@@ -2686,6 +2966,7 @@ void EuclidEngine::onPassiveMotion(int x, int y) {
 void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 
 	KeyboardInput::KeyEvent event = m_keyboard.onKey(key, x, y);
+	if (handleStaticParticleAssetModalKeyboard(event)) return;
 	if (handleObjExportModalKeyboard(event)) return;
 
 	TheArbiter::ApplicationLayer previousLayer =
@@ -2905,6 +3186,7 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 	if (result.exportObjRequested) {
 		exportCurrentMeshOBJ();
 	}
+	handleStaticParticleRequests(result);
 
 	syncCameraBehaviorFromArbiter();
 
@@ -2931,6 +3213,7 @@ void EuclidEngine::onIdle() {
 	if (m_exiting || m_cleaned) return;
 
 	advanceObjExportJob();
+	advanceStaticParticleAssetJob();
 	glutPostRedisplay();
 }
 void EuclidEngine::onClose() {

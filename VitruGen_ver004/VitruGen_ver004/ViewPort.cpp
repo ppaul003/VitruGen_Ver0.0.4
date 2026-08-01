@@ -11,15 +11,18 @@ ViewPort::~ViewPort() {}
 int ViewPort::clampPositive(int v) {
 	return max(1, v);
 }
+
 float ViewPort::getAspect() const {
 	return (m_window_h > 0)
 		? static_cast<float>(m_window_w) / static_cast<float>(m_window_h)
 		: 1.0f;
 }
+
 float ViewPort::panelOffsetX() const {
 	const float hiddenX = -(m_menuPanelW + m_margin + 24.0f);
 	return hiddenX * (1.0f - m_panelSlide);
 }
+
 float ViewPort::subLayerPanelOffsetY() const {
 	const float hiddenY = m_subPanelH + m_margin + 24.0f;
 	return hiddenY * (1.0f - m_subLayerPanelSlide);
@@ -31,6 +34,7 @@ void ViewPort::resize(int w, int h) {
 
 	glViewport(0, 0, m_window_w, m_window_h);
 }
+
 void ViewPort::beginOverlay2D() {
 	glViewport(0, 0, m_window_w, m_window_h);
 
@@ -49,6 +53,7 @@ void ViewPort::beginOverlay2D() {
 	glPushMatrix();
 	glLoadIdentity();
 }
+
 void ViewPort::endOverlay2D() {
 	glMatrixMode(GL_MODELVIEW);
 	glPopMatrix();
@@ -58,6 +63,7 @@ void ViewPort::endOverlay2D() {
 
 	glMatrixMode(GL_MODELVIEW);
 }
+
 void ViewPort::applyPerspective(float fovDegrees) {
 	m_fov = fovDegrees;
 
@@ -71,6 +77,7 @@ void ViewPort::applyPerspective(float fovDegrees) {
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 }
+
 void ViewPort::drawText2D(float x, float y, const char* text, void* font) {
 	if (!text) return;
 
@@ -233,7 +240,12 @@ void ViewPort::drawOverlay(
 	endOverlay2D();
 }
 
-void ViewPort::drawSubLayerPanelLine(float x, float y, bool active, const char* text, float alpha) {
+void ViewPort::drawSubLayerPanelLine(
+	float x,
+	float y,
+	bool active,
+	const char* text,
+	float alpha) {
 
 	if (active) {
 		glColor4f(0.45f, 1.0f, 0.65f, alpha);
@@ -301,8 +313,8 @@ void ViewPort::drawSubLayerPanel(const TheArbiter& arbiter, const MarchingCubesP
 	};
 
 	// =========================================================
-// SUB-LAYER 0 — COLLISION SETUP
-// =========================================================
+	// SUB-LAYER 0 — COLLISION SETUP
+	// =========================================================
 	if (arbiter.isSingleParticleReferenceSubLayer()) {
 
 		glColor4f(
@@ -431,15 +443,42 @@ void ViewPort::drawSubLayerPanel(const TheArbiter& arbiter, const MarchingCubesP
 
 		drawSectionTitle(
 			y0 + 425.0f,
-			"Next Sub-Layer:"
+			"Static Particle Asset:"
 		);
 
 		drawSubLayerPanelLine(
 			labelX,
 			y0 + 467.0f,
 			activeItem ==
+			TheArbiter::SP0_LIST_LOAD_STATIC_PARTICLE,
+			"[2] LOAD STATIC PARTICLE",
+			alpha
+		);
+
+		drawSubLayerPanelLine(
+			labelX,
+			y0 + 509.0f,
+			activeItem ==
+			TheArbiter::SP0_LIST_SAVE_ACTIVE_PARTICLE,
+			"[3] SAVE ACTIVE PARTICLE",
+			alpha
+		);
+
+		drawDivider(
+			y0 + 544.0f
+		);
+
+		drawSectionTitle(
+			y0 + 584.0f,
+			"Next Sub-Layer:"
+		);
+
+		drawSubLayerPanelLine(
+			labelX,
+			y0 + 626.0f,
+			activeItem ==
 			TheArbiter::SP0_LIST_RENDERING_SETUP,
-			"[2] RENDERING SETUP",
+			"[4] RENDERING SETUP",
 			alpha
 		);
 
@@ -859,38 +898,54 @@ void ViewPort::drawSubLayerPanel(const TheArbiter& arbiter, const MarchingCubesP
 		drawSubLayerPanelLine(
 			labelX,
 			y0 + 334.0f,
-			activeItem == TheArbiter::MC_LIST_EXPORT_OBJ,
-			"[1] Export .OBJ",
+			activeItem == TheArbiter::MC_LIST_SAVE_STATIC_PARTICLE,
+			"[1] SAVE STATIC PARTICLE",
 			alpha
 		);
 
-		drawDivider(y0 + 370.0f);
+		drawSubLayerPanelLine(
+			labelX,
+			y0 + 376.0f,
+			activeItem == TheArbiter::MC_LIST_SAVE_STATIC_PARTICLE_AS,
+			"[2] SAVE STATIC PARTICLE AS",
+			alpha
+		);
+
+		drawSubLayerPanelLine(
+			labelX,
+			y0 + 418.0f,
+			activeItem == TheArbiter::MC_LIST_EXPORT_OBJ,
+			"[3] EXPORT .OBJ",
+			alpha
+		);
+
+		drawDivider(y0 + 454.0f);
 
 		drawSectionTitle(
-			y0 + 410.0f,
+			y0 + 494.0f,
 			"Previous Sub-layer:"
 		);
 
 		drawSubLayerPanelLine(
 			labelX,
-			y0 + 452.0f,
+			y0 + 536.0f,
 			activeItem == TheArbiter::MC_LIST_TO_SUB_LAYER_2,
-			"[2] To Sub-Layer_2 Preview",
+			"[4] To Sub-Layer_2 Preview",
 			alpha
 		);
 
-		drawDivider(y0 + 488.0f);
+		drawDivider(y0 + 572.0f);
 
 		drawSectionTitle(
-			y0 + 528.0f,
+			y0 + 612.0f,
 			"Next Sub-layer:"
 		);
 
 		drawSubLayerPanelLine(
 			labelX,
-			y0 + 570.0f,
+			y0 + 654.0f,
 			activeItem == TheArbiter::MC_LIST_TO_SUB_LAYER_0,
-			"[3] To Sub-Layer_0 Reference",
+			"[5] RETURN TO SUB-LAYER_0",
 			alpha
 		);
 	}
@@ -3277,6 +3332,38 @@ void ViewPort::drawObjExportPanel(const ObjExportPanelData& data) {
 
 	const float textX = x0 + 38.0f;
 
+	if (data.mode == ObjExportPanelMode::SELECT) {
+		glColor4f(0.85f, 0.95f, 1.0f, 1.0f);
+		drawText2D(textX, y0 + 44.0f,
+			data.titleText.empty() ? "VITRUGEN STATIC PARTICLE LOAD" : data.titleText.c_str(),
+			GLUT_BITMAP_HELVETICA_18);
+		glColor4f(0.62f, 0.70f, 0.75f, 1.0f);
+		drawText2D(textX, y0 + 76.0f,
+			"Valid VSPA bundles under INPUTS and OUTPUT/STATIC_PARTICLES",
+			GLUT_BITMAP_HELVETICA_12);
+		const int first = max(0, data.selectedIndex - 8);
+		const int last = min(static_cast<int>(data.selectionLines.size()), first + 17);
+		float rowY = y0 + 118.0f;
+		if (data.selectionLines.empty()) {
+			glColor4f(1.0f, 0.55f, 0.25f, 1.0f);
+			drawText2D(textX, rowY, "No VSPA manifests found.", GLUT_BITMAP_HELVETICA_18);
+		}
+		for (int i = first; i < last; ++i) {
+			const bool active = i == data.selectedIndex;
+			glColor4f(active ? 0.45f : 0.72f, active ? 1.0f : 0.80f,
+				active ? 0.65f : 0.84f, 1.0f);
+			std::string row = active ? "> " : "  ";
+			row += data.selectionLines[static_cast<size_t>(i)];
+			drawText2D(textX, rowY, row.c_str(), GLUT_BITMAP_HELVETICA_12);
+			rowY += 28.0f;
+		}
+		glColor4f(0.62f, 0.68f, 0.72f, 1.0f);
+		drawText2D(textX, y1 - 34.0f,
+			"W/S: Select    E: Load selected asset    Q: Cancel",
+			GLUT_BITMAP_HELVETICA_12);
+		return;
+	}
+
 	// =========================================================
 	// Confirmation dialog
 	// =========================================================
@@ -3286,7 +3373,7 @@ void ViewPort::drawObjExportPanel(const ObjExportPanelData& data) {
 		drawText2D(
 			textX,
 			y0 + 52.0f,
-			"VITRUGEN OBJ EXPORT",
+			data.titleText.empty() ? "VITRUGEN OBJ EXPORT" : data.titleText.c_str(),
 			GLUT_BITMAP_HELVETICA_18
 		);
 
@@ -3294,7 +3381,7 @@ void ViewPort::drawObjExportPanel(const ObjExportPanelData& data) {
 		drawText2D(
 			textX,
 			y0 + 94.0f,
-			"Confirm Export .OBJ?",
+			data.confirmText.empty() ? "Confirm Export .OBJ?" : data.confirmText.c_str(),
 			GLUT_BITMAP_HELVETICA_18
 		);
 
@@ -3356,7 +3443,7 @@ void ViewPort::drawObjExportPanel(const ObjExportPanelData& data) {
 	drawText2D(
 		textX,
 		y0 + 44.0f,
-		"VITRUGEN OBJ EXPORT PIPELINE",
+		data.titleText.empty() ? "VITRUGEN OBJ EXPORT PIPELINE" : data.titleText.c_str(),
 		GLUT_BITMAP_HELVETICA_18
 	);
 
@@ -3364,7 +3451,7 @@ void ViewPort::drawObjExportPanel(const ObjExportPanelData& data) {
 		data.mode == ObjExportPanelMode::COMPLETE
 		? "STATUS: COMPLETE"
 		: data.mode == ObjExportPanelMode::FAILED
-		? "STATUS: EXPORT FAILED"
+		? "STATUS: OPERATION FAILED"
 		: "STATUS: PROCESSING";
 
 	if (data.mode == ObjExportPanelMode::COMPLETE) {
@@ -3514,21 +3601,21 @@ void ViewPort::drawObjExportPanel(const ObjExportPanelData& data) {
 		snprintf(
 			operationLine,
 			sizeof(operationLine),
-			"Exporting to .OBJ ... COMPLETE!"
+			"Static asset operation ... COMPLETE!"
 		);
 	}
 	else if (data.mode == ObjExportPanelMode::FAILED) {
 		snprintf(
 			operationLine,
 			sizeof(operationLine),
-			"Exporting to .OBJ ... FAILED"
+			"Static asset operation ... FAILED"
 		);
 	}
 	else {
 		snprintf(
 			operationLine,
 			sizeof(operationLine),
-			"Exporting to .OBJ ...%c",
+			"Static asset operation ...%c",
 			spinnerFrames[data.spinnerFrame % 4]
 		);
 	}
