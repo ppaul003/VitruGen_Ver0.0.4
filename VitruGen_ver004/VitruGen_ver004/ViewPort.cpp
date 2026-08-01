@@ -1295,6 +1295,7 @@ void ViewPort::drawSubLayerPanel(const TheArbiter& arbiter, const MarchingCubesP
 
 	glLineWidth(1.0f);
 }
+
 void ViewPort::drawLayer0Menu(const TheArbiter& arbiter) {
 	drawPanelBackground();
 
@@ -1340,6 +1341,7 @@ void ViewPort::drawLayer0Menu(const TheArbiter& arbiter) {
 			break;
 
 		case TheArbiter::WorkspaceDomain::SIMCAD_4D:
+
 			statusText =
 				"SIMCAD_4D selected: press E to configure.";
 
@@ -1366,21 +1368,193 @@ void ViewPort::drawLayer0Menu(const TheArbiter& arbiter) {
 	drawHelpFooter("A / D: Change selection     E: Enter", "ESC: Exit");
 	drawWorkspaceFrame(0.30f);
 }
+
+void ViewPort::drawSingleParticleLayer1Config(const TheArbiter& arbiter) {
+
+	drawPanelBackground();
+
+	// ---------------------------------------------------------
+	// Header.
+	// ---------------------------------------------------------
+	glColor4f(
+		1.0f,
+		1.0f,
+		1.0f,
+		m_panelSlide
+	);
+
+	drawText2D(
+		panelX(95.0f),
+		180.0f,
+		"LAYER 1 -> GRID_3D WORKSPACE CONFIGURATION",
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	drawText2D(
+		panelX(95.0f),
+		215.0f,
+		"MODE: SINGLE_PARTICLE",
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	const TheArbiter::SingleParticleLayer1Item selected =
+		arbiter.getSingleParticleLayer1Selection();
+
+	// ---------------------------------------------------------
+	// Row [1] — GRID_3D workspace selection.
+	// ---------------------------------------------------------
+	char workspaceLine[256];
+
+	snprintf(
+		workspaceLine,
+		sizeof(workspaceLine),
+		"[1] GRID_3D SELECTION { %s }",
+		arbiter.getSelectedWorkspaceDisplayName()
+	);
+
+	drawSelectableLine(
+		95.0f,
+		280.0f,
+		selected ==
+		TheArbiter::SingleParticleLayer1Item::Workspace,
+		workspaceLine
+	);
+
+	// ---------------------------------------------------------
+	// Row [2] — particle object type.
+	// ---------------------------------------------------------
+	char particleTypeLine[256];
+
+	snprintf(
+		particleTypeLine,
+		sizeof(particleTypeLine),
+		"[2] PARTICLE TYPE { %s }",
+		arbiter.getSingleParticleObjectTypeName()
+	);
+
+	drawSelectableLine(
+		95.0f,
+		335.0f,
+		selected ==
+		TheArbiter::SingleParticleLayer1Item::ParticleType,
+		particleTypeLine
+	);
+
+	// ---------------------------------------------------------
+	// Row [3] — configure STATIC particle pipeline.
+	// ---------------------------------------------------------
+	drawSelectableLine(
+		95.0f,
+		390.0f,
+		selected ==
+		TheArbiter::SingleParticleLayer1Item::Configure,
+		"[3] PRESS E TO CONFIGURE SIM"
+	);
+
+	// ---------------------------------------------------------
+	// Pipeline status.
+	// ---------------------------------------------------------
+	const char* statusText =
+		"UNKNOWN PARTICLE PIPELINE.";
+
+	float statusR = 1.0f;
+	float statusG = 0.45f;
+	float statusB = 0.45f;
+
+	switch (arbiter.getSingleParticleObjectType()) {
+
+	case TheArbiter::SingleParticleObjectType::Static:
+
+		statusText =
+			"STATIC PARTICLE PIPELINE READY.";
+
+		statusR = 0.45f;
+		statusG = 1.0f;
+		statusB = 0.65f;
+		break;
+
+	case TheArbiter::SingleParticleObjectType::Composite:
+
+		statusText =
+			"COMPOSITE PARTICLE PIPELINE RESERVED - VER 0.0.5.";
+
+		statusR = 1.0f;
+		statusG = 0.82f;
+		statusB = 0.45f;
+		break;
+
+	case TheArbiter::SingleParticleObjectType::Atomic:
+
+		statusText =
+			"ATOMIC PARTICLE PIPELINE RESERVED.";
+
+		statusR = 1.0f;
+		statusG = 0.82f;
+		statusB = 0.45f;
+		break;
+
+	default:
+	case TheArbiter::SingleParticleObjectType::Count:
+		break;
+	}
+
+	glColor4f(
+		statusR,
+		statusG,
+		statusB,
+		m_panelSlide
+	);
+
+	drawText2D(
+		panelX(95.0f),
+		455.0f,
+		statusText,
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	// ---------------------------------------------------------
+	// Footer.
+	// ---------------------------------------------------------
+	drawHelpFooter(
+		"W / S: Select list     A / D: Change value",
+		"E: Configure when LIST 3 selected     Q: Back one layer"
+	);
+
+	drawWorkspaceFrame(
+		0.20f,
+		nullptr
+	);
+}
+
 void ViewPort::drawLayer1EnvironmentConfig(const TheArbiter& arbiter) {
+
+	// GRID_3D -> SINGLE_PARTICLE uses its dedicated
+	// three-row Layer 1 configuration panel.
+	if (arbiter.isSingleParticleLayer1PanelContext()) {
+		drawSingleParticleLayer1Config(arbiter);
+		return;
+	}
+
+	// SIMCAD_4D -> PARTICLE_SIM / SANDBOX_SIM uses
+	// the established five-row ParticleSim panel.
 	if (arbiter.isParticleSimLayer1PanelContext()) {
 		drawParticleSimLayer1Config(arbiter);
 		return;
 	}
 
+
 	drawPanelBackground();
 	glColor4f(1.0f, 1.0f, 1.0f, m_panelSlide);
+
 	drawText2D(
 		panelX(95.0f),
 		180.0f,
 		"LAYER 1 -> WORKSPACE SELECTION",
-		GLUT_BITMAP_HELVETICA_18);
+		GLUT_BITMAP_HELVETICA_18
+	);
 
 	char line[256];
+
 	snprintf(
 		line,
 		sizeof(line),
@@ -1399,6 +1573,7 @@ void ViewPort::drawLayer1EnvironmentConfig(const TheArbiter& arbiter) {
 		TheArbiter::WorkspaceAvailability::AVAILABLE;
 
 	char statusLine[256];
+
 	if (workspaceAvailable) {
 		snprintf(
 			statusLine,
@@ -1446,12 +1621,19 @@ void ViewPort::drawLayer1EnvironmentConfig(const TheArbiter& arbiter) {
 
 	drawWorkspaceFrame(0.20f, nullptr);
 }
+
 void ViewPort::drawParticleSimLayer1Config(
 	const TheArbiter& arbiter) {
 
 	drawPanelBackground();
 
-	glColor4f(1.0f, 1.0f, 1.0f, m_panelSlide);
+	glColor4f(
+		1.0f,
+		1.0f,
+		1.0f,
+		m_panelSlide
+	);
+
 	drawText2D(
 		panelX(95.0f),
 		180.0f,
@@ -1460,6 +1642,7 @@ void ViewPort::drawParticleSimLayer1Config(
 	);
 
 	char modeLine[128];
+
 	snprintf(
 		modeLine,
 		sizeof(modeLine),
@@ -1477,7 +1660,11 @@ void ViewPort::drawParticleSimLayer1Config(
 	const TheArbiter::ParticleSimLayer1Item selected =
 		arbiter.getParticleSimLayer1Selection();
 
+	// ---------------------------------------------------------
+	// Row [1] — SIMCAD workspace.
+	// ---------------------------------------------------------
 	char workspaceLine[256];
+
 	snprintf(
 		workspaceLine,
 		sizeof(workspaceLine),
@@ -1493,7 +1680,11 @@ void ViewPort::drawParticleSimLayer1Config(
 		workspaceLine
 	);
 
+	// ---------------------------------------------------------
+	// Row [2] — grid layout.
+	// ---------------------------------------------------------
 	char gridLine[256];
+
 	snprintf(
 		gridLine,
 		sizeof(gridLine),
@@ -1509,7 +1700,11 @@ void ViewPort::drawParticleSimLayer1Config(
 		gridLine
 	);
 
+	// ---------------------------------------------------------
+	// Row [3] — color mode.
+	// ---------------------------------------------------------
 	char colorLine[256];
+
 	snprintf(
 		colorLine,
 		sizeof(colorLine),
@@ -1525,7 +1720,11 @@ void ViewPort::drawParticleSimLayer1Config(
 		colorLine
 	);
 
+	// ---------------------------------------------------------
+	// Row [4] — radius mode.
+	// ---------------------------------------------------------
 	char radiusLine[256];
+
 	snprintf(
 		radiusLine,
 		sizeof(radiusLine),
@@ -1541,6 +1740,9 @@ void ViewPort::drawParticleSimLayer1Config(
 		radiusLine
 	);
 
+	// ---------------------------------------------------------
+	// Row [5] — configure.
+	// ---------------------------------------------------------
 	drawSelectableLine(
 		95.0f,
 		500.0f,
@@ -1549,30 +1751,34 @@ void ViewPort::drawParticleSimLayer1Config(
 		"[5] PRESS E TO CONFIGURE SIM"
 	);
 
+	// ---------------------------------------------------------
+	// Status.
+	// ---------------------------------------------------------
 	if (arbiter.isParticleSimulationSelected()) {
-		glColor4f(0.45f, 1.0f, 0.65f, m_panelSlide);
 
-		char previewStatus[256];
-		snprintf(
-			previewStatus,
-			sizeof(previewStatus),
-			"PARTICLE_SIM grid preview: %s%s",
-			arbiter.getParticleGridLayoutName(),
-			arbiter.getParticleSimDraftConfig().gridLayout ==
-			TheArbiter::ParticleGridLayout::Dynamic
-			? " (FULL fallback; hash debug reserved)"
-			: ""
+		glColor4f(
+			0.45f,
+			1.0f,
+			0.65f,
+			m_panelSlide
 		);
 
 		drawText2D(
 			panelX(95.0f),
 			565.0f,
-			previewStatus,
+			"PARTICLE_SIM draft configuration ready.",
 			GLUT_BITMAP_HELVETICA_18
 		);
 	}
 	else {
-		glColor4f(1.0f, 0.82f, 0.45f, m_panelSlide);
+
+		glColor4f(
+			1.0f,
+			0.82f,
+			0.45f,
+			m_panelSlide
+		);
+
 		drawText2D(
 			panelX(95.0f),
 			565.0f,
@@ -1586,8 +1792,12 @@ void ViewPort::drawParticleSimLayer1Config(
 		"E: Activate selected row     Q: Back one layer"
 	);
 
-	drawWorkspaceFrame(0.20f, nullptr);
+	drawWorkspaceFrame(
+		0.20f,
+		nullptr
+	);
 }
+
 void ViewPort::drawLayer2ParticleConfig(const TheArbiter& arbiter, bool meshAvailable) {
 	if (arbiter.isParticleSimulationSelected()) {
 		drawParticleSimLayer2Config(arbiter);
@@ -1717,8 +1927,7 @@ void ViewPort::drawLayer2ParticleConfig(const TheArbiter& arbiter, bool meshAvai
 	drawWorkspaceFrame(0.20f, nullptr);
 }
 
-void ViewPort::drawParticleSimLayer2Config(
-	const TheArbiter& arbiter) {
+void ViewPort::drawParticleSimLayer2Config(const TheArbiter& arbiter) {
 
 	drawPanelBackground();
 

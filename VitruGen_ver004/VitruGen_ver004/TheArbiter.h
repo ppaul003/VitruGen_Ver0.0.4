@@ -58,6 +58,20 @@ public:
 		RESERVED
 	};
 
+	enum class SingleParticleObjectType {
+		Static = 0,
+		Composite,
+		Atomic,
+		Count
+	};
+
+	enum class SingleParticleLayer1Item {
+		Workspace = 0,
+		ParticleType,
+		Configure,
+		Count
+	};
+
 	enum class TextEntryTarget {
 		None = 0,
 
@@ -499,6 +513,8 @@ public:
 	WorkspaceId getSelectedWorkspace() const;
 	WorkspaceId getWorkspaceSelection(WorkspaceDomain domain) const;
 
+	SingleParticleLayer1Item getSingleParticleLayer1Selection() const { return m_singleParticleLayer1Selection; }
+	SingleParticleObjectType getSingleParticleObjectType() const { return m_singleParticleObjectType; }
 	ParticleColorSelection getParticleColorSelection() const { return m_particleColorSelection; }
 	ParticleResetMode getParticleResetMode() const { return m_particleResetMode; }
 	ParticleConfigList getActiveParticleConfigList() const { return m_activeParticleConfigList; }
@@ -541,9 +557,11 @@ public:
 	bool isSimulationRunLayer() const { return m_navigation.layer == ApplicationLayer::ACTIVE_WORKSPACE; }
 	bool isIdleSelected() const { return m_navigation.globalShellSelection == GlobalShellSelection::IDLE; }
 	bool isWorkspaceDomainsSelected() const { return m_navigation.globalShellSelection == GlobalShellSelection::WORKSPACE_DOMAINS; }
-
+	
+	bool isStaticParticleObjectType() const { return m_singleParticleObjectType == SingleParticleObjectType::Static; };
 	bool isSingleParticleSelected() const { return getSelectedWorkspace() == WorkspaceId::SINGLE_PARTICLE_MCAD; }
 	bool isParticleSimulationSelected() const { return getSelectedWorkspace() == WorkspaceId::PARTICLE_SIMULATION; }
+	bool isSingleParticleLayer1PanelContext() const;
 	bool isParticleSimLayer1PanelContext() const;
 	bool isParticleSimLayer2RunSelected() const;
 	bool isVolumeBoundarySensorReady() const { return m_volumeBoundarySensorReady; }
@@ -573,7 +591,7 @@ public:
 
 	const char* getSelectedDomainDisplayName() const;
 	const char* getSelectedWorkspaceDisplayName() const;
-
+	const char* getSingleParticleObjectTypeName() const;
 	const char* getParticleColorName() const;
 	const char* getParticleResetModeName() const;
 	const char* getParticleGridLayoutName() const;
@@ -795,6 +813,12 @@ private:
 	int m_particleSimLayer2Selection = 0;
 
 	// --- SINGLE_PARTICLE_MCAD WORKFLOW ---
+	SingleParticleLayer1Item m_singleParticleLayer1Selection =
+		SingleParticleLayer1Item::Workspace;
+
+	SingleParticleObjectType m_singleParticleObjectType =
+		SingleParticleObjectType::Static;
+
 	SingleParticleSubLayer m_singleParticleSubLayer = SP_SUB_LAYER_REFERENCE;
 	VolumeAssemblyNode m_volumeAssemblyNode = VOLUME_NODE_PREVIEW;
 	int m_workplaneSlice = 0;

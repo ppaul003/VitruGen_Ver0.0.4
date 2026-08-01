@@ -402,6 +402,7 @@ void TheArbiter::cycleGlobalShellSelection(int dir) {
 	}
 	validateNavigationState();
 }
+
 void TheArbiter::cycleWorkspaceSelection(int dir) {
 	if (dir == 0) return;
 
@@ -472,6 +473,7 @@ void TheArbiter::cycleWorkspaceSelection(int dir) {
 		workspaceCycle[nextIndex]
 	);
 }
+
 // =============================================================================
 // PARTICLE WORKSPACE CONFIGURATION
 // =============================================================================
@@ -491,12 +493,14 @@ void TheArbiter::toggleParticleColorSelection() {
 		break;
 	}
 }
+
 void TheArbiter::toggleParticleResetMode() {
 	m_particleResetMode =
 		(m_particleResetMode == PARTICLE_RESET_DEFAULT)
 		? PARTICLE_RESET_RANDOM
 		: PARTICLE_RESET_DEFAULT;
 }
+
 void TheArbiter::toggleParticleRenderMode() {
 	m_particleRenderMode =
 		(m_particleRenderMode == PARTICLE_RENDER_DEFAULT)
@@ -511,12 +515,26 @@ void TheArbiter::increaseParticleRadius() {
 		m_particleRadius = kParticleRadiusMax;
 	}
 }
+
 void TheArbiter::decreaseParticleRadius() {
 	m_particleRadius -= kParticleRadiusStep;
 
 	if (m_particleRadius < kParticleRadiusMin) {
 		m_particleRadius = kParticleRadiusMin;
 	}
+}
+
+bool TheArbiter::isSingleParticleLayer1PanelContext() const {
+
+	return
+		m_navigation.layer ==
+		ApplicationLayer::DOMAIN_SELECTION &&
+
+		m_navigation.selectedDomain ==
+		WorkspaceDomain::GRID_3D &&
+
+		getSelectedWorkspace() ==
+		WorkspaceId::SINGLE_PARTICLE_MCAD;
 }
 
 bool TheArbiter::isParticleSimLayer1PanelContext() const {
@@ -572,8 +590,7 @@ void TheArbiter::moveParticleSimLayer1Cursor(int dir) {
 
 	m_particleSimLayer1Selection =
 		static_cast<ParticleSimLayer1Item>(
-			wrapIndex(current, count, dir)
-			);
+			wrapIndex(current, count, dir));
 }
 
 void TheArbiter::moveParticleSimLayer2Cursor(int dir) {
@@ -605,8 +622,7 @@ void TheArbiter::adjustParticleSimDefaultCount(int dir) {
 	else if (dir > 0) {
 		count = (std::min)(
 			kParticleSimCapacity,
-			count + step
-			);
+			count + step);
 	}
 }
 
@@ -630,9 +646,7 @@ void TheArbiter::cycleParticleSimColorMode(int dir) {
 		static_cast<int>(ParticleColorMode::Count);
 
 	m_particleSimDraftConfig.colorMode =
-		static_cast<ParticleColorMode>(
-			wrapIndex(current, count, dir)
-			);
+		static_cast<ParticleColorMode>(wrapIndex(current, count, dir));
 
 	clampParticleSimLayer2Selection();
 }
@@ -645,18 +659,14 @@ void TheArbiter::cycleParticleSimRadiusMode(int dir) {
 		static_cast<int>(ParticleRadiusMode::Count);
 
 	m_particleSimDraftConfig.radiusMode =
-		static_cast<ParticleRadiusMode>(
-			wrapIndex(current, count, dir)
-			);
+		static_cast<ParticleRadiusMode>(wrapIndex(current, count, dir));
 
 	clampParticleSimLayer2Selection();
 }
 
 void TheArbiter::cycleParticleSimColorChannel(int dir) {
 	const int current =
-		static_cast<int>(
-			m_particleSimDraftConfig.selectedColorChannel
-			);
+		static_cast<int>(m_particleSimDraftConfig.selectedColorChannel);
 
 	const int count =
 		static_cast<int>(ParticleColorChannel::Count);
@@ -674,9 +684,7 @@ void TheArbiter::cycleParticleSimResetMode(int dir) {
 		static_cast<int>(ParticleSimResetMode::Count);
 
 	m_particleSimDraftConfig.resetMode =
-		static_cast<ParticleSimResetMode>(
-			wrapIndex(current, count, dir)
-			);
+		static_cast<ParticleSimResetMode>(wrapIndex(current, count, dir));
 }
 
 void TheArbiter::adjustParticleSimUniformRadius(int dir) {
@@ -960,6 +968,7 @@ void TheArbiter::cycleInjectionVoxelSelection(float dir) {
 	// centered in that injection chamber.
 	m_injectionRailT = 0.0f;
 }
+
 void TheArbiter::cycleVolumeEditTarget(float dir) {
 	int value =
 		static_cast<int>(m_volumeEditTarget);
@@ -977,6 +986,7 @@ void TheArbiter::cycleVolumeEditTarget(float dir) {
 	m_volumeEditTarget =
 		static_cast<VolumeEditTarget>(value);
 }
+
 void TheArbiter::cycleVolumeInjectionMode(float dir) {
 	(void)dir;
 
@@ -985,6 +995,7 @@ void TheArbiter::cycleVolumeInjectionMode(float dir) {
 		? VOLUME_CUT
 		: VOLUME_FUSE;
 }
+
 void TheArbiter::adjustInjectionRail(float dir) {
 	if (dir == 0.0f) return;
 
@@ -1043,6 +1054,7 @@ bool TheArbiter::isInjectionBrushBaseSelected() const {
 		isEditingInjectionVoxel1() &&
 		getActiveVolumeState().primitive == VOLUME_PRIMITIVE_BASE;
 }
+
 TheArbiter::VolumePrimitive
 TheArbiter::getResolvedVolumePrimitiveSelection() const {
 
@@ -1099,6 +1111,7 @@ void TheArbiter::resetVolumeState(VolumeObjectState& state, VolumePrimitive prim
 	state.offsetY = 0.0f;
 	state.offsetZ = 0.0f;
 }
+
 void TheArbiter::resetAllVolumeStates() {
 	resetVolumeState(m_volume0State, VOLUME_PRIMITIVE_SPHERE);
 	resetVolumeState(m_volume1State, VOLUME_PRIMITIVE_SPHERE);
@@ -1144,6 +1157,7 @@ void TheArbiter::adjustObjectOffset(float dir) {
 		*selectedOffset = 0.0f;
 	}
 }
+
 void TheArbiter::resetObjectOffset() {
 
 	VolumeObjectState& state =
@@ -1158,6 +1172,7 @@ void TheArbiter::setObjectEditMode(ObjectEditMode mode) {
 	m_objectEditMode = mode;
 	m_objectTransformMode = TRANSFORM_SCALE;
 }
+
 void TheArbiter::resetObjectScale() {
 
 	VolumeObjectState& state = activeVolumeState();
@@ -1172,6 +1187,7 @@ void TheArbiter::setObjectRotationMode(ObjectRotationMode mode) {
 	m_objectRotationMode = mode;
 	m_objectTransformMode = TRANSFORM_ROTATION;
 }
+
 void TheArbiter::resetObjectRotation() {
 	VolumeObjectState& state = activeVolumeState();
 
@@ -1202,6 +1218,7 @@ void TheArbiter::increaseObjectRotation() {
 		break;
 	}
 }
+
 void TheArbiter::decreaseObjectRotation() {
 	const float step =
 		static_cast<float>(getRotationAngleIncrementDeg());
@@ -1251,6 +1268,7 @@ void TheArbiter::increaseVolumePrimitiveScale() {
 		break;
 	}
 }
+
 void TheArbiter::decreaseVolumePrimitiveScale() {
 	constexpr float step = 0.05f;
 	constexpr float minScale = 0.10f;
@@ -2018,6 +2036,7 @@ bool TheArbiter::isSubLayerPanelItemSelectable(int item) const {
 	return true;
 
 }
+
 int TheArbiter::getActiveSubLayerPanelItemCount() const {
 	if (isMarchingCubesSubLayer()) return MC_LIST_COUNT;
 
@@ -2078,6 +2097,7 @@ const char* TheArbiter::getSelectedDomainDisplayName() const {
 		return "UNKNOWN_ENVIRONMENT";
 	}
 }
+
 const char* TheArbiter::getSelectedWorkspaceDisplayName() const {
 	switch (getSelectedWorkspace()) {
 		// GRID_2D
@@ -2123,6 +2143,24 @@ const char* TheArbiter::getSelectedWorkspaceDisplayName() const {
 	}
 }
 
+const char* TheArbiter::getSingleParticleObjectTypeName() const {
+	switch (m_singleParticleObjectType) {
+
+	case SingleParticleObjectType::Static:
+		return "STATIC";
+
+	case SingleParticleObjectType::Composite:
+		return "COMPOSITE";
+
+	case SingleParticleObjectType::Atomic:
+		return "ATOMIC";
+
+	default:
+	case SingleParticleObjectType::Count:
+		return "UNKNOWN";
+	}
+}
+
 const char* TheArbiter::getParticleColorName() const {
 	switch (m_particleColorSelection) {
 	case PARTICLE_COLOR_RED:
@@ -2138,6 +2176,7 @@ const char* TheArbiter::getParticleColorName() const {
 		return "UNKNOWN_COLOR";
 	}
 }
+
 const char* TheArbiter::getParticleResetModeName() const {
 	switch (m_particleResetMode) {
 	case PARTICLE_RESET_DEFAULT:
@@ -2150,6 +2189,7 @@ const char* TheArbiter::getParticleResetModeName() const {
 		return "UNKNOWN_RESET_MODE";
 	}
 }
+
 const char* TheArbiter::getParticleGridLayoutName() const {
 	switch (m_particleSimDraftConfig.gridLayout) {
 	case ParticleGridLayout::None:
@@ -2169,6 +2209,7 @@ const char* TheArbiter::getParticleGridLayoutName() const {
 		return "UNKNOWN";
 	}
 }
+
 const char* TheArbiter::getParticleColorModeName() const {
 	switch (m_particleSimDraftConfig.colorMode) {
 	case ParticleColorMode::Default:
@@ -2182,6 +2223,7 @@ const char* TheArbiter::getParticleColorModeName() const {
 		return "UNKNOWN";
 	}
 }
+
 const char* TheArbiter::getParticleRadiusModeName() const {
 	switch (m_particleSimDraftConfig.radiusMode) {
 	case ParticleRadiusMode::Uniform:
@@ -2195,6 +2237,7 @@ const char* TheArbiter::getParticleRadiusModeName() const {
 		return "UNKNOWN";
 	}
 }
+
 const char* TheArbiter::getParticleColorChannelName() const {
 	switch (m_particleSimDraftConfig.selectedColorChannel) {
 	case ParticleColorChannel::Red:
@@ -2211,6 +2254,7 @@ const char* TheArbiter::getParticleColorChannelName() const {
 		return "UNKNOWN";
 	}
 }
+
 const char* TheArbiter::getParticleSimResetModeName() const {
 	switch (m_particleSimDraftConfig.resetMode) {
 	case ParticleSimResetMode::Default:
@@ -2224,6 +2268,7 @@ const char* TheArbiter::getParticleSimResetModeName() const {
 		return "UNKNOWN";
 	}
 }
+
 const char* TheArbiter::getSingleParticleSubLayerName() const {
 	switch (m_singleParticleSubLayer) {
 	case SP_SUB_LAYER_REFERENCE:
