@@ -183,6 +183,21 @@ public:
 		float brushOffsetZ = 0.0f
 
 	);
+	void displaySPMirrorGuides(
+		float thetaRad,
+		float phiRad,
+		float zs,
+		int volumeDim,
+		int injectionDx,
+		int injectionDy,
+		int injectionDz,
+		bool editingVoxel1,
+		bool sharedOverlapActive,
+		float railT,
+		float brushOffsetX,
+		float brushOffsetY,
+		float brushOffsetZ
+	);
 	void displayVolumeOffsetGrid(
 		float thetaRad,
 		float phiRad,
@@ -247,6 +262,9 @@ public:
 	bool loadParticleMeshOBJ(const char* filename);
 	bool particleIntersectsSlice(const ParticleProxy3D& p, int slice) const;
 	float getParticleMeshMaxExtent() const { return m_particleMeshMaxExtent; }
+	glm::vec3 getParticleMeshMin() const { return m_particleMeshMin; }
+	glm::vec3 getParticleMeshMax() const { return m_particleMeshMax; }
+	glm::vec3 getParticleMeshCenter() const { return m_particleMeshCenter; }
 	size_t getParticleMeshBufferBytes() const { return static_cast<size_t>(m_particleMeshVertexCount) * sizeof(ParticleMeshVertex); }
 
 	void drawParticleMeshOBJ(
@@ -274,7 +292,6 @@ protected:
 		const char* secondaryAttributeName,
 		const char* programLabel
 	);
-
 	void drawAxes();
 	void drawWorkspaceBoundary();
 	void drawWorkspaceMajorGrid();

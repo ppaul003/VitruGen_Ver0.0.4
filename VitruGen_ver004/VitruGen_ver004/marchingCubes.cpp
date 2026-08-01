@@ -104,38 +104,12 @@ bool MarchingCubes::exportOBJ(const char* filename, bool writeNormals) {
 		printf("[MarchingCubes3D] exportOBJ failed: invalid filename.\n");
 		return false;
 	}
-
-	if (!m_triangleDataValid || m_totalVerts == 0) {
-		printf("[MarchingCubes3D] exportOBJ failed: no valid triangle data.\n");
+	if (!m_triangleDataValid || m_canonicalMesh.empty()) {
+		printf("[MarchingCubes3D] exportOBJ failed: no canonical indexed mesh.\n");
 		return false;
 	}
-
-	if (m_triangleVertsCPU.empty()) {
-		printf("[MarchingCubes3D] exportOBJ failed: CPU vertex buffer is empty.\n");
-		return false;
-	}
-
-	if (m_triangleVertsCPU.size() < static_cast<size_t>(m_totalVerts)) {
-		printf(
-			"[MarchingCubes3D] exportOBJ failed: CPU vertex buffer too small. cpu=%zu, totalVerts=%u\n",
-			m_triangleVertsCPU.size(),
-			m_totalVerts
-		);
-		return false;
-	}
-
-	if ((m_totalVerts % 3u) != 0u) {
-		printf(
-			"[MarchingCubes3D] exportOBJ warning: totalVerts=%u is not divisible by 3.\n",
-			m_totalVerts
-		);
-	}
-
-
-	const bool normalsAvailable =
-		writeNormals &&
-		!m_triangleNormsCPU.empty() &&
-		m_triangleNormsCPU.size() >= static_cast<size_t>(m_totalVerts);
+	const bool normalsAvailable = writeNormals &&
+		m_canonicalMesh.normals.size() == m_canonicalMesh.positions.size();
 
 	ofstream out(filename);
 
@@ -147,51 +121,33 @@ bool MarchingCubes::exportOBJ(const char* filename, bool writeNormals) {
 		return false;
 	}
 
-	out << "# VitruGen SIMCAD / EucliGen3D_TEST Marching Cubes OBJ\n";
+	out << "# VitruGen SIMCAD canonical indexed Marching Cubes OBJ\n";
 	out << "# Volume-workspace export with authored placement preserved\n";
-	out << "# vertices: " << m_totalVerts << "\n";
-	out << "# triangles: " << (m_totalVerts / 3u) << "\n";
+	out << "# vertices: " << m_canonicalMesh.positions.size() << "\n";
+	out << "# triangles: " << m_canonicalMesh.triangleCount() << "\n";
+	out << "o SP_MCAD_MESH\n";
 	out << "\n";
 
 	out << fixed << setprecision(6);
 
-	// Write vertices exactly as Marching Cubes generated them.
-//
-// These coordinates already contain the placement authored in
-// Sub-Layer 2, including the complete X/Y/Z Node_2 offset.
-	for (uint i = 0; i < m_totalVerts; ++i) {
-		const float4& v = m_triangleVertsCPU[i];
-
-		out << "v "
-			<< v.x << " "
-			<< v.y << " "
-			<< v.z << "\n";
+	for (const vitru::Vec3& v : m_canonicalMesh.positions) {
+		out << "v " << v.x << " " << v.y << " " << v.z << "\n";
 	}
 
 	out << "\n";
 
-	// Normals are directions, not positions, so do NOT subtract the center.
 	if (normalsAvailable) {
-		for (uint i = 0; i < m_totalVerts; ++i) {
-			const float4& n = m_triangleNormsCPU[i];
-
-			out << "vn "
-				<< n.x << " "
-				<< n.y << " "
-				<< n.z << "\n";
+		for (const vitru::Vec3& n : m_canonicalMesh.normals) {
+			out << "vn " << n.x << " " << n.y << " " << n.z << "\n";
 		}
 
 		out << "\n";
 	}
 
-	// Write triangle faces.
-	// OBJ indices are 1-based.
-	const uint triangleCount = m_totalVerts / 3u;
-
-	for (uint tri = 0; tri < triangleCount; ++tri) {
-		const uint i0 = tri * 3u + 1u;
-		const uint i1 = tri * 3u + 2u;
-		const uint i2 = tri * 3u + 3u;
+	for (size_t tri = 0; tri < m_canonicalMesh.triangleCount(); ++tri) {
+		const uint32_t i0 = m_canonicalMesh.indices[tri * 3u] + 1u;
+		const uint32_t i1 = m_canonicalMesh.indices[tri * 3u + 1u] + 1u;
+		const uint32_t i2 = m_canonicalMesh.indices[tri * 3u + 2u] + 1u;
 
 		if (normalsAvailable) {
 			out << "f "
@@ -210,14 +166,48 @@ bool MarchingCubes::exportOBJ(const char* filename, bool writeNormals) {
 	out.close();
 
 	printf(
-		"[MarchingCubes3D] exportOBJ success: '%s' vertices=%u triangles=%u normals=%s\n",
+		"[MarchingCubes3D] exportOBJ success: '%s' vertices=%zu triangles=%zu normals=%s indexed=YES\n",
 		filename,
-		m_totalVerts,
-		triangleCount,
+		m_canonicalMesh.positions.size(),
+		m_canonicalMesh.triangleCount(),
 		normalsAvailable ? "YES" : "NO"
 	);
 
 	return true;
+}
+
+void MarchingCubes::rebuildCanonicalMesh() {
+	std::vector<vitru::Vec3> raw;
+	raw.reserve(m_triangleVertsCPU.size());
+	for (const float4& p : m_triangleVertsCPU) {
+		raw.push_back({ p.x, p.y, p.z });
+	}
+	vitru::MeshProcessingOptions options;
+	const float minVoxel = (std::min)(m_voxelSize.x,
+		(std::min)(m_voxelSize.y, m_voxelSize.z));
+	options.weldEpsilon = (std::max)(1.0e-6f, minVoxel * 1.0e-4f);
+	options.degenerateAreaEpsilon = options.weldEpsilon * options.weldEpsilon;
+	m_meshProcessingReport = vitru::MeshProcessor::processTriangleSoup(
+		raw, m_canonicalMesh, options);
+
+	if (m_canonicalMesh.bounds.valid) {
+		const vitru::MeshBounds& b = m_canonicalMesh.bounds;
+		m_meshMin = make_float3(b.min.x, b.min.y, b.min.z);
+		m_meshMax = make_float3(b.max.x, b.max.y, b.max.z);
+		m_meshCenter = make_float3(b.center.x, b.center.y, b.center.z);
+		m_meshBoundsValid = true;
+	}
+	printf(
+		"[MarchingCubes3D] canonical mesh: rawV=%zu rawT=%zu finalV=%zu finalT=%zu nonfinite=%zu degenerate=%zu duplicate=%zu welded=%zu radius=%.6f\n",
+		m_meshProcessingReport.rawVertexCount,
+		m_meshProcessingReport.rawTriangleCount,
+		m_meshProcessingReport.finalVertexCount,
+		m_meshProcessingReport.finalTriangleCount,
+		m_meshProcessingReport.removedNonFiniteTriangles,
+		m_meshProcessingReport.removedDegenerateTriangles,
+		m_meshProcessingReport.removedDuplicateTriangles,
+		m_meshProcessingReport.weldedVertexInstances,
+		m_meshProcessingReport.bounds.radius);
 }
 
 void MarchingCubes::shutdown() {
@@ -246,6 +236,8 @@ void MarchingCubes::shutdown() {
 
 	m_activeVoxels = 0;
 	m_totalVerts = 0;
+	m_canonicalMesh.clear();
+	m_meshProcessingReport = vitru::MeshProcessingReport{};
 	m_initialized = false;
 
 	printf("[MarchingCubes3D] Shutdown complete.\n");
@@ -409,6 +401,8 @@ void MarchingCubes::generateTriangles(float* dVolume, float isoValue) {
 
 	m_triangleDataValid = true;
 	updateTriangleDebugBuffers();
+	rebuildCanonicalMesh();
+	m_triangleDataValid = m_meshProcessingReport.success;
 
 	printf(
 		"[MarchingCubes3D] generateTriangles: activeVoxels=%u, totalVerts=%u, triangles=%u\n",
@@ -443,6 +437,8 @@ void MarchingCubes::updateActiveVoxelDebugBuffer() {
 void MarchingCubes::extract(float* dVolume, float isoValue) {
 	m_triangleDataValid = false;
 	m_meshBoundsValid = false;
+	m_canonicalMesh.clear();
+	m_meshProcessingReport = vitru::MeshProcessingReport{};
 
 	m_triangleVertsCPU.clear();
 	m_triangleNormsCPU.clear();
@@ -602,12 +598,13 @@ void MarchingCubes::extract(float* dVolume, float isoValue) {
 		nullptr,
 		static_cast<int>(m_totalVerts * sizeof(float4))
 	);
+	rebuildCanonicalMesh();
 
 
 	unmapGLBufferObject(m_cudaPosVboResource);
 	unmapGLBufferObject(m_cudaNormVboResource);
 
-	m_triangleDataValid = true;
+	m_triangleDataValid = m_meshProcessingReport.success;
 
 	printf(
 		"[MarchingCubes3D] extract: activeVoxels=%u, totalVerts=%u, triangles=%u\n",

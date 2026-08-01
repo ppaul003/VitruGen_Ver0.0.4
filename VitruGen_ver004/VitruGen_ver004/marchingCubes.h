@@ -20,6 +20,8 @@
 #include <vector_types.h>
 
 #include "kernel.h"
+#include "MeshGeometry.h"
+#include "MeshProcessor.h"
 #include "params_kernel.cuh"
 
 class MarchingCubes {
@@ -45,6 +47,8 @@ public:
 	const std::vector<uint>& getActiveVoxelIdsCPU() const { return m_activeVoxelIdsCPU; }
 	const std::vector<float4>& getTriangleVertsCPU() const { return m_triangleVertsCPU; }
 	const std::vector<float4>& getTriangleNormsCPU() const { return m_triangleNormsCPU; }
+	const vitru::MeshGeometry& getCanonicalMesh() const { return m_canonicalMesh; }
+	const vitru::MeshProcessingReport& getMeshProcessingReport() const { return m_meshProcessingReport; }
 
 	uint3 getGridSize() const { return m_gridSize; }
 
@@ -184,6 +188,7 @@ private:
 			static_cast<int>(m_totalVerts * sizeof(float4))
 		);
 	}
+	void rebuildCanonicalMesh();
 
 private:
 	bool m_initialized = false;
@@ -229,6 +234,8 @@ private:
 
 	std::vector<float4> m_triangleVertsCPU;
 	std::vector<float4> m_triangleNormsCPU;
+	vitru::MeshGeometry m_canonicalMesh;
+	vitru::MeshProcessingReport m_meshProcessingReport;
 
 	std::vector<uint> m_activeVoxelIdsCPU;
 	uint m_debugActiveVoxelCopyLimit = 65536;

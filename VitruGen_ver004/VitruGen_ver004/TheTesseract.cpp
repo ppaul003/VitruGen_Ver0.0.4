@@ -1103,7 +1103,8 @@ bool Tesseract::commitSPWorkingVolume(const TheArbiter& arbiter) {
 bool Tesseract::commitSPInjectionBoolean(const TheArbiter& arbiter) {
 	if (!m_dBaseVolume ||
 		!m_dWorkingVolume ||
-		!m_dBrushVolume) return false;
+		!m_dBrushVolume ||
+		(arbiter.isSPMirrorEnabled() && !m_dMirrorBrushVolume)) return false;
 
 	if (!arbiter.hasInjectionVoxelSelected()) return false;
 	if (!m_hasCommittedGeometry) {
@@ -1154,6 +1155,24 @@ bool Tesseract::commitSPInjectionBoolean(const TheArbiter& arbiter) {
 
 			return false;
 		}
+
+		if (arbiter.isSPMirrorEnabled()) {
+			bool mirrorReady = false;
+			unsigned int mirrorUnsafe = 0;
+			unsigned int mirrorInside = 0;
+			if (!classifySPVolumeBoundaryForSource(
+				m_dMirrorBrushVolume, 0.0f, 0.0f,
+				mirrorReady, mirrorUnsafe, &mirrorInside, nullptr) ||
+				!mirrorReady || mirrorUnsafe != 0 || mirrorInside == 0) {
+				printf(
+					"[Tesseract] Mirrored fuse commit blocked: "
+					"%u unsafe boundary patches detected.\n",
+					mirrorUnsafe);
+				m_volumeBoundarySensorReady = mirrorReady;
+				m_volumeBoundaryUnsafeCount += mirrorUnsafe;
+				return false;
+			}
+		}
 	}
 
 	const int op =
@@ -1171,13 +1190,21 @@ bool Tesseract::commitSPInjectionBoolean(const TheArbiter& arbiter) {
 	// Output goes to m_dWorkingVolume first.
 	// Then it is copied back into m_dBaseVolume.
 	// ---------------------------------------------------------
-	composeVolumeFieldsLauncher(
-		m_dBaseVolume,
-		m_dBrushVolume,
-		m_dWorkingVolume,
-		m_volumeSize,
-		op
-	);
+	if (arbiter.isSPMirrorEnabled()) {
+		// First union the authored primary/mirror pair; then apply that pair
+		// to VOLUME_0 using the selected FUSE or CUT operation.
+		composeVolumeFieldsLauncher(
+			m_dBrushVolume, m_dMirrorBrushVolume,
+			m_dMirrorBrushVolume, m_volumeSize, 0);
+		composeVolumeFieldsLauncher(
+			m_dBaseVolume, m_dMirrorBrushVolume,
+			m_dWorkingVolume, m_volumeSize, op);
+	}
+	else {
+		composeVolumeFieldsLauncher(
+			m_dBaseVolume, m_dBrushVolume,
+			m_dWorkingVolume, m_volumeSize, op);
+	}
 
 	threadSync();
 	cudaMemcpy(
@@ -1194,6 +1221,10 @@ bool Tesseract::commitSPInjectionBoolean(const TheArbiter& arbiter) {
 		m_volumeSize,
 		1.0e6f
 	);
+	if (m_dMirrorBrushVolume) {
+		clearVolumeKernelLauncher(
+			m_dMirrorBrushVolume, m_volumeSize, 1.0e6f);
+	}
 
 	threadSync();
 
@@ -1529,8 +1560,14 @@ bool Tesseract::renderSPVolumeToPBO(
 		float brushTintR = 1.0f;
 		float brushTintG = 0.0f;
 		float brushTintB = 0.0f;
+		if (arbiter.isSPMirrorEnabled()) {
+			brushTintR = 1.0f;
+			brushTintG = 0.34f;
+			brushTintB = 0.02f;
+		}
 
-		if (arbiter.getVolumeInjectionMode() ==
+		if (!arbiter.isSPMirrorEnabled() &&
+			arbiter.getVolumeInjectionMode() ==
 			TheArbiter::VOLUME_CUT) {
 
 			brushTintR = 0.05f;
@@ -1558,6 +1595,17 @@ bool Tesseract::renderSPVolumeToPBO(
 			brushTintR, brushTintG, brushTintB,
 			brushAlpha
 		);
+
+		if (arbiter.isSPMirrorEnabled() && m_dMirrorBrushVolume) {
+			kernelOverlayLauncher(
+				dOut, m_dMirrorBrushVolume,
+				viewportW, viewportH,
+				m_volumeSize, renderMethod,
+				zs, thetaRad, phiRad,
+				threshold, sliceDistance,
+				0.05f, 0.88f, 1.0f,
+				brushAlpha);
+		}
 	}
 
 	unmapGLBufferObject(*m_cudaPboResourceSlot);
@@ -1931,7 +1979,7 @@ void Tesseract::renderSPVolumeInjectionEditTargetPreview(
 
 	// In shared mode, VOLUME_0 is the permanent Node_1 reference cage;
 	// it no longer depends on List [1] owning the cursor.
-	if (!sharedOverlapActive && !targetListSelected) return;
+	if (!sharedOverlapActive && !targetListSelected && !arbiter.isSPMirrorEnabled()) return;
 	m_renderer->displayVolumeInjectionEditTargetPreview(
 		thetaRad,
 		phiRad,
@@ -1944,6 +1992,19 @@ void Tesseract::renderSPVolumeInjectionEditTargetPreview(
 		arbiter.isEditingInjectionVoxel1(),
 		sharedOverlapActive
 	);
+	if (arbiter.isSPMirrorEnabled()) {
+		m_renderer->displaySPMirrorGuides(
+			thetaRad, phiRad, zs, m_volumeSize.x,
+			arbiter.getInjectionVoxelDX(),
+			arbiter.getInjectionVoxelDY(),
+			arbiter.getInjectionVoxelDZ(),
+			arbiter.isEditingInjectionVoxel1(),
+			sharedOverlapActive,
+			arbiter.getInjectionRailT(),
+			arbiter.getVolume1State().offsetX * 0.5f * m_volumeSize.x,
+			arbiter.getVolume1State().offsetY * 0.5f * m_volumeSize.y,
+			arbiter.getVolume1State().offsetZ * 0.5f * m_volumeSize.z);
+	}
 
 }
 //
@@ -1975,6 +2036,18 @@ void Tesseract::renderSPVolumeOffsetGrid(
 			arbiter.isEditingInjectionVoxel1(),
 			true
 		);
+		if (arbiter.isSPMirrorEnabled()) {
+			m_renderer->displaySPMirrorGuides(
+				thetaRad, phiRad, zs, m_volumeSize.x,
+				arbiter.getInjectionVoxelDX(),
+				arbiter.getInjectionVoxelDY(),
+				arbiter.getInjectionVoxelDZ(),
+				arbiter.isEditingInjectionVoxel1(), true,
+				arbiter.getInjectionRailT(),
+				arbiter.getVolume1State().offsetX * 0.5f * m_volumeSize.x,
+				arbiter.getVolume1State().offsetY * 0.5f * m_volumeSize.y,
+				arbiter.getVolume1State().offsetZ * 0.5f * m_volumeSize.z);
+		}
 
 		return;
 	}
@@ -2017,6 +2090,18 @@ void Tesseract::renderSPVolumeOffsetGrid(
 			arbiter.isEditingInjectionVoxel1(),
 			false
 		);
+		if (arbiter.isSPMirrorEnabled()) {
+			m_renderer->displaySPMirrorGuides(
+				thetaRad, phiRad, zs, m_volumeSize.x,
+				arbiter.getInjectionVoxelDX(),
+				arbiter.getInjectionVoxelDY(),
+				arbiter.getInjectionVoxelDZ(),
+				arbiter.isEditingInjectionVoxel1(), false,
+				arbiter.getInjectionRailT(),
+				arbiter.getVolume1State().offsetX * 0.5f * m_volumeSize.x,
+				arbiter.getVolume1State().offsetY * 0.5f * m_volumeSize.y,
+				arbiter.getVolume1State().offsetZ * 0.5f * m_volumeSize.z);
+		}
 
 		return;
 	}
@@ -2115,6 +2200,18 @@ void Tesseract::renderSPVolumeOffsetGrid(
 			brushOffsetY,
 			brushOffsetZ
 		);
+	}
+	if (arbiter.isSPMirrorEnabled()) {
+		m_renderer->displaySPMirrorGuides(
+			thetaRad, phiRad, zs, m_volumeSize.x,
+			arbiter.getInjectionVoxelDX(),
+			arbiter.getInjectionVoxelDY(),
+			arbiter.getInjectionVoxelDZ(),
+			arbiter.isEditingInjectionVoxel1(), false,
+			arbiter.getInjectionRailT(),
+			arbiter.getVolume1State().offsetX * 0.5f * m_volumeSize.x,
+			arbiter.getVolume1State().offsetY * 0.5f * m_volumeSize.y,
+			arbiter.getVolume1State().offsetZ * 0.5f * m_volumeSize.z);
 	}
 }
 //
@@ -2224,6 +2321,40 @@ bool Tesseract::classifySPVolumeBoundaryForSource(
 		&m_volumeBoundaryMaskCPU
 	);
 }
+
+void Tesseract::generateSPVolume1MirroredBrushField(
+	const TheArbiter& arbiter, float* dDestination) {
+	if (!dDestination) return;
+	if (!arbiter.isSPMirrorEnabled()) {
+		clearVolumeKernelLauncher(dDestination, m_volumeSize, 1.0e6f);
+		return;
+	}
+
+	const TheArbiter::VolumeObjectState& state = arbiter.getVolume1State();
+	const SPVolumeBasis basis = buildSPVolumeBasisFromState(arbiter, state);
+	const float3 railBrushOffset = buildSPVolumeRailBrushOffset(arbiter);
+	int dx = 0;
+	int dy = 0;
+	int dz = 0;
+	arbiter.getMirroredInjectionDirection(dx, dy, dz);
+	// Negating the mirrored route recovers the selected injection direction,
+	// which is the normal of the center reflection plane.
+	const float3 planeNormal = make_float3(
+		static_cast<float>(-dx),
+		static_cast<float>(-dy),
+		static_cast<float>(-dz));
+
+	mirroredVolumeKernelLauncher(
+		dDestination,
+		m_volumeSize,
+		getSPVolumePrimitiveIdFromState(state),
+		buildSPVolumePrimitiveParamsFromState(state),
+		railBrushOffset,
+		basis.xAxis,
+		basis.yAxis,
+		basis.zAxis,
+		planeNormal);
+}
 //
 bool Tesseract::classifySPVolumeBoundaryForSource(
 	const float* dSourceVolume,
@@ -2331,6 +2462,9 @@ void Tesseract::updateSPOverlapPreviewStatus(
 	// Generate the complete authored VOLUME_1 state: resolved primitive,
 	// scale, committed basis, live rotation, rail depth, and local offset.
 	generateSPVolume1BrushField(arbiter, m_dBrushVolume);
+	if (arbiter.isSPMirrorEnabled()) {
+		generateSPVolume1MirroredBrushField(arbiter, m_dMirrorBrushVolume);
+	}
 	threadSync();
 
 	classifySPVolumeBoundaryForSource(
@@ -2342,12 +2476,30 @@ void Tesseract::updateSPOverlapPreviewStatus(
 		&m_spOverlapPreviewInsideSampleCount,
 		nullptr
 	);
+
+	m_spOverlapPreviewMirrorRequired = arbiter.isSPMirrorEnabled();
+	if (m_spOverlapPreviewMirrorRequired && m_dMirrorBrushVolume) {
+		generateSPVolume1MirroredBrushField(arbiter, m_dMirrorBrushVolume);
+		threadSync();
+		classifySPVolumeBoundaryForSource(
+			m_dMirrorBrushVolume,
+			0.0f,
+			0.0f,
+			m_spMirrorOverlapPreviewSensorReady,
+			m_spMirrorOverlapPreviewUnsafeCount,
+			&m_spMirrorOverlapPreviewInsideSampleCount,
+			nullptr);
+	}
 }
 //
 void Tesseract::clearSPOverlapPreviewStatus() {
 	m_spOverlapPreviewSensorReady = false;
 	m_spOverlapPreviewUnsafeCount = 0;
 	m_spOverlapPreviewInsideSampleCount = 0;
+	m_spMirrorOverlapPreviewSensorReady = false;
+	m_spMirrorOverlapPreviewUnsafeCount = 0;
+	m_spMirrorOverlapPreviewInsideSampleCount = 0;
+	m_spOverlapPreviewMirrorRequired = false;
 }
 //
 void Tesseract::releaseSPVolumeBoundarySensor() {
@@ -2397,8 +2549,10 @@ int Tesseract::getSPVolumePrimitiveId(const TheArbiter& arbiter) const {
 		case TheArbiter::VOLUME_PRIMITIVE_TORUS: return 1;
 		case TheArbiter::VOLUME_PRIMITIVE_BLOCK: return 2;
 		case TheArbiter::VOLUME_PRIMITIVE_CYLINDER: return 3;
+		case TheArbiter::VOLUME_PRIMITIVE_CONE: return 7;
 		case TheArbiter::VOLUME_PRIMITIVE_CAPSULE: return 4;
 		case TheArbiter::VOLUME_PRIMITIVE_WEDGE: return 5;
+		case TheArbiter::VOLUME_PRIMITIVE_DELTA_WING: return 8;
 		case TheArbiter::VOLUME_PRIMITIVE_FRUSTUM: return 6;
 		default: return -1;
 	}
@@ -2427,8 +2581,10 @@ int Tesseract::getSPVolumePrimitiveIdFromState(const TheArbiter::VolumeObjectSta
 		case TheArbiter::VOLUME_PRIMITIVE_TORUS: return 1;
 		case TheArbiter::VOLUME_PRIMITIVE_BLOCK: return 2;
 		case TheArbiter::VOLUME_PRIMITIVE_CYLINDER: return 3;
+		case TheArbiter::VOLUME_PRIMITIVE_CONE: return 7;
 		case TheArbiter::VOLUME_PRIMITIVE_CAPSULE: return 4;
 		case TheArbiter::VOLUME_PRIMITIVE_WEDGE: return 5;
+		case TheArbiter::VOLUME_PRIMITIVE_DELTA_WING: return 8;
 		case TheArbiter::VOLUME_PRIMITIVE_FRUSTUM: return 6;
 		default: return 0;
 	}
@@ -2575,6 +2731,19 @@ float4 Tesseract::buildSPVolumePrimitiveParams(const TheArbiter& arbiter) const 
 		param.w = 0.0f;
 		break;
 
+	case TheArbiter::VOLUME_PRIMITIVE_CONE: {
+		const float xyScale = 0.5f * (sx + sy);
+		param.x = minDim * 0.42f * xyScale;
+		param.z = minDim * 0.46f * sz;
+		break;
+	}
+
+	case TheArbiter::VOLUME_PRIMITIVE_DELTA_WING:
+		param.x = minDim * 0.46f * sx;
+		param.y = minDim * 0.46f * sy;
+		param.z = minDim * 0.10f * sz;
+		break;
+
 	case TheArbiter::VOLUME_PRIMITIVE_FRUSTUM:
 		// param.x = bottom half X
 		// param.y = bottom half Y
@@ -2660,6 +2829,19 @@ float4 Tesseract::buildSPVolumePrimitiveParamsFromState(const TheArbiter::Volume
 		param.x = minDim * 0.42f * sx;
 		param.y = minDim * 0.42f * sy;
 		param.z = minDim * 0.42f * sz;
+		break;
+
+	case TheArbiter::VOLUME_PRIMITIVE_CONE: {
+		const float xyScale = 0.5f * (sx + sy);
+		param.x = minDim * 0.42f * xyScale;
+		param.z = minDim * 0.46f * sz;
+		break;
+	}
+
+	case TheArbiter::VOLUME_PRIMITIVE_DELTA_WING:
+		param.x = minDim * 0.46f * sx;
+		param.y = minDim * 0.46f * sy;
+		param.z = minDim * 0.10f * sz;
 		break;
 
 	case TheArbiter::VOLUME_PRIMITIVE_FRUSTUM:

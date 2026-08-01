@@ -191,6 +191,18 @@ private:
 	static constexpr int MENU_COMMIT_NEW_BASE_VECTOR = 1301;
 	// Node_1 injection-brush local basis commit.
 	static constexpr int MENU_COMMIT_BRUSH_BASE = 1302;
+	static constexpr int MENU_SP_MIRROR_NONE = 1303;
+	static constexpr int MENU_SP_MIRROR_ON = 1304;
+	static constexpr int MENU_PRIMITIVE_BASE = 1400;
+	static constexpr int MENU_PRIMITIVE_SPHERE = 1401;
+	static constexpr int MENU_PRIMITIVE_TORUS = 1402;
+	static constexpr int MENU_PRIMITIVE_BLOCK = 1403;
+	static constexpr int MENU_PRIMITIVE_CYLINDER = 1404;
+	static constexpr int MENU_PRIMITIVE_CONE = 1405;
+	static constexpr int MENU_PRIMITIVE_CAPSULE = 1406;
+	static constexpr int MENU_PRIMITIVE_WEDGE = 1407;
+	static constexpr int MENU_PRIMITIVE_DELTA_WING = 1408;
+	static constexpr int MENU_PRIMITIVE_FRUSTUM = 1409;
 	// SUB_LAYER_0 selection/collision setup.
 	static constexpr int MENU_SP_PRIMARY_ACTION = 2001;
 	static constexpr int MENU_SP_COLLISION_SPHERE = 2002;

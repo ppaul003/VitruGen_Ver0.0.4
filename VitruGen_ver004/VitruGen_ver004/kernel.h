@@ -130,6 +130,18 @@ extern "C" {
         float3 basisZ
     );
 
+    void mirroredVolumeKernelLauncher(
+        float* d_vol,
+        int3 volSize,
+        int id,
+        float4 param,
+        float3 offset,
+        float3 basisX,
+        float3 basisY,
+        float3 basisZ,
+        float3 mirrorNormal
+    );
+
     void clearVolumeKernelLauncher(
         float* d_vol,
         int3 volSize,

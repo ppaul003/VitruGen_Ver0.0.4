@@ -298,8 +298,10 @@ public:
 		VOLUME_PRIMITIVE_TORUS,
 		VOLUME_PRIMITIVE_BLOCK,
 		VOLUME_PRIMITIVE_CYLINDER,
+		VOLUME_PRIMITIVE_CONE,
 		VOLUME_PRIMITIVE_CAPSULE,
 		VOLUME_PRIMITIVE_WEDGE,
+		VOLUME_PRIMITIVE_DELTA_WING,
 		VOLUME_PRIMITIVE_FRUSTUM,
 
 		VOLUME_PRIMITIVE_COUNT
@@ -424,6 +426,12 @@ public:
 		SP_OVERLAP_POSITION_IN_NODE_2 = 0,
 		SP_OVERLAP_OUTSIDE_CAGE,
 		SP_OVERLAP_ACTIVE
+	};
+
+	enum SPMirrorMode {
+		SP_MIRROR_NONE = 0,
+		SP_MIRROR_ON,
+		SP_MIRROR_COUNT
 	};
 
 	enum ApplyToBasePanelItem {
@@ -555,7 +563,9 @@ public:
 	ArbiterResult setVolumeAssemblyNode(VolumeAssemblyNode node);
 	ArbiterResult setOffsetVectorSelection(OffsetVector vector);
 	ArbiterResult clearObjectOffsetFromMenu();
+	ArbiterResult setVolumePrimitiveFromMenu(VolumePrimitive primitive);
 	ArbiterResult toggleVolumeInjectionModeFromMenu();
+	ArbiterResult setSPMirrorModeFromMenu(SPMirrorMode mode);
 	ArbiterResult commitBrushBaseFromMenu();
 	ArbiterResult commitObjectBasisAndReturnToPreview();
 	ArbiterResult enterMarchingCubesFromPreview();
@@ -612,6 +622,8 @@ public:
 	int getInjectionVoxelDX() const;
 	int getInjectionVoxelDY() const;
 	int getInjectionVoxelDZ() const;
+	VolumeInjectionVoxel getMirroredInjectionVoxel() const;
+	void getMirroredInjectionDirection(int& dx, int& dy, int& dz) const;
 	int getActiveSubLayerPanelItem() const { return m_activeSubLayerPanelItem; }
 	int getWorkplaneSlice() const { return m_workplaneSlice; }
 	int getActiveSubLayerPanelItemCount() const;
@@ -648,6 +660,8 @@ public:
 	bool hasHover() const { return m_hoverValid; }
 	bool hasEditableVolumePrimitive() const { return getVolumePrimitiveSelection() != VOLUME_PRIMITIVE_BASE; }
 	bool hasInjectionVoxelSelected() const { return m_volumeInjectionVoxel != INJECTION_VOXEL_NONE; }
+	SPMirrorMode getSPMirrorMode() const { return m_spMirrorMode; }
+	bool isSPMirrorEnabled() const { return hasInjectionVoxelSelected() && m_spMirrorMode == SP_MIRROR_ON; }
 	bool canApplyVolumeToBase() const;
 	bool isInjectionBrushBaseSelected() const;
 
@@ -709,6 +723,7 @@ public:
 	const char* getVolumeInjectionModeName() const;
 	const char* getVolumeEditTargetName() const;
 	const char* getSPOverlapPreviewStatusName() const;
+	const char* getSPMirrorModeName() const;
 	const char* getVolumeEditTargetObjectName() const;
 	const char* getOffsetVectorName() const;
 	const char* getOffsetIncrementName() const;
@@ -821,6 +836,7 @@ private:
 	void cycleInjectionVoxelSelection(float dir);
 	void cycleVolumeEditTarget(float dir);
 	void cycleVolumeInjectionMode(float dir);
+	void cycleSPMirrorMode(float dir);
 	void adjustInjectionRail(float dir);
 
 	VolumeObjectState& activeVolumeState();
@@ -960,6 +976,7 @@ private:
 	VolumeInjectionVoxel m_volumeInjectionVoxel = INJECTION_VOXEL_NONE;
 	VolumeEditTarget m_volumeEditTarget = VOLUME_EDIT_TARGET_VOXEL_0;
 	VolumeInjectionMode m_volumeInjectionMode = VOLUME_FUSE;
+	SPMirrorMode m_spMirrorMode = SP_MIRROR_NONE;
 	OffsetVector m_offsetVectorSelection = OFFSET_VECTOR_X;
 
 	int m_rotationAngleIncrementIndex = 0;

@@ -281,6 +281,36 @@ extern "C" {
 		getLastCudaError("volumeKernel failed");
 	}
 
+	void mirroredVolumeKernelLauncher(
+		float* d_vol, int3 volSize,
+		int id, float4 param, float3 offset,
+		float3 basisX, float3 basisY, float3 basisZ,
+		float3 mirrorNormal) {
+		if (!d_vol) return;
+		if (volSize.x <= 0 || volSize.y <= 0 || volSize.z <= 0) return;
+		const float normalLength = sqrtf(
+			mirrorNormal.x * mirrorNormal.x +
+			mirrorNormal.y * mirrorNormal.y +
+			mirrorNormal.z * mirrorNormal.z);
+		if (normalLength <= 1.0e-6f) return;
+		mirrorNormal.x /= normalLength;
+		mirrorNormal.y /= normalLength;
+		mirrorNormal.z /= normalLength;
+
+		dim3 blockSize(
+			VOLUME_KERNEL_BLOCK_X,
+			VOLUME_KERNEL_BLOCK_Y,
+			VOLUME_KERNEL_BLOCK_Z);
+		dim3 gridSize(
+			divUpInt(volSize.x, VOLUME_KERNEL_BLOCK_X),
+			divUpInt(volSize.y, VOLUME_KERNEL_BLOCK_Y),
+			divUpInt(volSize.z, VOLUME_KERNEL_BLOCK_Z));
+		mirroredVolumeKernel<<<gridSize, blockSize>>>(
+			d_vol, volSize, id, param, offset,
+			basisX, basisY, basisZ, mirrorNormal);
+		getLastCudaError("mirroredVolumeKernel failed");
+	}
+
 	uint getVolumeBoundaryFaceStride(int3 volSize) {
 		if (volSize.x <= 0 || volSize.y <= 0 || volSize.z <= 0)
 			return 0;

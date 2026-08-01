@@ -3141,6 +3141,142 @@ void EuclidRenderer::displayVolumeInjectionEditTargetPreview(
 
     glMatrixMode(GL_MODELVIEW);
 }
+void EuclidRenderer::displaySPMirrorGuides(
+	float thetaRad,
+	float phiRad,
+	float zs,
+	int volumeDim,
+	int injectionDx,
+	int injectionDy,
+	int injectionDz,
+	bool editingVoxel1,
+	bool sharedOverlapActive,
+	float railT,
+	float brushOffsetX,
+	float brushOffsetY,
+	float brushOffsetZ) {
+	if (volumeDim <= 0 ||
+		(injectionDx == 0 && injectionDy == 0 && injectionDz == 0)) return;
+
+	GLint oldProgram = 0;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &oldProgram);
+	glPushAttrib(GL_ALL_ATTRIB_BITS);
+	glViewport(0, 0, m_window_w, m_window_h);
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	const float aspect = m_window_h > 0
+		? static_cast<float>(m_window_w) / static_cast<float>(m_window_h)
+		: 1.0f;
+	gluPerspective(m_fov, aspect, 1.0f, 2000.0f);
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+	glTranslatef(0.0f, 0.0f, -zs);
+	glRotatef(phiRad * 180.0f / static_cast<float>(M_PI), 1.0f, 0.0f, 0.0f);
+	glRotatef(thetaRad * 180.0f / static_cast<float>(M_PI), 0.0f, 1.0f, 0.0f);
+	glUseProgram(0);
+	glDisable(GL_TEXTURE_2D);
+	glDisable(GL_LIGHTING);
+	glDisable(GL_DEPTH_TEST);
+	glDepthMask(GL_FALSE);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	const vec3 n = glm::normalize(vec3(
+		static_cast<float>(injectionDx),
+		static_cast<float>(injectionDy),
+		static_cast<float>(injectionDz)));
+	const vec3 seed = fabsf(n.y) < 0.90f ? vec3(0.0f, 1.0f, 0.0f) : vec3(1.0f, 0.0f, 0.0f);
+	const vec3 u = glm::normalize(glm::cross(seed, n));
+	const vec3 v = glm::normalize(glm::cross(n, u));
+	const float half = 0.48f * static_cast<float>(volumeDim);
+	const float chamberStep = static_cast<float>(volumeDim);
+	const vec3 primaryCenter = n * chamberStep;
+	const vec3 mirrorCenter = -primaryCenter;
+	railT = std::max(0.0f, std::min(1.0f, railT));
+	const vec3 primaryBrushCenter =
+		primaryCenter * (1.0f - railT) +
+		vec3(brushOffsetX, brushOffsetY, brushOffsetZ);
+	const vec3 mirrorBrushCenter = primaryBrushCenter -
+		2.0f * glm::dot(primaryBrushCenter, n) * n;
+	const vec3 previewOrigin = editingVoxel1 && !sharedOverlapActive
+		? primaryCenter : vec3(0.0f);
+	glTranslatef(-previewOrigin.x, -previewOrigin.y, -previewOrigin.z);
+
+	// Stable 3 x 3 plane grid through VOLUME_0 center.
+	glLineWidth(1.5f);
+	glColor4f(0.55f, 0.70f, 1.0f, sharedOverlapActive ? 0.16f : 0.32f);
+	glBegin(GL_LINES);
+	for (int i = -3; i <= 3; ++i) {
+		const float t = half * static_cast<float>(i) / 3.0f;
+		const vec3 a = u * t - v * half;
+		const vec3 b = u * t + v * half;
+		const vec3 c = v * t - u * half;
+		const vec3 d = v * t + u * half;
+		glVertex3f(a.x, a.y, a.z); glVertex3f(b.x, b.y, b.z);
+		glVertex3f(c.x, c.y, c.z); glVertex3f(d.x, d.y, d.z);
+	}
+	glEnd();
+
+	if (!sharedOverlapActive) {
+		// Symmetric routes and opposite helper cage remain visible until both
+		// reflected objects fit inside the VOLUME_0 cage.
+		glLineWidth(2.25f);
+		glBegin(GL_LINES);
+		glColor4f(1.0f, 0.40f, 0.04f, 0.72f);
+		glVertex3f(0.0f, 0.0f, 0.0f);
+		glVertex3f(primaryCenter.x, primaryCenter.y, primaryCenter.z);
+		glColor4f(0.05f, 0.88f, 1.0f, 0.72f);
+		glVertex3f(0.0f, 0.0f, 0.0f);
+		glVertex3f(mirrorCenter.x, mirrorCenter.y, mirrorCenter.z);
+		glEnd();
+
+		glPushMatrix();
+		glTranslatef(primaryCenter.x, primaryCenter.y, primaryCenter.z);
+		drawVolumeBoundaryCage(
+			volumeDim, std::max(1, volumeDim / 16), 0.40f,
+			vec4(1.0f, 0.40f, 0.04f, 0.17f),
+			vec4(1.0f, 0.22f, 0.01f, 0.05f),
+			vec4(1.0f, 0.58f, 0.08f, 0.76f));
+		glPopMatrix();
+
+		glPushMatrix();
+		glTranslatef(mirrorCenter.x, mirrorCenter.y, mirrorCenter.z);
+		drawVolumeBoundaryCage(
+			volumeDim, std::max(1, volumeDim / 16), 0.45f,
+			vec4(0.04f, 0.82f, 1.0f, 0.17f),
+			vec4(0.02f, 0.56f, 0.88f, 0.05f),
+			vec4(0.10f, 0.92f, 1.0f, 0.78f));
+		glPopMatrix();
+	}
+
+	// One authored rail position drives both reflected brush markers.
+	const float tick = 0.045f * static_cast<float>(volumeDim);
+	for (int side = 0; side < 2; ++side) {
+		const vec3 marker = side == 0 ? primaryBrushCenter : mirrorBrushCenter;
+		if (side == 0) glColor4f(1.0f, 0.40f, 0.04f, 0.94f);
+		else glColor4f(0.05f, 0.88f, 1.0f, 0.94f);
+		glLineWidth(3.0f);
+		glBegin(GL_LINES);
+		glVertex3f(marker.x - tick, marker.y, marker.z);
+		glVertex3f(marker.x + tick, marker.y, marker.z);
+		glVertex3f(marker.x, marker.y - tick, marker.z);
+		glVertex3f(marker.x, marker.y + tick, marker.z);
+		glVertex3f(marker.x, marker.y, marker.z - tick);
+		glVertex3f(marker.x, marker.y, marker.z + tick);
+		glEnd();
+	}
+
+	glMatrixMode(GL_MODELVIEW);
+	glPopMatrix();
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glPopAttrib();
+	glUseProgram(static_cast<GLuint>(oldProgram));
+}
+
 void EuclidRenderer::displayVolumeInjectionRailMarker(
     float thetaRad,
     float phiRad,

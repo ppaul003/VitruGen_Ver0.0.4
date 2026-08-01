@@ -211,6 +211,22 @@ namespace {
 	constexpr int kInjectionVoxelCycleCount =
 		static_cast<int>(sizeof(kInjectionVoxelCycle) /
 			sizeof(kInjectionVoxelCycle[0]));
+
+	struct InjectionDirection { int x; int y; int z; };
+	constexpr InjectionDirection kInjectionDirections[] = {
+		{ 0, 0, 0 },
+		{ 1, 0, 0 }, { 0, 1, 0 }, { -1, 0, 0 },
+		{ 0, 0, 1 }, { 0, -1, 0 }, { 0, 0, -1 },
+		{ 0, 1, -1 }, { 1, 1, 0 }, { 0, 1, 1 }, { -1, 1, 0 },
+		{ 1, -1, 0 }, { 0, -1, -1 }, { -1, -1, 0 }, { 0, -1, 1 },
+		{ -1, 0, -1 }, { 1, 0, -1 }, { -1, 0, 1 }, { 1, 0, 1 },
+		{ 1, -1, 1 }, { -1, 1, -1 }, { 1, 1, -1 }, { -1, -1, 1 },
+		{ 1, -1, -1 }, { -1, 1, 1 }, { 1, 1, 1 }, { -1, -1, -1 }
+	};
+	static_assert(
+		static_cast<int>(sizeof(kInjectionDirections) / sizeof(kInjectionDirections[0])) ==
+		kInjectionVoxelCycleCount,
+		"Injection direction table must track the voxel cycle");
 }
 
 // =============================================================================
@@ -1103,6 +1119,13 @@ void TheArbiter::cycleVolumeInjectionMode(float dir) {
 		: VOLUME_FUSE;
 }
 
+void TheArbiter::cycleSPMirrorMode(float dir) {
+	(void)dir;
+	m_spMirrorMode = (m_spMirrorMode == SP_MIRROR_ON)
+		? SP_MIRROR_NONE
+		: SP_MIRROR_ON;
+}
+
 void TheArbiter::adjustInjectionRail(float dir) {
 	if (dir == 0.0f) return;
 
@@ -1222,6 +1245,7 @@ void TheArbiter::resetVolumeState(VolumeObjectState& state, VolumePrimitive prim
 void TheArbiter::resetAllVolumeStates() {
 	resetVolumeState(m_volume0State, VOLUME_PRIMITIVE_SPHERE);
 	resetVolumeState(m_volume1State, VOLUME_PRIMITIVE_SPHERE);
+	m_spMirrorMode = SP_MIRROR_NONE;
 }
 
 void TheArbiter::adjustObjectOffset(float dir) {
@@ -1581,6 +1605,7 @@ void TheArbiter::finalizeVoxelBaseCommit() {
 	m_activeSubLayerPanelItem = PREVIEW_LIST_INJECTION_MODE;
 	m_volumeInjectionVoxel = INJECTION_VOXEL_NONE;
 	m_volumeEditTarget = VOLUME_EDIT_TARGET_VOXEL_0;
+	m_spMirrorMode = SP_MIRROR_NONE;
 	m_objectEditMode = EDIT_SCALE_WHOLE;
 	m_objectRotationMode = ROTATE_PITCH;
 	m_objectTransformMode = TRANSFORM_SCALE;
@@ -2705,11 +2730,17 @@ const char* TheArbiter::getVolumePrimitiveName() const {
 	case VOLUME_PRIMITIVE_CYLINDER:
 		return "CYLINDER";
 
+	case VOLUME_PRIMITIVE_CONE:
+		return "CONE";
+
 	case VOLUME_PRIMITIVE_CAPSULE:
 		return "CAPSULE";
 
 	case VOLUME_PRIMITIVE_WEDGE:
 		return "WEDGE";
+
+	case VOLUME_PRIMITIVE_DELTA_WING:
+		return "DELTA_WING";
 
 	case VOLUME_PRIMITIVE_FRUSTUM:
 		return "FRUSTUM";
@@ -2852,6 +2883,9 @@ const char* TheArbiter::getSPOverlapPreviewStatusName() const {
 	case SP_OVERLAP_POSITION_IN_NODE_2:
 		return "POSITION IN NODE_2";
 	}
+}
+const char* TheArbiter::getSPMirrorModeName() const {
+	return m_spMirrorMode == SP_MIRROR_ON ? "ON" : "NONE";
 }
 const char* TheArbiter::getVolumeEditTargetObjectName() const {
 	// Checkpoint 3C:
@@ -3060,6 +3094,29 @@ TheArbiter::setOffsetVectorSelection(
 }
 
 TheArbiter::ArbiterResult
+TheArbiter::setVolumePrimitiveFromMenu(VolumePrimitive primitive) {
+	ArbiterResult result;
+	const int value = static_cast<int>(primitive);
+	if (!isVolumeRenderSubLayer() ||
+		m_volumeAssemblyNode != VOLUME_NODE_EDIT_OBJECT ||
+		value < static_cast<int>(VOLUME_PRIMITIVE_BASE) ||
+		value >= static_cast<int>(VOLUME_PRIMITIVE_COUNT)) {
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return result;
+	}
+	activeVolumeState().primitive = primitive;
+	m_activeSubLayerPanelItem = hasInjectionVoxelSelected()
+		? INJECTION_EDIT_LIST_OBJECT
+		: EDIT_LIST_OBJECT;
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.regenerateVolume = true;
+	result.rebuildMenu = true;
+	return result;
+}
+
+TheArbiter::ArbiterResult
 TheArbiter::clearObjectOffsetFromMenu() {
 
 	ArbiterResult result;
@@ -3129,6 +3186,29 @@ TheArbiter::toggleVolumeInjectionModeFromMenu() {
 	//     {FUSE} <-> {CUT}
 	result.rebuildMenu = true;
 
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::setSPMirrorModeFromMenu(SPMirrorMode mode) {
+	ArbiterResult result;
+	const bool validMode = mode == SP_MIRROR_NONE || mode == SP_MIRROR_ON;
+	if (!isVolumeRenderSubLayer() ||
+		m_volumeAssemblyNode != VOLUME_NODE_EDIT_OBJECT ||
+		!hasInjectionVoxelSelected() ||
+		!isEditingInjectionVoxel1() ||
+		!validMode) {
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return result;
+	}
+
+	m_spMirrorMode = mode;
+	m_activeSubLayerPanelItem = INJECTION_EDIT_LIST_MIRROR;
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.regenerateVolume = true;
+	result.rebuildMenu = true;
 	return result;
 }
 
@@ -4088,6 +4168,14 @@ void TheArbiter::handleSubLayerPanelAdjust(float dir, ArbiterResult& result) {
 				}
 				break;
 
+			case INJECTION_EDIT_LIST_MIRROR:
+				if (isEditingInjectionVoxel1()) {
+					cycleSPMirrorMode(dir);
+					result.regenerateVolume = true;
+					result.rebuildMenu = true;
+				}
+				break;
+
 			default:
 				break;
 			}
@@ -4410,7 +4498,8 @@ void TheArbiter::activateSubLayerPanelItem(ArbiterResult& result) {
 			else if (isEditingInjectionVoxel1() &&
 				m_activeSubLayerPanelItem == INJECTION_EDIT_LIST_MIRROR) {
 
-				// Placeholder for a later checkpoint.
+				cycleSPMirrorMode(+1.0f);
+				result.regenerateVolume = true;
 				result.rebuildMenu = true;
 			}
 
@@ -5002,6 +5091,31 @@ int TheArbiter::getInjectionVoxelDZ() const {
 	default:
 		return 0;
 	}
+}
+
+void TheArbiter::getMirroredInjectionDirection(
+	int& dx, int& dy, int& dz) const {
+	dx = -getInjectionVoxelDX();
+	dy = -getInjectionVoxelDY();
+	dz = -getInjectionVoxelDZ();
+}
+
+TheArbiter::VolumeInjectionVoxel
+TheArbiter::getMirroredInjectionVoxel() const {
+	const int current = static_cast<int>(m_volumeInjectionVoxel);
+	if (current <= 0 || current >= kInjectionVoxelCycleCount) {
+		return INJECTION_VOXEL_NONE;
+	}
+	const InjectionDirection source = kInjectionDirections[current];
+	for (int i = 1; i < kInjectionVoxelCycleCount; ++i) {
+		const InjectionDirection candidate = kInjectionDirections[i];
+		if (candidate.x == -source.x &&
+			candidate.y == -source.y &&
+			candidate.z == -source.z) {
+			return kInjectionVoxelCycle[i];
+		}
+	}
+	return INJECTION_VOXEL_NONE;
 }
 
 int TheArbiter::getRotationAngleIncrementDeg() const {

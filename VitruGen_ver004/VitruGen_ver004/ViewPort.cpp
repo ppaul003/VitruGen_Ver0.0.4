@@ -1115,7 +1115,8 @@ void ViewPort::drawSubLayerPanel(const TheArbiter& arbiter, const MarchingCubesP
 					y0 + 542.0f,
 					activeItem ==
 					TheArbiter::INJECTION_EDIT_LIST_MIRROR,
-					"[4] Mirror { None } (placeholder)",
+					(std::string("[4] MIRROR { ") +
+						arbiter.getSPMirrorModeName() + " }").c_str(),
 					alpha
 				);
 

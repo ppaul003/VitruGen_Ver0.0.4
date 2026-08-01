@@ -222,11 +222,13 @@ public:
 	bool hasVolume() const { return m_dWorkingVolume != nullptr; }
 	bool hasCommittedVolume() const { return m_dBaseVolume != nullptr; }
 	bool hasBrushVolume() const { return m_dBrushVolume != nullptr; }
+	bool hasMirrorBrushVolume() const { return m_dMirrorBrushVolume != nullptr; }
 	bool isVolumeDirty() const { return m_volumeDirty; }
 
 	float* getVolume() const { return m_dWorkingVolume; }
 	float* getCommittedVolume() const { return m_dBaseVolume; }
 	float* getBrushVolume() const { return m_dBrushVolume; }
+	float* getMirrorBrushVolume() const { return m_dMirrorBrushVolume; }
 
 	void bindVolume(float* dVolume) {
 		m_dWorkingVolume = dVolume;
@@ -246,12 +248,20 @@ public:
 		m_dBrushVolume = dVolume;
 		m_volumeDirty = true;
 	}
+	void bindMirrorBrushVolume(float* dVolume) {
+		m_dMirrorBrushVolume = dVolume;
+		m_volumeDirty = true;
+	}
 
 	void clearCommittedVolumeBinding();
 	void clearSPCommittedVolume();
 
 	void clearBrushVolumeBinding() {
 		m_dBrushVolume = nullptr;
+		m_volumeDirty = true;
+	}
+	void clearMirrorBrushVolumeBinding() {
+		m_dMirrorBrushVolume = nullptr;
 		m_volumeDirty = true;
 	}
 
@@ -282,10 +292,18 @@ public:
 	bool isSPOverlapPreviewActive() const {
 		return m_spOverlapPreviewSensorReady &&
 			m_spOverlapPreviewUnsafeCount == 0 &&
-			m_spOverlapPreviewInsideSampleCount > 0;
+			m_spOverlapPreviewInsideSampleCount > 0 &&
+			(!m_spOverlapPreviewMirrorRequired ||
+				(m_spMirrorOverlapPreviewSensorReady &&
+				m_spMirrorOverlapPreviewUnsafeCount == 0 &&
+				m_spMirrorOverlapPreviewInsideSampleCount > 0));
 	}
-	unsigned int getSPOverlapPreviewUnsafeCount() const { return m_spOverlapPreviewUnsafeCount; }
-	unsigned int getSPOverlapPreviewInsideSampleCount() const { return m_spOverlapPreviewInsideSampleCount; }
+	unsigned int getSPOverlapPreviewUnsafeCount() const {
+		return m_spOverlapPreviewUnsafeCount + m_spMirrorOverlapPreviewUnsafeCount;
+	}
+	unsigned int getSPOverlapPreviewInsideSampleCount() const {
+		return m_spOverlapPreviewInsideSampleCount + m_spMirrorOverlapPreviewInsideSampleCount;
+	}
 	void releaseSPVolumeBoundarySensor();
 
 private:
@@ -417,6 +435,11 @@ private:
 		float* dDestination
 	);
 
+	void generateSPVolume1MirroredBrushField(
+		const TheArbiter& arbiter,
+		float* dDestination
+	);
+
 	bool classifySPVolumeBoundaryForSource(
 		const float* dSourceVolume,
 		float isoValue,
@@ -489,6 +512,7 @@ private:
 	float* m_dWorkingVolume = nullptr;
 	float* m_dBaseVolume = nullptr;
 	float* m_dBrushVolume = nullptr;
+	float* m_dMirrorBrushVolume = nullptr;
 	int3 m_volumeSize{ 128, 128, 128 };
 	struct cudaGraphicsResource** m_cudaPboResourceSlot = nullptr;
 
@@ -508,6 +532,10 @@ private:
 	unsigned int m_spOverlapPreviewUnsafeCount = 0;
 	unsigned int m_spOverlapPreviewInsideSampleCount = 0;
 	bool m_spOverlapPreviewSensorReady = false;
+	unsigned int m_spMirrorOverlapPreviewUnsafeCount = 0;
+	unsigned int m_spMirrorOverlapPreviewInsideSampleCount = 0;
+	bool m_spMirrorOverlapPreviewSensorReady = false;
+	bool m_spOverlapPreviewMirrorRequired = false;
 };
 
 #endif

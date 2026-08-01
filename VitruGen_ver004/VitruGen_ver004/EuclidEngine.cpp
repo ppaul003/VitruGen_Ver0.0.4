@@ -386,6 +386,16 @@ void EuclidEngine::initVolumeField() {
 
 		clearVolumeKernelLauncher(dBrushVolume, v, 1.0e6f);
 	}
+	// Dedicated reflected brush field. It is never aliased with the primary
+	// brush so both members can be classified, previewed, and composed safely.
+	if (!m_tesseract.hasMirrorBrushVolume()) {
+		float* dMirrorBrushVolume = nullptr;
+		allocateArray(
+			reinterpret_cast<void**>(&dMirrorBrushVolume),
+			volumeBytes);
+		m_tesseract.bindMirrorBrushVolume(dMirrorBrushVolume);
+		clearVolumeKernelLauncher(dMirrorBrushVolume, v, 1.0e6f);
+	}
 	// ---------------------------------------------------------
 	// Boundary-contact sensor resources.
 	//
@@ -405,7 +415,7 @@ void EuclidEngine::initVolumeField() {
 		"%d x %d x %d, %.2f MB each, %.2f MB total\n",
 		v.x, v.y, v.z,
 		static_cast<double>(volumeBytes) / (1024.0 * 1024.0),
-		static_cast<double>(3 * volumeBytes) / (1024.0 * 1024.0)
+		static_cast<double>(4 * volumeBytes) / (1024.0 * 1024.0)
 	);
 }
 
@@ -800,6 +810,33 @@ void EuclidEngine::rebuildMenus() {
 			// Shape editing.
 			// -------------------------------------------------------------
 			glutAddMenuEntry(
+				"Procedural Primitive:",
+				MENU_NOP
+			);
+			const TheArbiter::VolumePrimitive selectedPrimitive =
+				m_arbiter.getVolumePrimitiveSelection();
+			auto addPrimitiveEntry = [&](const char* name, int command,
+				TheArbiter::VolumePrimitive primitive) {
+				char label[96];
+				snprintf(label, sizeof(label), "%s %s",
+					selectedPrimitive == primitive ? "*" : " ", name);
+				glutAddMenuEntry(label, command);
+			};
+			addPrimitiveEntry("BASE", MENU_PRIMITIVE_BASE, TheArbiter::VOLUME_PRIMITIVE_BASE);
+			addPrimitiveEntry("SPHERE", MENU_PRIMITIVE_SPHERE, TheArbiter::VOLUME_PRIMITIVE_SPHERE);
+			addPrimitiveEntry("TORUS", MENU_PRIMITIVE_TORUS, TheArbiter::VOLUME_PRIMITIVE_TORUS);
+			addPrimitiveEntry("BLOCK", MENU_PRIMITIVE_BLOCK, TheArbiter::VOLUME_PRIMITIVE_BLOCK);
+			addPrimitiveEntry("CYLINDER", MENU_PRIMITIVE_CYLINDER, TheArbiter::VOLUME_PRIMITIVE_CYLINDER);
+			addPrimitiveEntry("CONE", MENU_PRIMITIVE_CONE, TheArbiter::VOLUME_PRIMITIVE_CONE);
+			addPrimitiveEntry("CAPSULE", MENU_PRIMITIVE_CAPSULE, TheArbiter::VOLUME_PRIMITIVE_CAPSULE);
+			addPrimitiveEntry("WEDGE", MENU_PRIMITIVE_WEDGE, TheArbiter::VOLUME_PRIMITIVE_WEDGE);
+			addPrimitiveEntry("DELTA_WING", MENU_PRIMITIVE_DELTA_WING, TheArbiter::VOLUME_PRIMITIVE_DELTA_WING);
+			addPrimitiveEntry("FRUSTUM", MENU_PRIMITIVE_FRUSTUM, TheArbiter::VOLUME_PRIMITIVE_FRUSTUM);
+			glutAddMenuEntry(
+				"=========================================",
+				MENU_NOP
+			);
+			glutAddMenuEntry(
 				"Edit Object Shape:",
 				MENU_NOP
 			);
@@ -871,6 +908,26 @@ void EuclidEngine::rebuildMenus() {
 			// VOLUME_1 only: bake the brush-local basis.
 			// -------------------------------------------------------------
 			if (editingBrush) {
+				glutAddMenuEntry(
+					"Mirror Injection:",
+					MENU_NOP
+				);
+				glutAddMenuEntry(
+					m_arbiter.isSPMirrorEnabled()
+					? "  Mirror { NONE }"
+					: "* Mirror { NONE }",
+					MENU_SP_MIRROR_NONE
+				);
+				glutAddMenuEntry(
+					m_arbiter.isSPMirrorEnabled()
+					? "* Mirror { ON }"
+					: "  Mirror { ON }",
+					MENU_SP_MIRROR_ON
+				);
+				glutAddMenuEntry(
+					"=========================================",
+					MENU_NOP
+				);
 
 				glutAddMenuEntry(
 					"Commit Brush Base:",
@@ -1303,6 +1360,12 @@ void EuclidEngine::sMainMenu(int value) {
 		applyArbiterMenuResult(result);
 	};
 
+	auto selectVolumePrimitive =
+		[&](TheArbiter::VolumePrimitive primitive) {
+			applyArbiterMenuResult(
+				s_instance->m_arbiter.setVolumePrimitiveFromMenu(primitive));
+	};
+
 	switch (value) {
 		// =========================================================
 		// Sub-Layer 0: selection and collision setup
@@ -1448,6 +1511,27 @@ void EuclidEngine::sMainMenu(int value) {
 		);
 		return;
 
+	case MENU_PRIMITIVE_BASE:
+		selectVolumePrimitive(TheArbiter::VOLUME_PRIMITIVE_BASE); return;
+	case MENU_PRIMITIVE_SPHERE:
+		selectVolumePrimitive(TheArbiter::VOLUME_PRIMITIVE_SPHERE); return;
+	case MENU_PRIMITIVE_TORUS:
+		selectVolumePrimitive(TheArbiter::VOLUME_PRIMITIVE_TORUS); return;
+	case MENU_PRIMITIVE_BLOCK:
+		selectVolumePrimitive(TheArbiter::VOLUME_PRIMITIVE_BLOCK); return;
+	case MENU_PRIMITIVE_CYLINDER:
+		selectVolumePrimitive(TheArbiter::VOLUME_PRIMITIVE_CYLINDER); return;
+	case MENU_PRIMITIVE_CONE:
+		selectVolumePrimitive(TheArbiter::VOLUME_PRIMITIVE_CONE); return;
+	case MENU_PRIMITIVE_CAPSULE:
+		selectVolumePrimitive(TheArbiter::VOLUME_PRIMITIVE_CAPSULE); return;
+	case MENU_PRIMITIVE_WEDGE:
+		selectVolumePrimitive(TheArbiter::VOLUME_PRIMITIVE_WEDGE); return;
+	case MENU_PRIMITIVE_DELTA_WING:
+		selectVolumePrimitive(TheArbiter::VOLUME_PRIMITIVE_DELTA_WING); return;
+	case MENU_PRIMITIVE_FRUSTUM:
+		selectVolumePrimitive(TheArbiter::VOLUME_PRIMITIVE_FRUSTUM); return;
+
 		// =========================================================
 		// Assembly-node navigation
 		// =========================================================
@@ -1497,6 +1581,18 @@ void EuclidEngine::sMainMenu(int value) {
 
 		return;
 	}
+
+	case MENU_SP_MIRROR_NONE:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.setSPMirrorModeFromMenu(
+				TheArbiter::SP_MIRROR_NONE));
+		return;
+
+	case MENU_SP_MIRROR_ON:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.setSPMirrorModeFromMenu(
+				TheArbiter::SP_MIRROR_ON));
+		return;
 
 	// =========================================================
 	// Node_3 commit
@@ -1662,6 +1758,12 @@ void EuclidEngine::freeVolumeField() {
 	if (dBrushVolume) {
 		freeArray(dBrushVolume);
 		m_tesseract.clearBrushVolumeBinding();
+	}
+
+	float* dMirrorBrushVolume = m_tesseract.getMirrorBrushVolume();
+	if (dMirrorBrushVolume) {
+		freeArray(dMirrorBrushVolume);
+		m_tesseract.clearMirrorBrushVolumeBinding();
 	}
 }
 
@@ -2182,13 +2284,14 @@ void EuclidEngine::syncVolumeBoundaryStatusFromTesseract() {
 	if (overlapContext &&
 		m_tesseract.isSPOverlapPreviewSensorReady()) {
 
-		if (m_tesseract.getSPOverlapPreviewUnsafeCount() > 0) {
-			overlapStatus =
-				TheArbiter::SP_OVERLAP_OUTSIDE_CAGE;
-		}
-		else if (m_tesseract.getSPOverlapPreviewInsideSampleCount() > 0) {
+		if (m_tesseract.isSPOverlapPreviewActive()) {
 			overlapStatus =
 				TheArbiter::SP_OVERLAP_ACTIVE;
+		}
+		else if (m_tesseract.getSPOverlapPreviewUnsafeCount() > 0 ||
+			m_tesseract.getSPOverlapPreviewInsideSampleCount() > 0) {
+			overlapStatus =
+				TheArbiter::SP_OVERLAP_OUTSIDE_CAGE;
 		}
 	}
 
@@ -3034,13 +3137,28 @@ void EuclidEngine::advanceObjExportJob() {
 			line,
 			sizeof(line),
 			"[MarchingCubes3D] exportOBJ success: "
-			"'%s' vertices=%u triangles=%u normals=YES",
+			"'%s' vertices=%zu triangles=%zu normals=YES indexed=YES",
 			m_objExportPath.c_str(),
-			m_marchingCubes->getTotalVertexCount(),
-			m_marchingCubes->getGeneratedTriangleCount()
+			m_marchingCubes->getCanonicalMesh().positions.size(),
+			m_marchingCubes->getCanonicalMesh().triangleCount()
 		);
 
 		appendObjExportLog(line);
+		{
+			const vitru::MeshProcessingReport& report =
+				m_marchingCubes->getMeshProcessingReport();
+			snprintf(
+				line, sizeof(line),
+				"[MeshProcessor] rawV=%zu rawT=%zu finalV=%zu finalT=%zu removed=%zu welded=%zu radius=%.6f",
+				report.rawVertexCount, report.rawTriangleCount,
+				report.finalVertexCount, report.finalTriangleCount,
+				report.removedNonFiniteTriangles +
+				report.removedDegenerateTriangles +
+				report.removedDuplicateTriangles,
+				report.weldedVertexInstances,
+				report.bounds.radius);
+			appendObjExportLog(line);
+		}
 
 		m_objExportPanel.progressPercent = 70;
 		m_objExportPanel.statusText = "OBJ file written";
@@ -3342,6 +3460,37 @@ void EuclidEngine::advanceObjExportJob() {
 		);
 
 		appendObjExportLog(line);
+		if (m_marchingCubes->getCanonicalMesh().bounds.valid) {
+			const vitru::MeshBounds& exported =
+				m_marchingCubes->getCanonicalMesh().bounds;
+			const glm::vec3 loadedMin = m_renderer->getParticleMeshMin();
+			const glm::vec3 loadedMax = m_renderer->getParticleMeshMax();
+			const glm::vec3 loadedCenter = m_renderer->getParticleMeshCenter();
+			const float loadedExtent = m_renderer->getParticleMeshMaxExtent();
+			float delta = fabsf(loadedExtent - exported.maxAxisExtent);
+			delta = (std::max)(delta, fabsf(loadedMin.x - exported.min.x));
+			delta = (std::max)(delta, fabsf(loadedMin.y - exported.min.y));
+			delta = (std::max)(delta, fabsf(loadedMin.z - exported.min.z));
+			delta = (std::max)(delta, fabsf(loadedMax.x - exported.max.x));
+			delta = (std::max)(delta, fabsf(loadedMax.y - exported.max.y));
+			delta = (std::max)(delta, fabsf(loadedMax.z - exported.max.z));
+			delta = (std::max)(delta, fabsf(loadedCenter.x - exported.center.x));
+			delta = (std::max)(delta, fabsf(loadedCenter.y - exported.center.y));
+			delta = (std::max)(delta, fabsf(loadedCenter.z - exported.center.z));
+			const size_t loadedTriangles = static_cast<size_t>(
+				m_renderer->getParticleMeshVertexCount()) / 3u;
+			const bool roundtripPass =
+				loadedTriangles == m_marchingCubes->getCanonicalMesh().triangleCount() &&
+				delta <= 1.0e-5f;
+			snprintf(
+				line, sizeof(line),
+				"[OBJ Roundtrip] triangles=%zu/%zu maxBoundsDelta=%.8f extent=%.6f/%.6f %s",
+				loadedTriangles,
+				m_marchingCubes->getCanonicalMesh().triangleCount(),
+				delta, loadedExtent, exported.maxAxisExtent,
+				roundtripPass ? "PASS" : "MISMATCH");
+			appendObjExportLog(line);
+		}
 
 		m_objExportPanel.progressPercent = 80;
 		m_objExportPanel.statusText =

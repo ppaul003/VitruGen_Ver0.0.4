@@ -439,6 +439,50 @@ float sdfRectFrustumZApprox(
 }
 
 __device__
+float sdfConeZApprox(
+	float x, float y, float z,
+	float bottomRadius, float halfHeight) {
+	bottomRadius = fmaxf(bottomRadius, 0.001f);
+	halfHeight = fmaxf(halfHeight, 0.001f);
+	float t = (z / halfHeight) * 0.5f + 0.5f;
+	t = fminf(fmaxf(t, 0.0f), 1.0f);
+	const float radiusAtZ = bottomRadius * (1.0f - t);
+	const float radial = sqrtf(x * x + y * y) - radiusAtZ;
+	const float cap = fabsf(z) - halfHeight;
+	const float outsideRadial = fmaxf(radial, 0.0f);
+	const float outsideCap = fmaxf(cap, 0.0f);
+	const float outside = sqrtf(
+		outsideRadial * outsideRadial + outsideCap * outsideCap);
+	const float inside = fminf(fmaxf(radial, cap), 0.0f);
+	return outside + inside;
+}
+
+__device__
+float sdfDeltaWingApprox(
+	float x, float y, float z,
+	float halfWidth, float halfLength, float halfThickness) {
+	halfWidth = fmaxf(halfWidth, 0.001f);
+	halfLength = fmaxf(halfLength, 0.001f);
+	halfThickness = fmaxf(halfThickness, 0.001f);
+
+	// Reference orientation: broad trailing edge at local -Y, point at +Y,
+	// span on local X, and extrusion thickness on local Z.
+	const float normalizedY =
+		fminf(fmaxf((y + halfLength) / (2.0f * halfLength), 0.0f), 1.0f);
+	const float widthAtY = halfWidth * (1.0f - normalizedY);
+	const float side = fabsf(x) - widthAtY;
+	const float bottom = -halfLength - y;
+	const float top = y - halfLength;
+	const float thickness = fabsf(z) - halfThickness;
+	const float q = fmaxf(fmaxf(side, bottom), fmaxf(top, thickness));
+	if (q <= 0.0f) return q;
+	const float ox = fmaxf(side, 0.0f);
+	const float oy = fmaxf(fmaxf(bottom, top), 0.0f);
+	const float oz = fmaxf(thickness, 0.0f);
+	return sqrtf(ox * ox + oy * oy + oz * oz);
+}
+
+__device__
 float funcSDFLocal(
 	float dx, float dy, float dz,
 	float id, float4 param) {
@@ -518,6 +562,16 @@ float funcSDFLocal(
 			param.z,
 			param.w
 		);
+	}
+
+	// id 7: circular cone along local Z
+	if (id == 7) {
+		return sdfConeZApprox(dx, dy, dz, param.x, param.z);
+	}
+
+	// id 8: extruded triangular delta wing
+	if (id == 8) {
+		return sdfDeltaWingApprox(dx, dy, dz, param.x, param.y, param.z);
 	}
 
 	// fallback: block
@@ -1944,6 +1998,45 @@ void volumeKernel(
 		basisZ,
 		offset
 	);
+}
+
+__global__
+void mirroredVolumeKernel(
+	float* d_vol,
+	int3 volSize,
+	int id,
+	float4 param,
+	float3 offset,
+	float3 basisX,
+	float3 basisY,
+	float3 basisZ,
+	float3 mirrorNormal) {
+	const uint c = blockIdx.x * blockDim.x + threadIdx.x;
+	const uint r = blockIdx.y * blockDim.y + threadIdx.y;
+	const uint s = blockIdx.z * blockDim.z + threadIdx.z;
+	if (c >= static_cast<unsigned int>(volSize.x) ||
+		r >= static_cast<unsigned int>(volSize.y) ||
+		s >= static_cast<unsigned int>(volSize.z)) return;
+
+	const float3 planeCenter = make_float3(
+		0.5f * static_cast<float>(volSize.x),
+		0.5f * static_cast<float>(volSize.y),
+		0.5f * static_cast<float>(volSize.z));
+	const float3 sample = make_float3(
+		static_cast<float>(c), static_cast<float>(r), static_cast<float>(s));
+	const float3 relative = sample - planeCenter;
+	const float signedDistance = dot(relative, mirrorNormal);
+	const float3 reflectedSample = sample - 2.0f * signedDistance * mirrorNormal;
+	const float3 objectCenter = planeCenter + offset;
+	const float3 worldPoint = reflectedSample - objectCenter;
+	const float3 localPoint = worldPointToObjectLocalBasis(
+		worldPoint, basisX, basisY, basisZ);
+
+	const uint w = static_cast<unsigned int>(volSize.x);
+	const uint h = static_cast<unsigned int>(volSize.y);
+	const uint i = c + r * w + s * w * h;
+	d_vol[i] = funcSDFLocal(
+		localPoint.x, localPoint.y, localPoint.z, id, param);
 }
 
 __global__
