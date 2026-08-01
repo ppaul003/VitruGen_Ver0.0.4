@@ -581,6 +581,113 @@ void TheArbiter::cycleParticleSimPanelWorkspace(int dir) {
 	);
 }
 
+
+
+void TheArbiter::moveSingleParticleLayer1Cursor(int dir) {
+	if (dir == 0) return;
+	
+	const int count =
+		static_cast<int>(SingleParticleLayer1Item::Count);
+
+	const int current =
+		static_cast<int>(m_singleParticleLayer1Selection);
+
+	m_singleParticleLayer1Selection =
+		static_cast<SingleParticleLayer1Item>(
+			wrapIndex(current, count, dir));
+}
+
+void TheArbiter::cycleSingleParticleObjectType(int dir) {
+	if (dir == 0) return;
+
+	const int count =
+		static_cast<int>(SingleParticleObjectType::Count);
+
+	const int current =
+		static_cast<int>(m_singleParticleObjectType);
+
+	m_singleParticleObjectType =
+		static_cast<SingleParticleObjectType>(
+			wrapIndex(current,count,dir));
+}
+
+void TheArbiter::handleSingleParticleLayer1Adjust(int dir, ArbiterResult& result) {
+	
+	switch (m_singleParticleLayer1Selection) {
+
+	case SingleParticleLayer1Item::Workspace:
+
+		// Cycle through the GRID_3D workspace list:
+		//
+		// GRAPH_3D
+		// SINGLE_PARTICLE
+		// LINKED_PARTICLES
+		cycleWorkspaceSelection(dir);
+		break;
+
+	case SingleParticleLayer1Item::ParticleType:
+
+		// Cycle:
+		//
+		// STATIC
+		// COMPOSITE
+		// ATOMIC
+		cycleSingleParticleObjectType(dir);
+		break;
+
+	default:
+	case SingleParticleLayer1Item::Configure:
+	case SingleParticleLayer1Item::Count:
+
+		// Row [3] is an action row and has no A/D value.
+		break;
+	}
+
+	result.command = CMD_REDRAW;
+
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+}
+
+void TheArbiter::activateSingleParticleLayer1Item(ArbiterResult& result) {
+
+	// E only activates the final Configure row.
+	if (m_singleParticleLayer1Selection !=
+		SingleParticleLayer1Item::Configure) {
+
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		
+		return;
+	}
+
+	// Ver0.0.4 only implements STATIC.
+	//
+	// COMPOSITE and ATOMIC remain visible selections,
+	// but they must not enter an incomplete pipeline.
+	if (!isStaticParticleObjectType()) {
+
+		result.command = CMD_REDRAW;
+
+		result.requestRedraw = true;
+		result.rebuildMenu = true;
+		
+		return;
+	}
+
+	// Enter the existing SINGLE_PARTICLE Layer 2
+	// particle configuration screen.
+	setApplicationLayer(ApplicationLayer::WORKSPACE_CONFIGURATION);
+	
+	// Begin Layer 2 at its first row.
+	m_activeParticleConfigList = PARTICLE_LIST_COLOR;
+	
+	result.command = CMD_REDRAW;
+	
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+}
+
 void TheArbiter::moveParticleSimLayer1Cursor(int dir) {
 	const int count =
 		static_cast<int>(ParticleSimLayer1Item::Count);
@@ -1877,8 +1984,64 @@ void TheArbiter::handleDomainSelectionKeyboard(
 	const KeyboardInput::KeyEvent& event,
 	ArbiterResult& result) {
 
-	if (isParticleSimLayer1PanelContext()) {
+	// =========================================================
+	// GRID_3D -> SINGLE_PARTICLE Layer 1 panel
+	// =========================================================
+	if (isSingleParticleLayer1PanelContext()) {
+
 		switch (event.signal) {
+
+		case KeyboardInput::KEY_W:
+
+			moveSingleParticleLayer1Cursor(-1);
+
+			result.command = CMD_REDRAW;
+			result.requestRedraw = true;
+				
+			break;
+
+		case KeyboardInput::KEY_S:
+
+			moveSingleParticleLayer1Cursor(+1);
+
+			result.command = CMD_REDRAW;
+			result.requestRedraw = true;
+				
+			break;
+
+		case KeyboardInput::KEY_A:
+
+			handleSingleParticleLayer1Adjust(-1, result);
+
+			break;
+
+		case KeyboardInput::KEY_D:
+
+			handleSingleParticleLayer1Adjust(+1, result);
+			
+			break;
+
+		case KeyboardInput::KEY_E:
+		case KeyboardInput::KEY_ENTER:
+
+			activateSingleParticleLayer1Item(result);
+			
+			break;
+
+		default:
+			break;
+		}
+
+		return;
+	}
+
+	// =========================================================
+	// SIMCAD_4D -> PARTICLE_SIM Layer 1 panel
+	// =========================================================
+	if (isParticleSimLayer1PanelContext()) {
+
+		switch (event.signal) {
+
 		case KeyboardInput::KEY_W:
 			moveParticleSimLayer1Cursor(-1);
 			result.command = CMD_REDRAW;
@@ -1911,19 +2074,31 @@ void TheArbiter::handleDomainSelectionKeyboard(
 		return;
 	}
 
+	// =========================================================
+	// Generic Layer 1 workspace selector
+	// =========================================================
 	switch (event.signal) {
+
 	case KeyboardInput::KEY_A:
+
 		cycleWorkspaceSelection(-1);
+
 		result.command = CMD_REDRAW;
 		result.requestRedraw = true;
+			
 		break;
+
 	case KeyboardInput::KEY_D:
+
 		cycleWorkspaceSelection(+1);
+
 		result.command = CMD_REDRAW;
 		result.requestRedraw = true;
+			
 		break;
 
 	case KeyboardInput::KEY_E:
+
 		enterCurrentSelection(result);
 		break;
 

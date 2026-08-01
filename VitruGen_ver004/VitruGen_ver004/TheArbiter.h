@@ -671,6 +671,15 @@ private:
 
 	void moveParticleConfigCursorUp();
 	void moveParticleConfigCursorDown();
+
+	// SINGLE_PARTICLE Layer 1 configuration.
+	void moveSingleParticleLayer1Cursor(int dir);
+	void cycleSingleParticleObjectType(int dir);
+
+	void handleSingleParticleLayer1Adjust(int dir, ArbiterResult& result);
+	void activateSingleParticleLayer1Item(ArbiterResult& result);
+
+	// PARTICLE_SIM layer config
 	void moveParticleSimLayer1Cursor(int dir);
 	void moveParticleSimLayer2Cursor(int dir);
 	void handleParticleSimLayer1Adjust(int dir, ArbiterResult& result);
