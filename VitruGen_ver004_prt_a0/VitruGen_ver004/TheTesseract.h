@@ -50,7 +50,25 @@ public:
 	struct WorkspaceGridVisualConfig {
 		// 64 logical cells / stride 8 = 8 visible divisions.
 		int majorStride = 8;
+		bool drawBoundary = true;
+		bool drawMajor = true;
 		bool drawMinor = false;
+		bool drawAxes = true;
+	};
+
+	struct PSGridVisualState {
+		TheArbiter::ParticleGridLayout layout =
+			TheArbiter::ParticleGridLayout::Full;
+
+		WorkspaceGridVisualConfig render = {
+			8,
+			true,
+			true,
+			true,
+			true
+		};
+
+		bool dynamicPlaceholder = false;
 	};
 
 	// Reserved extension point shared by all workspace update pipelines.
@@ -100,6 +118,7 @@ public:
 		bool resourcesBound = false;
 		PSSimulationConfig config;
 		PSRuntimeState runtime;
+		PSGridVisualState gridVisual;
 	};
 
 	struct SPWorkspaceInstance {
@@ -128,8 +147,11 @@ public:
 	void updateAnimBehavior(float timeS);
 
 	const WorkspaceGridVisualConfig& getWorkspaceGridVisualConfig() const { return m_workspaceGridVisual; }
+	const PSGridVisualState& getPSGridVisualState() const { return m_PSWorkspace.gridVisual; }
 
 	bool applyWorkspaceBoundaryGridVisual();
+	bool applyPSGridVisual();
+	bool setPSGridLayout(TheArbiter::ParticleGridLayout layout);
 	int getWorkspaceGridHalfSliceRange() const;
 
 	// --- ACTIVE WORKSPACE LIFECYCLE ---
@@ -259,6 +281,9 @@ public:
 	void releaseSPVolumeBoundarySensor();
 
 private:
+	bool applyGridVisual(
+		const WorkspaceGridVisualConfig& visual
+	);
 
 	bool bindRendererToParticleSystem(
 		ParticleSystem* particleSystem,

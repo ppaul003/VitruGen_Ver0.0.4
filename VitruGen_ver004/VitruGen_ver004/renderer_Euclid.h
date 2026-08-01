@@ -123,7 +123,11 @@ public:
 		bool hoverValid,
 		float hoverX,
 		float hoverY,
-		bool useMeshRender = false
+		bool useMeshRender = false,
+		bool fillMeshBounds = false,
+		bool wireframe = false,
+		bool showCollisionProxy = false,
+		bool showRenderCage = false
 	);
 	void displayXYWorkplane(
 		int slice,
@@ -247,12 +251,21 @@ public:
 	void drawParticleMeshOBJ(
 		const ParticleProxy3D& p,
 		const float4& color,
-		bool selected);
+		bool selected,
+		bool fillMeshBounds,
+		bool wireframe);
 
 protected:
 	void _initGL();
 	void _initialize();
 	void _drawPoints(bool useColorBuffer = true);
+	void drawParticleWireSphere(
+		const ParticleProxy3D& p,
+		const float4& color,
+		float lineWidth,
+		float alpha,
+		bool overlay);
+	void drawParticleRenderCage(const ParticleProxy3D& p);
 
 	GLuint _compileProgram(
 		const char* vsource,

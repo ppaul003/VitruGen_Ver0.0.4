@@ -153,7 +153,7 @@ public:
 
 	struct ParticleSimDraftConfig {
 		ParticleGridLayout gridLayout =
-			ParticleGridLayout::Dynamic;
+			ParticleGridLayout::Full;
 
 		ParticleColorMode colorMode =
 			ParticleColorMode::Default;
@@ -219,6 +219,66 @@ public:
 	enum ParticleRenderMode {
 		PARTICLE_RENDER_DEFAULT = 0,
 		PARTICLE_RENDER_MESH = 1
+	};
+
+	enum class SingleParticleObjectType {
+		Static = 0,
+		Composite,
+		Atomic,
+		Count
+	};
+
+	enum class SingleParticleLayer1Item {
+		Workspace = 0,
+		ParticleType,
+		Configure,
+		Count
+	};
+
+	enum class SingleParticleCollisionShape {
+		Sphere = 0,
+		Block,
+		Capsule,
+		Cone,
+		DeformableSphere,
+		Count
+	};
+
+	enum class SingleParticleMeshBoundMode {
+		Default = 0,
+		Fill,
+		Count
+	};
+
+	enum class SingleParticleDisplayMode {
+		Render = 0,
+		RenderAndCollision,
+		Wireframe,
+		Count
+	};
+
+	enum SPSubLayer0PanelItem {
+		SP0_LIST_COLLISION_SHAPE = 0,
+		SP0_LIST_RENDERING_SETUP,
+		SP0_LIST_COUNT
+	};
+
+	enum SPSubLayer1PanelItem {
+		SP1_LIST_RENDER_SOURCE = 0,
+		SP1_LIST_MESH_BOUND,
+		SP1_LIST_DISPLAY_MODE,
+		SP1_LIST_RENDER_CAGE,
+		SP1_LIST_MESH_PREVIEW_EDIT,
+		SP1_LIST_COLLISION_SETUP,
+		SP1_LIST_COUNT
+	};
+
+	enum class SingleParticleStatus {
+		None = 0,
+		SelectParticleFirst,
+		CompositeReserved,
+		AtomicReserved,
+		CollisionProxyReserved
 	};
 
 	enum SingleParticleSubLayer {
@@ -509,6 +569,12 @@ public:
 	int getParticleSimLayer2RowCount() const;
 	unsigned int getParticleSimRGBTotal() const;
 
+	SingleParticleLayer1Item getSingleParticleLayer1Selection() const { return m_singleParticleLayer1Selection; }
+	SingleParticleObjectType getSingleParticleObjectType() const { return m_singleParticleObjectType; }
+	SingleParticleCollisionShape getSingleParticleCollisionShape() const { return m_singleParticleCollisionShape; }
+	SingleParticleMeshBoundMode getSingleParticleMeshBoundMode() const { return m_singleParticleMeshBoundMode; }
+	SingleParticleDisplayMode getSingleParticleDisplayMode() const { return m_singleParticleDisplayMode; }
+
 	VolumeAssemblyNode getVolumeAssemblyNode() const { return m_volumeAssemblyNode; }
 	VolumeInjectionMode getVolumeInjectionMode() const { return m_volumeInjectionMode; }
 
@@ -544,6 +610,7 @@ public:
 
 	bool isSingleParticleSelected() const { return getSelectedWorkspace() == WorkspaceId::SINGLE_PARTICLE_MCAD; }
 	bool isParticleSimulationSelected() const { return getSelectedWorkspace() == WorkspaceId::PARTICLE_SIMULATION; }
+	bool isSingleParticleLayer1PanelContext() const;
 	bool isParticleSimLayer1PanelContext() const;
 	bool isParticleSimLayer2RunSelected() const;
 	bool isVolumeBoundarySensorReady() const { return m_volumeBoundarySensorReady; }
@@ -556,10 +623,25 @@ public:
 	bool isShapeEditSubLayer() const { return isSimulationRunLayer() && isSingleParticleSelected() && m_singleParticleSubLayer == SP_SUB_LAYER_SHAPE_EDIT; }
 	bool isVolumeRenderSubLayer() const { return isSimulationRunLayer() && isSingleParticleSelected() && m_singleParticleSubLayer == SP_SUB_LAYER_VOLUME_RENDER; }
 	bool isMarchingCubesSubLayer() const { return isSimulationRunLayer() && isSingleParticleSelected() && m_singleParticleSubLayer == SP_SUB_LAYER_MARCHING_CUBES; }
-	bool isWorkplaneParticleSelectSubLayer() const { return isShapeEditSubLayer(); }
+	bool isWorkplaneParticleSelectSubLayer() const { return isSingleParticleReferenceSubLayer() && m_spSelectionArmed; }
+	bool isSPSelectionArmed() const { return m_spSelectionArmed; }
+	bool isSPParticleSelected() const { return m_selectedParticle; }
+	bool isSPSelectionGateActive() const { return isWorkplaneParticleSelectSubLayer() && !m_subLayerPanelOpen; }
 	bool isParticleRenderMesh() const { return m_particleRenderMode == PARTICLE_RENDER_MESH; }
+	bool isSingleParticleObjectTypeAvailable() const { return m_singleParticleObjectType == SingleParticleObjectType::Static; }
+	bool isSingleParticleCollisionShapeAvailable() const { return m_singleParticleCollisionShape == SingleParticleCollisionShape::Sphere; }
+	bool isSPMeshBoundFill() const { return m_singleParticleMeshBoundMode == SingleParticleMeshBoundMode::Fill; }
+	bool isSPDisplayRenderAndCollision() const { return m_singleParticleDisplayMode == SingleParticleDisplayMode::RenderAndCollision; }
+	bool isSPDisplayWireframe() const { return m_singleParticleDisplayMode == SingleParticleDisplayMode::Wireframe; }
+	bool isSPRenderCageEnabled() const { return m_spRenderCageEnabled; }
 	bool isSubLayerPanelOpen() const { return m_subLayerPanelOpen; }
-	bool isSubLayerPanelEligible() const { return isVolumeRenderSubLayer() || isMarchingCubesSubLayer(); }
+	bool isSubLayerPanelEligible() const {
+		return m_selectedParticle &&
+			(isSingleParticleReferenceSubLayer() ||
+				isShapeEditSubLayer() ||
+				isVolumeRenderSubLayer() ||
+				isMarchingCubesSubLayer());
+	}
 
 	bool hasSelectedParticle() const { return m_selectedParticle; }
 	bool hasHover() const { return m_hoverValid; }
@@ -582,6 +664,11 @@ public:
 	const char* getParticleColorChannelName() const;
 	const char* getParticleSimResetModeName() const;
 	const char* getParticleRenderModeName() const;
+	const char* getSingleParticleObjectTypeName() const;
+	const char* getSingleParticleCollisionShapeName() const;
+	const char* getSingleParticleMeshBoundModeName() const;
+	const char* getSingleParticleDisplayModeName() const;
+	const char* getSingleParticleStatusMessage() const;
 	const char* getSingleParticleSubLayerName() const;
 	const char* getVolumePrimitiveName() const;
 	const char* getObjectEditModeName() const;
@@ -670,6 +757,17 @@ private:
 	void adjustParticleSimUniformRadius(int dir);
 	void adjustParticleSimMinimumRadius(int dir);
 	void adjustParticleSimMaximumRadius(int dir);
+
+	void moveSingleParticleLayer1Cursor(int dir);
+	void handleSingleParticleLayer1Adjust(int dir, ArbiterResult& result);
+	void activateSingleParticleLayer1Item(ArbiterResult& result);
+	void cycleSingleParticleObjectType(int dir);
+	void cycleSingleParticleCollisionShape(int dir);
+	void cycleSingleParticleMeshBoundMode(int dir);
+	void cycleSingleParticleDisplayMode(int dir);
+	void cycleSingleParticleRenderSource(int dir);
+	void toggleSingleParticleRenderCage();
+	void clearSingleParticleSelectionState(bool clearConfiguration = false);
 
 	void toggleParticleRenderMode();
 
@@ -795,9 +893,24 @@ private:
 	int m_particleSimLayer2Selection = 0;
 
 	// --- SINGLE_PARTICLE_MCAD WORKFLOW ---
+	SingleParticleLayer1Item m_singleParticleLayer1Selection =
+		SingleParticleLayer1Item::Workspace;
+	SingleParticleObjectType m_singleParticleObjectType =
+		SingleParticleObjectType::Static;
+	SingleParticleCollisionShape m_singleParticleCollisionShape =
+		SingleParticleCollisionShape::Sphere;
+	SingleParticleMeshBoundMode m_singleParticleMeshBoundMode =
+		SingleParticleMeshBoundMode::Default;
+	SingleParticleDisplayMode m_singleParticleDisplayMode =
+		SingleParticleDisplayMode::Render;
+	SingleParticleStatus m_singleParticleStatus =
+		SingleParticleStatus::None;
+
 	SingleParticleSubLayer m_singleParticleSubLayer = SP_SUB_LAYER_REFERENCE;
 	VolumeAssemblyNode m_volumeAssemblyNode = VOLUME_NODE_PREVIEW;
 	int m_workplaneSlice = 0;
+	bool m_spSelectionArmed = false;
+	bool m_spRenderCageEnabled = true;
 	bool m_selectedParticle = false;
 	bool m_hoverValid = false;
 	float m_hoverX = 0.0f;

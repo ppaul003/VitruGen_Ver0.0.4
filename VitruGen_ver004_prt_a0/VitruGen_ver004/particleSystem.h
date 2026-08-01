@@ -91,6 +91,12 @@ public:
 		uint greenCount,
 		uint blueCount
 	);
+	bool setUniformActiveRadii(float radius);
+	bool setRandomActiveRadii(
+		float minimumRadius,
+		float maximumRadius,
+		uint seed = 1973
+	);
 	void setUniformParticleColor(float r, float g, float b, float a = 1.0f);
 	void setParticle(ParticleArray array, int index, float* data);
 	void setArray(ParticleArray array, const float* data, int start, int count);

@@ -199,7 +199,7 @@ bool Tesseract::applyGridVisual(
 	const WorkspaceGridVisualConfig& visual) {
 
 	if (!m_renderer ||
-		!m_particleSimSystem) 
+		!m_particleSimSystem)
 		return false;
 
 	const uint3 gridSize =
@@ -213,18 +213,18 @@ bool Tesseract::applyGridVisual(
 
 	m_renderer->setGrid(
 		glm::ivec3(
-			static_cast<int>(gridSize.x), 
-			static_cast<int>(gridSize.y), 
+			static_cast<int>(gridSize.x),
+			static_cast<int>(gridSize.y),
 			static_cast<int>(gridSize.z)
 		),
 		glm::vec3(
-			worldOrigin.x, 
-			worldOrigin.y, 
+			worldOrigin.x,
+			worldOrigin.y,
 			worldOrigin.z
 		),
 		glm::vec3(
-			cellSize.x, 
-			cellSize.y, 
+			cellSize.x,
+			cellSize.y,
 			cellSize.z
 		)
 	);
@@ -653,7 +653,8 @@ bool Tesseract::startPSWorkspace() {
 		!initializePSWorkspace())
 		return false;
 
-	m_PSWorkspace.runtime.paused = false;
+	m_PSWorkspace.runtime.paused = true;
+
 	return true;
 }
 //
@@ -683,6 +684,7 @@ bool Tesseract::resetPSWorkspace(ParticleSystem::ParticleConfig config) {
 		!initializePSWorkspace()) return false;
 
 	m_particleSimSystem->reset(config);
+
 	m_PSWorkspace.runtime.paused = true;
 	m_PSWorkspace.runtime.elapsedSimulationTime = 0.0f;
 
@@ -813,7 +815,7 @@ void Tesseract::renderSingleParticleWorkspace(const WorkspaceRenderContext& ctx)
 		arbiter.isSimulationRunLayer() &&
 		arbiter.isSingleParticleSelected() &&
 		(arbiter.isSingleParticleReferenceSubLayer() ||
-			arbiter.isWorkplaneParticleSelectSubLayer());
+			arbiter.isShapeEditSubLayer());
 
 	if (configPreviewActive || referenceOrEditActive) {
 
@@ -959,7 +961,32 @@ void Tesseract::renderSingleParticleMCAD(
 	const bool useMeshRender =
 		arbiter.isParticleRenderMesh();
 
-	m_renderer->setParticleHighlighted(showWorkplane && selected);
+	const bool fillMeshBounds =
+		arbiter.getSPMeshBoundMode() ==
+		TheArbiter::SPMeshBoundMode::Fill;
+
+	const bool wireframe =
+		arbiter.getSPDisplayMode() ==
+		TheArbiter::SPDisplayMode::Wireframe;
+
+	const bool showCollisionProxy =
+		arbiter.getSPDisplayMode() ==
+		TheArbiter::SPDisplayMode::RenderAndCollision;
+
+	const bool showRenderCage =
+		arbiter.isShapeEditSubLayer() &&
+		arbiter.isSPRenderCageVisible();
+
+	const bool showSelectionHighlight =
+		selected &&
+		(
+			arbiter.isSingleParticleReferenceSubLayer() ||
+			arbiter.isShapeEditSubLayer()
+		);
+
+	m_renderer->setParticleHighlighted(
+		showSelectionHighlight
+	);
 
 	m_renderer->displayParticleWorkspace(
 		thetaRad,
@@ -971,7 +998,11 @@ void Tesseract::renderSingleParticleMCAD(
 		arbiter.hasHover(),
 		arbiter.getHoverX(),
 		arbiter.getHoverY(),
-		useMeshRender
+		useMeshRender,
+		fillMeshBounds,
+		wireframe,
+		showCollisionProxy,
+		showRenderCage
 	);
 }
 //
@@ -980,7 +1011,8 @@ bool Tesseract::updateSingleParticleMCAD() {
 		!initializeSPWorkspace())
 		return false;
 
-	if (!m_singleParticleSystem) return false;
+	if (!m_singleParticleSystem)
+		return false;
 
 	syncSPRendering();
 	return true;

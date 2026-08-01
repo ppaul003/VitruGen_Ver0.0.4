@@ -303,6 +303,17 @@ void EuclidRenderer::setGridStyle(int majorEvery, bool drawMinor) {
     m_gridMajorEvery = std::max(1, majorEvery);
     m_drawMinorGrid = drawMinor;
 }
+void EuclidRenderer::setWorkspaceGridVisibility(
+    bool drawBoundary,
+    bool drawMajor,
+    bool drawMinor,
+    bool drawAxes) {
+
+    m_drawBoundaryGrid = drawBoundary;
+    m_drawMajorGrid = drawMajor;
+    m_drawMinorGrid = drawMinor;
+    m_drawAxes = drawAxes;
+}
 void EuclidRenderer::setGridMode3D() {
     m_gridMode = GRID_3D;
 }
@@ -333,7 +344,7 @@ void EuclidRenderer::drawAxes() {
     glEnd();
     glLineWidth(1.0f);
 }
-void EuclidRenderer::drawWorkspaceBox() {
+void EuclidRenderer::drawWorkspaceBoundary() {
     const float s = kWorkspaceHalfBox;
 
     glUseProgram(0);
@@ -367,6 +378,18 @@ void EuclidRenderer::drawWorkspaceBox() {
     glVertex3f(-s, -s, s); glVertex3f(-s, s, s);
 
     glEnd();
+
+    glLineWidth(1.0f);
+    glDisable(GL_BLEND);
+}
+void EuclidRenderer::drawWorkspaceMajorGrid() {
+    const float s = kWorkspaceHalfBox;
+
+    glUseProgram(0);
+    glDisable(GL_TEXTURE_2D);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // Sparse internal major grid, similar to EucliGen_ver002.
     glLineWidth(1.0f);
@@ -1521,39 +1544,26 @@ void EuclidRenderer::displayGrid() {
         );
     
     // Axes at origin
-    if (m_drawAxes) {
-        glLineWidth(2.0f);
-        glBegin(GL_LINES);
-        
-        glColor4f(1, 0, 0, 1);
-        glVertex3f(0, 0, 0);
-        glVertex3f(0.35f, 0, 0);
-        
-        glColor4f(0, 1, 0, 1);
-        glVertex3f(0, 0, 0);
-        glVertex3f(0, 0.35f, 0);
-        
-        glColor4f(0, 0, 1, 1);
-        glVertex3f(0, 0, 0);
-        glVertex3f(0, 0, 0.35f);
-        
-        glEnd();
-    }
+    if (m_drawAxes)
+        drawAxes();
     
     const int major =
         std::max(1, m_gridMajorEvery);
     
     if (m_gridMode == GRID_3D) {
         // bounding box
-        glLineWidth(2.0f);
-        glColor4f(1, 1, 1, 0.35f);
-        RenderUtils::draw_aabb_wire(mn, mx);
+        if (m_drawBoundaryGrid) {
+            glLineWidth(2.0f);
+            glColor4f(1, 1, 1, 0.35f);
+            RenderUtils::draw_aabb_wire(mn, mx);
+        }
         
         // major lattice (sparse)
-        glLineWidth(1.0f);
-        glColor4f(1, 1, 1, 0.12f);
+        if (m_drawMajorGrid) {
+            glLineWidth(1.0f);
+            glColor4f(1, 1, 1, 0.12f);
         
-        glBegin(GL_LINES);
+            glBegin(GL_LINES);
         
         // X-parallel
         for (int yi = 0; yi <= m_gridDim.y; yi++) {
@@ -1615,7 +1625,8 @@ void EuclidRenderer::displayGrid() {
             }
         }
         
-        glEnd();
+            glEnd();
+        }
         
         // optional minor grid (dense)
         if (m_drawMinorGrid) {
@@ -2009,7 +2020,8 @@ void EuclidRenderer::displayParticleWorkspace(
     glDisable(GL_TEXTURE_2D);
     glUseProgram(0);
 
-    drawWorkspaceBox();
+    drawWorkspaceBoundary();
+    drawWorkspaceMajorGrid();
 
     if (showWorkplane) {
         drawXYWorkplane(

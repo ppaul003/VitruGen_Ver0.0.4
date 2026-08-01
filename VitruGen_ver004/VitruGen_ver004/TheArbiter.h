@@ -243,6 +243,55 @@ public:
 		SP_SUB_LAYER_COUNT
 	};
 
+	// ---------------------------------------------------------
+// SINGLE_PARTICLE collision and rendering setup state.
+// ---------------------------------------------------------
+	enum class SPCollisionShape {
+		Sphere = 0,
+		Block,
+		Capsule,
+		Cone,
+		DeformableSphere,
+		Count
+	};
+
+	enum class SPMeshBoundMode {
+		Default = 0,
+		Fill,
+		Count
+	};
+
+	enum class SPDisplayMode {
+		Render = 0,
+		RenderAndCollision,
+		Wireframe,
+		Count
+	};
+
+	// ---------------------------------------------------------
+	// Sub-Layer 0 panel:
+	//     Particle selection and collision setup.
+	// ---------------------------------------------------------
+	enum SPSubLayer0PanelItem {
+		SP0_LIST_COLLISION_SHAPE = 0,
+		SP0_LIST_RENDERING_SETUP,
+		SP0_LIST_COUNT
+	};
+
+	// ---------------------------------------------------------
+	// Sub-Layer 1 panel:
+	//     Rendering setup.
+	// ---------------------------------------------------------
+	enum SPSubLayer1PanelItem {
+		SP1_LIST_RENDER_SOURCE = 0,
+		SP1_LIST_MESH_BOUND,
+		SP1_LIST_DISPLAY_MODE,
+		SP1_LIST_RENDER_CAGE,
+		SP1_LIST_MESH_PREVIEW_EDIT,
+		SP1_LIST_COLLISION_SETUP,
+		SP1_LIST_COUNT
+	};
+
 	enum VolumePrimitive {
 		VOLUME_PRIMITIVE_BASE = 0,
 		VOLUME_PRIMITIVE_SPHERE,
@@ -505,6 +554,16 @@ public:
 	ArbiterResult commitObjectBasisAndReturnToPreview();
 	ArbiterResult enterMarchingCubesFromPreview();
 	ArbiterResult activateMarchingCubesPanelItemFromMenu(MarchingCubesPanelItem item);
+	ArbiterResult activateSPPrimaryActionFromMenu();
+	ArbiterResult setSPCollisionShapeFromMenu(SPCollisionShape shape);
+	ArbiterResult enterSPRenderingSetupFromMenu();
+	ArbiterResult setSPRenderSourceFromMenu(ParticleRenderMode mode);
+	ArbiterResult setSPMeshBoundModeFromMenu(SPMeshBoundMode mode);
+	ArbiterResult setSPDisplayModeFromMenu(SPDisplayMode mode);
+	ArbiterResult setSPRenderCageVisibleFromMenu(bool visible);
+	ArbiterResult enterSPVolumePreviewFromMenu();
+	ArbiterResult returnSPCollisionSetupFromMenu();
+	ArbiterResult returnSPToLayer2FromMenu();
 	ArbiterResult trySelectParticleAtCurrentSlice();
 
 	// --- CANONICAL NAVIGATION QUERIES ---
@@ -543,6 +602,7 @@ public:
 	ObjectBasis orthonormalizeBasis(const ObjectBasis& basis) const;
 	VolumePrimitive getResolvedVolumePrimitiveSelection() const;
 
+
 	int getInjectionVoxelDX() const;
 	int getInjectionVoxelDY() const;
 	int getInjectionVoxelDZ() const;
@@ -557,7 +617,7 @@ public:
 	bool isSimulationRunLayer() const { return m_navigation.layer == ApplicationLayer::ACTIVE_WORKSPACE; }
 	bool isIdleSelected() const { return m_navigation.globalShellSelection == GlobalShellSelection::IDLE; }
 	bool isWorkspaceDomainsSelected() const { return m_navigation.globalShellSelection == GlobalShellSelection::WORKSPACE_DOMAINS; }
-	
+	bool isTextEntryActive() const { return m_textEntry.isActive(); }
 	bool isStaticParticleObjectType() const { return m_singleParticleObjectType == SingleParticleObjectType::Static; };
 	bool isSingleParticleSelected() const { return getSelectedWorkspace() == WorkspaceId::SINGLE_PARTICLE_MCAD; }
 	bool isParticleSimulationSelected() const { return getSelectedWorkspace() == WorkspaceId::PARTICLE_SIMULATION; }
@@ -569,29 +629,59 @@ public:
 	bool isEditingInjectionVoxel0() const { return m_volumeEditTarget == VOLUME_EDIT_TARGET_VOXEL_0; }
 	bool isEditingInjectionVoxel1() const { return m_volumeEditTarget == VOLUME_EDIT_TARGET_VOXEL_1; }
 	bool setVolumeBoundaryStatus(bool sensorReady, unsigned int unsafeCount);
-
 	bool isSingleParticleReferenceSubLayer() const { return isSimulationRunLayer() && isSingleParticleSelected() && m_singleParticleSubLayer == SP_SUB_LAYER_REFERENCE; }
 	bool isShapeEditSubLayer() const { return isSimulationRunLayer() && isSingleParticleSelected() && m_singleParticleSubLayer == SP_SUB_LAYER_SHAPE_EDIT; }
 	bool isVolumeRenderSubLayer() const { return isSimulationRunLayer() && isSingleParticleSelected() && m_singleParticleSubLayer == SP_SUB_LAYER_VOLUME_RENDER; }
 	bool isMarchingCubesSubLayer() const { return isSimulationRunLayer() && isSingleParticleSelected() && m_singleParticleSubLayer == SP_SUB_LAYER_MARCHING_CUBES; }
-	bool isWorkplaneParticleSelectSubLayer() const { return isShapeEditSubLayer(); }
 	bool isParticleRenderMesh() const { return m_particleRenderMode == PARTICLE_RENDER_MESH; }
 	bool isSubLayerPanelOpen() const { return m_subLayerPanelOpen; }
-	bool isSubLayerPanelEligible() const { return isVolumeRenderSubLayer() || isMarchingCubesSubLayer(); }
-
 	bool hasSelectedParticle() const { return m_selectedParticle; }
 	bool hasHover() const { return m_hoverValid; }
 	bool hasEditableVolumePrimitive() const { return getVolumePrimitiveSelection() != VOLUME_PRIMITIVE_BASE; }
 	bool hasInjectionVoxelSelected() const { return m_volumeInjectionVoxel != INJECTION_VOXEL_NONE; }
-
 	bool canApplyVolumeToBase() const;
 	bool isInjectionBrushBaseSelected() const;
 
-	unsigned int getVolumeBoundaryUnsafeCount() const { return m_volumeBoundaryUnsafeCount; }
+	// The workplane and picking path are active only while:
+	//     Sub-Layer 0
+	//     selection is armed
+	//     no particle has been selected yet
+	//     the side panel is closed
+	bool isWorkplaneParticleSelectSubLayer() const {
+		return isSingleParticleReferenceSubLayer() &&
+			m_spSelectionArmed &&
+			!m_selectedParticle &&
+			!m_subLayerPanelOpen;
+	}
+
+	// Every SP sub-layer may own a side panel, but only after
+	// the anchor particle has been selected.
+	bool isSubLayerPanelEligible() const {
+		if (!hasSelectedParticle()) {
+			return false;
+		}
+
+		return
+			isSingleParticleReferenceSubLayer() ||
+			isShapeEditSubLayer() ||
+			isVolumeRenderSubLayer() ||
+			isMarchingCubesSubLayer();
+	}
+
+	SPCollisionShape getSPCollisionShape() const {return m_spCollisionShape;}
+	SPMeshBoundMode getSPMeshBoundMode() const {return m_spMeshBoundMode;}
+	SPDisplayMode getSPDisplayMode() const {return m_spDisplayMode;}
+
+	bool isSPSelectionArmed() const {return m_spSelectionArmed;}
+	bool isSPRenderCageVisible() const {return m_spRenderCageVisible;}
 
 	const char* getSelectedDomainDisplayName() const;
 	const char* getSelectedWorkspaceDisplayName() const;
 	const char* getSingleParticleObjectTypeName() const;
+	const char* getSPCollisionShapeName() const;
+	const char* getSPMeshBoundModeName() const;
+	const char* getSPDisplayModeName() const;
+	const char* getSPRenderSourceName() const;
 	const char* getParticleColorName() const;
 	const char* getParticleResetModeName() const;
 	const char* getParticleGridLayoutName() const;
@@ -616,8 +706,8 @@ public:
 	void setParticleRenderMode(ParticleRenderMode mode) { m_particleRenderMode = mode; }
 	void updateHoverFromScreen(int x, int y, int w, int h);
 	void finalizeVoxelBaseCommit();
+	void beginSelectedRGBCountEntry(ArbiterResult& result);
 
-	bool isTextEntryActive() const { return m_textEntry.isActive(); }
 
 	TextEntryMode getTextEntryMode() const { return m_textEntry.getMode(); }
 	TextEntryTarget getTextEntryTarget() const { return m_textEntryTarget; }
@@ -627,7 +717,7 @@ public:
 	const std::string& getTextEntryStatusMessage() const { return m_textEntry.getStatusMessage(); }
 
 	unsigned int getAvailableRGBCountForSelectedChannel() const;
-	void beginSelectedRGBCountEntry(ArbiterResult& result);
+	unsigned int getVolumeBoundaryUnsafeCount() const { return m_volumeBoundaryUnsafeCount; }
 
 private:
 	// --- NAVIGATION TRANSITIONS / INPUT ROUTING ---
@@ -675,9 +765,16 @@ private:
 	// SINGLE_PARTICLE Layer 1 configuration.
 	void moveSingleParticleLayer1Cursor(int dir);
 	void cycleSingleParticleObjectType(int dir);
-
 	void handleSingleParticleLayer1Adjust(int dir, ArbiterResult& result);
 	void activateSingleParticleLayer1Item(ArbiterResult& result);
+
+	// --- SINGLE_PARTICLE SETUP CONTROLS ---
+	void handleSingleParticlePrimaryAction(ArbiterResult& result);
+
+	void cycleSPCollisionShape(float dir);
+	void cycleSPMeshBoundMode(float dir);
+	void cycleSPDisplayMode(float dir);
+	void toggleSPRenderCage();
 
 	// PARTICLE_SIM layer config
 	void moveParticleSimLayer1Cursor(int dir);
@@ -803,38 +900,48 @@ private:
 	NavigationState m_navigation;
 
 	TextEntrySession m_textEntry;
-	TextEntryTarget m_textEntryTarget =
-		TextEntryTarget::None;
+	TextEntryTarget m_textEntryTarget = TextEntryTarget::None;
 
 	// --- PARTICLE WORKSPACE CONFIGURATION ---
+	ParticleSimLayer1Item m_particleSimLayer1Selection =
+		ParticleSimLayer1Item::Workspace;
+
+	ParticleSimDraftConfig m_particleSimDraftConfig;
 	ParticleColorSelection m_particleColorSelection = PARTICLE_COLOR_RED;
 	ParticleResetMode m_particleResetMode = PARTICLE_RESET_DEFAULT;
 	ParticleConfigList m_activeParticleConfigList = PARTICLE_LIST_COLOR;
 	ParticleRenderMode m_particleRenderMode = PARTICLE_RENDER_DEFAULT;
 
-	float m_particleRadius = kParticleRadiusDefault;
-
-	ParticleSimDraftConfig m_particleSimDraftConfig;
-
-	ParticleSimLayer1Item m_particleSimLayer1Selection =
-		ParticleSimLayer1Item::Workspace;
-
 	int m_particleSimLayer2Selection = 0;
 
 	// --- SINGLE_PARTICLE_MCAD WORKFLOW ---
+	SPDisplayMode m_spDisplayMode = SPDisplayMode::Render;
+
 	SingleParticleLayer1Item m_singleParticleLayer1Selection =
 		SingleParticleLayer1Item::Workspace;
 
 	SingleParticleObjectType m_singleParticleObjectType =
 		SingleParticleObjectType::Static;
 
-	SingleParticleSubLayer m_singleParticleSubLayer = SP_SUB_LAYER_REFERENCE;
+	SingleParticleSubLayer m_singleParticleSubLayer =
+		SP_SUB_LAYER_REFERENCE;
+
+	// Collision and visual setup state.
+	SPCollisionShape m_spCollisionShape = SPCollisionShape::Sphere;
+	SPMeshBoundMode m_spMeshBoundMode = SPMeshBoundMode::Default;
 	VolumeAssemblyNode m_volumeAssemblyNode = VOLUME_NODE_PREVIEW;
-	int m_workplaneSlice = 0;
-	bool m_selectedParticle = false;
+
+	// Sub-Layer 0 selection state.
 	bool m_hoverValid = false;
+	bool m_spSelectionArmed = false;
+	bool m_selectedParticle = false;
+	bool m_spRenderCageVisible = true;
+
+	int m_workplaneSlice = 0;
+
 	float m_hoverX = 0.0f;
 	float m_hoverY = 0.0f;
+	float m_particleRadius = kParticleRadiusDefault;
 
 	// --- VOLUME OBJECT EDITING ---
 	ObjectEditMode m_objectEditMode = EDIT_SCALE_WHOLE;
@@ -844,17 +951,19 @@ private:
 	VolumeEditTarget m_volumeEditTarget = VOLUME_EDIT_TARGET_VOXEL_0;
 	VolumeInjectionMode m_volumeInjectionMode = VOLUME_FUSE;
 	OffsetVector m_offsetVectorSelection = OFFSET_VECTOR_X;
+
 	int m_rotationAngleIncrementIndex = 0;
 	int m_offsetIncrementIndex = 0;
 	float m_offsetIncrement = 0.01f;
 	float m_injectionRailT = 0.0f;
+
 	VolumeObjectState m_volume0State;
 	VolumeObjectState m_volume1State;
 
 	// --- SUB-LAYER PANEL / BOUNDARY STATUS ---
 	bool m_subLayerPanelOpen = false;
-	int m_activeSubLayerPanelItem = 0;
 	bool m_volumeBoundarySensorReady = false;
+	int m_activeSubLayerPanelItem = 0;
 	unsigned int m_volumeBoundaryUnsafeCount = 0;
 };
 

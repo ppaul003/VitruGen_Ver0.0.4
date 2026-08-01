@@ -101,7 +101,7 @@ struct integrate_functor {
 			pos.z = cSimParams.boundary - velData.w;
 			vel.z *= cSimParams.boundaryDamping;
 		}
-		if (pos.z < -cSimParams.boundary - velData.w) {
+		if (pos.z < -cSimParams.boundary + velData.w) {
 			pos.z = -cSimParams.boundary + velData.w;
 			vel.z *= cSimParams.boundaryDamping;
 		}

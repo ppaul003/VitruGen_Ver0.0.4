@@ -585,7 +585,7 @@ void TheArbiter::cycleParticleSimPanelWorkspace(int dir) {
 
 void TheArbiter::moveSingleParticleLayer1Cursor(int dir) {
 	if (dir == 0) return;
-	
+
 	const int count =
 		static_cast<int>(SingleParticleLayer1Item::Count);
 
@@ -612,7 +612,7 @@ void TheArbiter::cycleSingleParticleObjectType(int dir) {
 }
 
 void TheArbiter::handleSingleParticleLayer1Adjust(int dir, ArbiterResult& result) {
-	
+
 	switch (m_singleParticleLayer1Selection) {
 
 	case SingleParticleLayer1Item::Workspace:
@@ -657,7 +657,7 @@ void TheArbiter::activateSingleParticleLayer1Item(ArbiterResult& result) {
 
 		result.command = CMD_REDRAW;
 		result.requestRedraw = true;
-		
+
 		return;
 	}
 
@@ -671,19 +671,19 @@ void TheArbiter::activateSingleParticleLayer1Item(ArbiterResult& result) {
 
 		result.requestRedraw = true;
 		result.rebuildMenu = true;
-		
+
 		return;
 	}
 
 	// Enter the existing SINGLE_PARTICLE Layer 2
 	// particle configuration screen.
 	setApplicationLayer(ApplicationLayer::WORKSPACE_CONFIGURATION);
-	
+
 	// Begin Layer 2 at its first row.
 	m_activeParticleConfigList = PARTICLE_LIST_COLOR;
-	
+
 	result.command = CMD_REDRAW;
-	
+
 	result.requestRedraw = true;
 	result.rebuildMenu = true;
 }
@@ -1593,6 +1593,89 @@ void TheArbiter::finalizeVoxelBaseCommit() {
 
 }
 
+void TheArbiter::handleSingleParticlePrimaryAction(
+	ArbiterResult& result) {
+
+	if (!isSimulationRunLayer() ||
+		!isSingleParticleSelected()) {
+
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return;
+	}
+
+	// ---------------------------------------------------------
+	// Sub-Layer 0 owns selection mode.
+	// ---------------------------------------------------------
+	if (isSingleParticleReferenceSubLayer()) {
+
+		// Selected particle:
+		// E deselects, closes the panel and keeps selection
+		// armed for immediate reselection.
+		if (m_selectedParticle) {
+
+			m_selectedParticle = false;
+			m_spSelectionArmed = true;
+
+			m_subLayerPanelOpen = false;
+			m_activeSubLayerPanelItem =
+				SP0_LIST_COLLISION_SHAPE;
+
+			result.command = CMD_REDRAW;
+			result.requestRedraw = true;
+			result.rebuildMenu = true;
+			return;
+		}
+
+		// Free camera:
+		// E arms selection.
+		if (!m_spSelectionArmed) {
+
+			m_spSelectionArmed = true;
+
+			m_subLayerPanelOpen = false;
+			m_activeSubLayerPanelItem =
+				SP0_LIST_COLLISION_SHAPE;
+
+			result.command = CMD_REDRAW;
+			result.requestRedraw = true;
+			result.rebuildMenu = true;
+			return;
+		}
+
+		// Selection armed but nothing selected:
+		// E cancels selection mode.
+		m_spSelectionArmed = false;
+
+		m_hoverValid = false;
+		m_hoverX = 0.0f;
+		m_hoverY = 0.0f;
+
+		m_subLayerPanelOpen = false;
+		m_activeSubLayerPanelItem =
+			SP0_LIST_COLLISION_SHAPE;
+
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		result.rebuildMenu = true;
+		return;
+	}
+
+	// ---------------------------------------------------------
+	// Sub-Layer 1 does not auto-advance with E.
+	// Navigation belongs to its panel.
+	// ---------------------------------------------------------
+	if (isShapeEditSubLayer()) {
+
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return;
+	}
+
+	// Preserve established Sub-Layer 2 and 3 E behavior.
+	advanceSingleParticleSubLayer(result);
+}
+
 void TheArbiter::moveParticleConfigCursorUp() {
 	if (isSingleParticleSelected()) {
 		int v = static_cast<int>(m_activeParticleConfigList);
@@ -1674,22 +1757,9 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 		return result;
 	}
 
-	// Global layer retreat. Layer 0 absorbs Q.
-	// SINGLE_PARTICLE sub-layer 1 has one extra rule:
-	// if particle 0 is selected, Q clears selection first.
-	// If nothing is selected, Q goes back one layer/sub-layer as usual.
+	// Q is structural backward navigation only.
+	// Particle deselection belongs to E in Sub-Layer 0.
 	if (event.signal == KeyboardInput::KEY_Q) {
-		if (isWorkplaneParticleSelectSubLayer() &&
-			m_selectedParticle) {
-
-			m_selectedParticle = false;
-
-			result.command = CMD_REDRAW;
-			result.requestRedraw = true;
-			result.rebuildMenu = true;
-			return result;
-		}
-
 		goBackOneLayer(result);
 		return result;
 	}
@@ -1751,8 +1821,9 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 			}
 
 			switch (event.signal) {
+
 			case KeyboardInput::KEY_E:
-				advanceSingleParticleSubLayer(result);
+				handleSingleParticlePrimaryAction(result);
 				break;
 
 			case KeyboardInput::KEY_W:
@@ -1997,7 +2068,7 @@ void TheArbiter::handleDomainSelectionKeyboard(
 
 			result.command = CMD_REDRAW;
 			result.requestRedraw = true;
-				
+
 			break;
 
 		case KeyboardInput::KEY_S:
@@ -2006,7 +2077,7 @@ void TheArbiter::handleDomainSelectionKeyboard(
 
 			result.command = CMD_REDRAW;
 			result.requestRedraw = true;
-				
+
 			break;
 
 		case KeyboardInput::KEY_A:
@@ -2018,14 +2089,14 @@ void TheArbiter::handleDomainSelectionKeyboard(
 		case KeyboardInput::KEY_D:
 
 			handleSingleParticleLayer1Adjust(+1, result);
-			
+
 			break;
 
 		case KeyboardInput::KEY_E:
 		case KeyboardInput::KEY_ENTER:
 
 			activateSingleParticleLayer1Item(result);
-			
+
 			break;
 
 		default:
@@ -2085,7 +2156,7 @@ void TheArbiter::handleDomainSelectionKeyboard(
 
 		result.command = CMD_REDRAW;
 		result.requestRedraw = true;
-			
+
 		break;
 
 	case KeyboardInput::KEY_D:
@@ -2094,7 +2165,7 @@ void TheArbiter::handleDomainSelectionKeyboard(
 
 		result.command = CMD_REDRAW;
 		result.requestRedraw = true;
-			
+
 		break;
 
 	case KeyboardInput::KEY_E:
@@ -2213,13 +2284,19 @@ bool TheArbiter::isSubLayerPanelItemSelectable(int item) const {
 }
 
 int TheArbiter::getActiveSubLayerPanelItemCount() const {
+
+	if (isSingleParticleReferenceSubLayer()) return SP0_LIST_COUNT;
+	if (isShapeEditSubLayer()) return SP1_LIST_COUNT;
 	if (isMarchingCubesSubLayer()) return MC_LIST_COUNT;
 
 	switch (m_volumeAssemblyNode) {
 
 	case VOLUME_NODE_EDIT_OBJECT:
+
 		if (hasInjectionVoxelSelected()) {
-			if (m_volumeEditTarget == VOLUME_EDIT_TARGET_VOXEL_1) {
+
+			if (m_volumeEditTarget ==
+				VOLUME_EDIT_TARGET_VOXEL_1) {
 
 				return INJECTION_EDIT_LIST_VOXEL1_COUNT;
 			}
@@ -2230,13 +2307,16 @@ int TheArbiter::getActiveSubLayerPanelItemCount() const {
 		return EDIT_LIST_COUNT;
 
 	case VOLUME_NODE_OFFSET_OBJECT:
-		if (hasInjectionVoxelSelected()) {
 
+		if (hasInjectionVoxelSelected()) {
 			if (isEditingInjectionVoxel1()) {
+
 				return INJECTION_OFFSET_LIST_VOXEL1_COUNT;
 			}
+
 			return INJECTION_OFFSET_LIST_VOXEL0_COUNT;
 		}
+
 		return OFFSET_LIST_COUNT;
 
 	case VOLUME_NODE_APPLY_TO_BASE:
@@ -2246,6 +2326,72 @@ int TheArbiter::getActiveSubLayerPanelItemCount() const {
 	case VOLUME_NODE_PREVIEW:
 		return PREVIEW_LIST_COUNT;
 	}
+}
+
+void TheArbiter::cycleSPCollisionShape(float dir) {
+
+	const int count =
+		static_cast<int>(SPCollisionShape::Count);
+
+	int value =
+		static_cast<int>(m_spCollisionShape);
+
+
+
+	if (dir < 0.0f) {
+		value =
+			(value + count - 1) % count;
+	}
+	else {
+		value =
+			(value + 1) % count;
+	}
+
+	m_spCollisionShape =
+		static_cast<SPCollisionShape>(value);
+}
+
+void TheArbiter::cycleSPMeshBoundMode(float dir) {
+
+	(void)dir;
+
+	m_spMeshBoundMode =
+		m_spMeshBoundMode ==
+		SPMeshBoundMode::Default
+		? SPMeshBoundMode::Fill
+		: SPMeshBoundMode::Default;
+}
+
+void TheArbiter::cycleSPDisplayMode(float dir) {
+
+	const int count =
+		static_cast<int>(SPDisplayMode::Count);
+
+	int value =
+		static_cast<int>(m_spDisplayMode);
+
+	if (dir < 0.0f) {
+
+		value =
+			(value + count - 1) % count;
+
+	}
+	else {
+
+		value =
+			(value + 1) % count;
+
+	}
+
+	m_spDisplayMode =
+		static_cast<SPDisplayMode>(value);
+
+}
+
+void TheArbiter::toggleSPRenderCage() {
+
+	m_spRenderCageVisible =
+		!m_spRenderCageVisible;
 }
 
 // =============================================================================
@@ -2334,6 +2480,74 @@ const char* TheArbiter::getSingleParticleObjectTypeName() const {
 	case SingleParticleObjectType::Count:
 		return "UNKNOWN";
 	}
+}
+
+const char* TheArbiter::getSPCollisionShapeName() const {
+
+	switch (m_spCollisionShape) {
+
+	case SPCollisionShape::Sphere:
+		return "SPHERE";
+
+	case SPCollisionShape::Block:
+		return "BLOCK";
+
+	case SPCollisionShape::Capsule:
+		return "CAPSULE";
+
+	case SPCollisionShape::Cone:
+		return "CONE";
+
+	case SPCollisionShape::DeformableSphere:
+		return "DEFORMABLE_SPHERE";
+
+	default:
+	case SPCollisionShape::Count:
+		return "UNKNOWN";
+	}
+}
+
+const char* TheArbiter::getSPMeshBoundModeName() const {
+
+	switch (m_spMeshBoundMode) {
+
+	case SPMeshBoundMode::Fill:
+		return "FILL";
+
+	default:
+	case SPMeshBoundMode::Default:
+		return "DEFAULT";
+
+	case SPMeshBoundMode::Count:
+		return "UNKNOWN";
+	}
+}
+
+const char* TheArbiter::getSPDisplayModeName() const {
+
+	switch (m_spDisplayMode) {
+
+	case SPDisplayMode::RenderAndCollision:
+		return "RENDER_AND_COLLISION";
+
+	case SPDisplayMode::Wireframe:
+		return "WIREFRAME";
+
+	default:
+	case SPDisplayMode::Render:
+		return "RENDER";
+
+	case SPDisplayMode::Count:
+		return "UNKNOWN";
+	}
+}
+
+const char* TheArbiter::getSPRenderSourceName() const {
+
+	return m_particleRenderMode ==
+		PARTICLE_RENDER_MESH
+		? "MESH"
+		: "PARTICLE";
 }
 
 const char* TheArbiter::getParticleColorName() const {
@@ -2445,23 +2659,27 @@ const char* TheArbiter::getParticleSimResetModeName() const {
 }
 
 const char* TheArbiter::getSingleParticleSubLayerName() const {
+
 	switch (m_singleParticleSubLayer) {
+
 	case SP_SUB_LAYER_REFERENCE:
-		return "SUB_LAYER_0_SINGLE_PARTICLE_REFERENCE";
+		return "SUB_LAYER_0 COLLISION SETUP";
 
 	case SP_SUB_LAYER_SHAPE_EDIT:
-		return "SUB_LAYER_1_SHAPE_SELECTION_AND_EDIT";
+		return "SUB_LAYER_1 RENDERING SETUP";
 
 	case SP_SUB_LAYER_VOLUME_RENDER:
-		return "SUB_LAYER_2_VOLUME_RENDER_MODE";
+		return "SUB_LAYER_2 MESH / VOLUME PREVIEW AND EDIT";
 
 	case SP_SUB_LAYER_MARCHING_CUBES:
-		return "SUB_LAYER_3_MARCHING_CUBES_MODE";
+		return "SUB_LAYER_3 MARCHING CUBES";
 
 	default:
+	case SP_SUB_LAYER_COUNT:
 		return "UNKNOWN_SINGLE_PARTICLE_SUB_LAYER";
 	}
 }
+
 const char* TheArbiter::getVolumePrimitiveName() const {
 	switch (getVolumePrimitiveSelection()) {
 	case VOLUME_PRIMITIVE_SPHERE:
@@ -2653,32 +2871,51 @@ TheArbiter::ArbiterResult
 TheArbiter::trySelectParticleAtCurrentSlice() {
 
 	ArbiterResult result;
-	if (!isWorkplaneParticleSelectSubLayer()) return result;
 
-	// Particle 0 is anchored at the origin for this phase.
-	// A click only toggles selection if the active workplane is near
-	// z = 0 and the mouse hover is close to the particle center.
+	// This predicate now means:
+	//
+	//     Sub-Layer 0
+	//     selection armed
+	//     no selected particle
+	//     panel closed
+	if (!isWorkplaneParticleSelectSubLayer())
+		return result;
+
+
+	// Particle 0 remains anchored at the origin for this phase.
 	const bool sliceNearOrigin =
-		std::abs(m_workplaneSlice) <= 1;
+		abs(m_workplaneSlice) <= 1;
 
 	const float pickRadius = 0.35f;
 
 	const bool hoverNearOrigin =
 		m_hoverValid &&
-		((m_hoverX * m_hoverX + m_hoverY * m_hoverY) <=
-			(pickRadius * pickRadius));
+		(m_hoverX * m_hoverX +
+			m_hoverY * m_hoverY) <= (pickRadius * pickRadius);
 
 	if (sliceNearOrigin && hoverNearOrigin) {
-		m_selectedParticle = !m_selectedParticle;
+
+		// Clicking selects only.
+		// Clicking again does not deselect.
+		m_selectedParticle = true;
+
+		// Keep selection armed so E deselection can return
+		// immediately to an active selection context.
+		m_spSelectionArmed = true;
+		m_subLayerPanelOpen = false;
+
+		m_activeSubLayerPanelItem =
+			SP0_LIST_COLLISION_SHAPE;
 
 		result.command = CMD_REDRAW;
 
 		result.requestRedraw = true;
 		result.rebuildMenu = true;
+
 		return result;
 	}
 
-	// Clicking away from the particle does not toggle.
+	// Empty-space click preserves all state.
 	result.command = CMD_REDRAW;
 	result.requestRedraw = true;
 
@@ -2975,6 +3212,212 @@ TheArbiter::activateMarchingCubesPanelItemFromMenu(MarchingCubesPanelItem item) 
 	return result;
 }
 
+TheArbiter::ArbiterResult
+TheArbiter::activateSPPrimaryActionFromMenu() {
+	ArbiterResult result;
+
+	if (!isSingleParticleReferenceSubLayer()) {
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return result;
+	}
+
+	handleSingleParticlePrimaryAction(result);
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::setSPCollisionShapeFromMenu(SPCollisionShape shape) {
+	ArbiterResult result;
+	const int value = static_cast<int>(shape);
+
+	if (!isSingleParticleReferenceSubLayer() ||
+		value < 0 ||
+		value >= static_cast<int>(SPCollisionShape::Count)) {
+
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return result;
+	}
+
+	// Reserved choices are presentation state only. The runtime collision
+	// system remains the operational particle sphere.
+	m_spCollisionShape = shape;
+	m_activeSubLayerPanelItem = SP0_LIST_COLLISION_SHAPE;
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::enterSPRenderingSetupFromMenu() {
+	ArbiterResult result;
+
+	if (!isSingleParticleReferenceSubLayer() ||
+		!m_selectedParticle) {
+
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return result;
+	}
+
+	m_singleParticleSubLayer = SP_SUB_LAYER_SHAPE_EDIT;
+	m_subLayerPanelOpen = true;
+	m_activeSubLayerPanelItem = SP1_LIST_RENDER_SOURCE;
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::setSPRenderSourceFromMenu(ParticleRenderMode mode) {
+	ArbiterResult result;
+
+	if (!isShapeEditSubLayer() ||
+		(mode != PARTICLE_RENDER_DEFAULT &&
+			mode != PARTICLE_RENDER_MESH)) {
+
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return result;
+	}
+
+	m_particleRenderMode = mode;
+	m_activeSubLayerPanelItem = SP1_LIST_RENDER_SOURCE;
+
+	result.command = CMD_PARTICLE_RENDER_MODE_CHANGED;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::setSPMeshBoundModeFromMenu(SPMeshBoundMode mode) {
+	ArbiterResult result;
+	const int value = static_cast<int>(mode);
+
+	if (!isShapeEditSubLayer() ||
+		value < 0 ||
+		value >= static_cast<int>(SPMeshBoundMode::Count)) {
+
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return result;
+	}
+
+	m_spMeshBoundMode = mode;
+	m_activeSubLayerPanelItem = SP1_LIST_MESH_BOUND;
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::setSPDisplayModeFromMenu(SPDisplayMode mode) {
+	ArbiterResult result;
+	const int value = static_cast<int>(mode);
+
+	if (!isShapeEditSubLayer() ||
+		value < 0 ||
+		value >= static_cast<int>(SPDisplayMode::Count)) {
+
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return result;
+	}
+
+	m_spDisplayMode = mode;
+	m_activeSubLayerPanelItem = SP1_LIST_DISPLAY_MODE;
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::setSPRenderCageVisibleFromMenu(bool visible) {
+	ArbiterResult result;
+
+	if (!isShapeEditSubLayer()) {
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return result;
+	}
+
+	m_spRenderCageVisible = visible;
+	m_activeSubLayerPanelItem = SP1_LIST_RENDER_CAGE;
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::enterSPVolumePreviewFromMenu() {
+	ArbiterResult result;
+
+	if (!isShapeEditSubLayer() ||
+		!m_selectedParticle) {
+
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return result;
+	}
+
+	m_singleParticleSubLayer = SP_SUB_LAYER_VOLUME_RENDER;
+	m_volumeAssemblyNode = VOLUME_NODE_PREVIEW;
+	m_subLayerPanelOpen = true;
+	m_activeSubLayerPanelItem = PREVIEW_LIST_INJECTION_MODE;
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.regenerateVolume = true;
+	result.rebuildMenu = true;
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::returnSPCollisionSetupFromMenu() {
+	ArbiterResult result;
+
+	if (!isShapeEditSubLayer()) {
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return result;
+	}
+
+	m_singleParticleSubLayer = SP_SUB_LAYER_REFERENCE;
+	m_subLayerPanelOpen = true;
+	m_activeSubLayerPanelItem = SP0_LIST_COLLISION_SHAPE;
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::returnSPToLayer2FromMenu() {
+	ArbiterResult result;
+
+	if (!isSingleParticleReferenceSubLayer()) {
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return result;
+	}
+
+	retreatSingleParticleSubLayer(result);
+	return result;
+}
+
 // =============================================================================
 // LAYER / SUB-LAYER TRANSITIONS
 // =============================================================================
@@ -3040,21 +3483,26 @@ void TheArbiter::enterCurrentSelection(ArbiterResult& result) {
 	if (m_navigation.layer == ApplicationLayer::WORKSPACE_CONFIGURATION) {
 		if (isSingleParticleSelected()) {
 			if (m_activeParticleConfigList == PARTICLE_LIST_RUN) {
-				// LIST 4 is the run command for SINGLE_PARTICLE.
-				// Place particle 0 at the origin, then enter Layer 3.
-				setApplicationLayer(ApplicationLayer::ACTIVE_WORKSPACE);
-				m_singleParticleSubLayer = SP_SUB_LAYER_REFERENCE;
 
+				setApplicationLayer(ApplicationLayer::ACTIVE_WORKSPACE);
+
+				m_singleParticleSubLayer = SP_SUB_LAYER_REFERENCE;
+				m_activeSubLayerPanelItem = SP0_LIST_COLLISION_SHAPE;
+
+				m_spSelectionArmed = false;
 				m_selectedParticle = false;
+				m_subLayerPanelOpen = false;
 				m_hoverValid = false;
 				m_hoverX = 0.0f;
 				m_hoverY = 0.0f;
 				m_workplaneSlice = 0;
 
+				m_volumeAssemblyNode = VOLUME_NODE_PREVIEW;
 				result.command = CMD_PLACE_SINGLE_PARTICLE;
 			}
 			else {
-				result.command = CMD_REDRAW;
+				result.command =
+					CMD_REDRAW;
 			}
 
 			result.requestRedraw = true;
@@ -3178,19 +3626,34 @@ void TheArbiter::advanceSingleParticleSubLayer(ArbiterResult& result) {
 	result.requestRedraw = true;
 	result.rebuildMenu = true;
 }
+
 void TheArbiter::retreatSingleParticleSubLayer(ArbiterResult& result) {
-	if (!isSimulationRunLayer() || !isSingleParticleSelected()) {
+
+	if (!isSimulationRunLayer() ||
+		!isSingleParticleSelected()) {
+
 		result.command = CMD_REDRAW;
 		result.requestRedraw = true;
 		return;
 	}
 
-	// MC retreats to SUB_LAYER_2 Preview rather than directly to Node_3.
-	if (m_singleParticleSubLayer == SP_SUB_LAYER_MARCHING_CUBES) {
-		m_singleParticleSubLayer = SP_SUB_LAYER_VOLUME_RENDER;
-		m_volumeAssemblyNode = VOLUME_NODE_PREVIEW;
+	// ---------------------------------------------------------
+	// Sub-Layer 3 -> Sub-Layer 2 Preview.
+	// Preserve the current MC return behavior.
+	// ---------------------------------------------------------
+	if (m_singleParticleSubLayer ==
+		SP_SUB_LAYER_MARCHING_CUBES) {
+
+		m_singleParticleSubLayer =
+			SP_SUB_LAYER_VOLUME_RENDER;
+
+		m_volumeAssemblyNode =
+			VOLUME_NODE_PREVIEW;
+
 		m_subLayerPanelOpen = true;
-		m_activeSubLayerPanelItem = PREVIEW_LIST_INJECTION_MODE;
+
+		m_activeSubLayerPanelItem =
+			PREVIEW_LIST_INJECTION_MODE;
 
 		result.command = CMD_REDRAW;
 		result.requestRedraw = true;
@@ -3198,13 +3661,19 @@ void TheArbiter::retreatSingleParticleSubLayer(ArbiterResult& result) {
 		return;
 	}
 
-	// Q walks backward through the assembly pipeline first.
-	if (m_singleParticleSubLayer == SP_SUB_LAYER_VOLUME_RENDER &&
-		m_volumeAssemblyNode != VOLUME_NODE_PREVIEW) {
+	// ---------------------------------------------------------
+	// Walk backward through the existing Sub-Layer 2
+	// four-node assembly sequence.
+	// ---------------------------------------------------------
+	if (m_singleParticleSubLayer ==
+		SP_SUB_LAYER_VOLUME_RENDER &&
+		m_volumeAssemblyNode !=
+		VOLUME_NODE_PREVIEW) {
 
-		m_volumeAssemblyNode = static_cast<VolumeAssemblyNode>(
-			static_cast<int>(m_volumeAssemblyNode) - 1
-			);
+		m_volumeAssemblyNode =
+			static_cast<VolumeAssemblyNode>(
+				static_cast<int>(m_volumeAssemblyNode) - 1);
+
 		m_activeSubLayerPanelItem = 0;
 
 		result.command = CMD_REDRAW;
@@ -3213,15 +3682,19 @@ void TheArbiter::retreatSingleParticleSubLayer(ArbiterResult& result) {
 		return;
 	}
 
-	int v = static_cast<int>(m_singleParticleSubLayer);
-	if (v > 0) {
-		--v;
-		m_singleParticleSubLayer = static_cast<SingleParticleSubLayer>(v);
+	// ---------------------------------------------------------
+	// Sub-Layer 2 Preview -> Sub-Layer 1 Rendering Setup.
+	// ---------------------------------------------------------
+	if (m_singleParticleSubLayer ==
+		SP_SUB_LAYER_VOLUME_RENDER) {
 
-		if (!isSubLayerPanelEligible()) {
-			m_subLayerPanelOpen = false;
-			m_activeSubLayerPanelItem = 0;
-		}
+		m_singleParticleSubLayer =
+			SP_SUB_LAYER_SHAPE_EDIT;
+
+		m_subLayerPanelOpen = false;
+
+		m_activeSubLayerPanelItem =
+			SP1_LIST_RENDER_SOURCE;
 
 		result.command = CMD_REDRAW;
 		result.requestRedraw = true;
@@ -3229,11 +3702,49 @@ void TheArbiter::retreatSingleParticleSubLayer(ArbiterResult& result) {
 		return;
 	}
 
-	// At sub-layer 0, Q exits back to application Layer 2.
+	// ---------------------------------------------------------
+	// Sub-Layer 1 -> Sub-Layer 0.
+	// Selection remains intact because Q is structural.
+	// ---------------------------------------------------------
+	if (m_singleParticleSubLayer ==
+		SP_SUB_LAYER_SHAPE_EDIT) {
+
+		m_singleParticleSubLayer =
+			SP_SUB_LAYER_REFERENCE;
+
+		m_subLayerPanelOpen = false;
+
+		m_activeSubLayerPanelItem =
+			SP0_LIST_COLLISION_SHAPE;
+
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		result.rebuildMenu = true;
+		return;
+	}
+
+	// ---------------------------------------------------------
+	// Sub-Layer 0 -> Layer 2 configuration.
+	// Workspace selection state is cleared here.
+	// ---------------------------------------------------------
+	m_spSelectionArmed = false;
+	m_selectedParticle = false;
+
 	m_subLayerPanelOpen = false;
-	m_activeSubLayerPanelItem = 0;
-	m_volumeAssemblyNode = VOLUME_NODE_PREVIEW;
-	setApplicationLayer(ApplicationLayer::WORKSPACE_CONFIGURATION);
+	m_activeSubLayerPanelItem =
+		SP0_LIST_COLLISION_SHAPE;
+
+	m_hoverValid = false;
+	m_hoverX = 0.0f;
+	m_hoverY = 0.0f;
+	m_workplaneSlice = 0;
+
+	m_volumeAssemblyNode =
+		VOLUME_NODE_PREVIEW;
+
+	setApplicationLayer(
+		ApplicationLayer::WORKSPACE_CONFIGURATION
+	);
 
 	result.command = CMD_REDRAW;
 	result.requestRedraw = true;
@@ -3258,7 +3769,9 @@ void TheArbiter::adjustWorkplaneSlice(int delta, ArbiterResult& result) {
 	result.command = CMD_REDRAW;
 	result.requestRedraw = true;
 }
+
 void TheArbiter::handleParticleConfigAdjust(float dir, ArbiterResult& result) {
+
 	if (isSingleParticleSelected()) {
 		switch (m_activeParticleConfigList) {
 		case PARTICLE_LIST_COLOR:
@@ -3318,21 +3831,44 @@ void TheArbiter::handleParticleConfigAdjust(float dir, ArbiterResult& result) {
 // SUB-LAYER PANEL NAVIGATION / ACTIONS
 // =============================================================================
 void TheArbiter::toggleSubLayerPanel(ArbiterResult& result) {
+
 	if (!isSubLayerPanelEligible()) {
+
 		m_subLayerPanelOpen = false;
+		m_activeSubLayerPanelItem = 0;
+
 		result.command = CMD_REDRAW;
 		result.requestRedraw = true;
+		result.rebuildMenu = true;
 		return;
 	}
 
-	m_subLayerPanelOpen = !m_subLayerPanelOpen;
+	m_subLayerPanelOpen =
+		!m_subLayerPanelOpen;
+
 	if (m_subLayerPanelOpen) {
-		m_activeSubLayerPanelItem = 0;
+
+		if (isSingleParticleReferenceSubLayer()) {
+
+			m_activeSubLayerPanelItem =
+				SP0_LIST_COLLISION_SHAPE;
+		}
+		else if (isShapeEditSubLayer()) {
+
+			m_activeSubLayerPanelItem =
+				SP1_LIST_RENDER_SOURCE;
+		}
+		else {
+
+			m_activeSubLayerPanelItem = 0;
+		}
 	}
 
 	result.command = CMD_REDRAW;
 	result.requestRedraw = true;
+	result.rebuildMenu = true;
 }
+
 void TheArbiter::moveSubLayerPanelCursorUp(ArbiterResult& result) {
 	const int count = getActiveSubLayerPanelItemCount();
 
@@ -3355,6 +3891,7 @@ void TheArbiter::moveSubLayerPanelCursorUp(ArbiterResult& result) {
 	result.command = CMD_REDRAW;
 	result.requestRedraw = true;
 }
+
 void TheArbiter::moveSubLayerPanelCursorDown(ArbiterResult& result) {
 	const int count = getActiveSubLayerPanelItemCount();
 
@@ -3377,12 +3914,85 @@ void TheArbiter::moveSubLayerPanelCursorDown(ArbiterResult& result) {
 	result.command = CMD_REDRAW;
 	result.requestRedraw = true;
 }
+
 void TheArbiter::handleSubLayerPanelAdjust(float dir, ArbiterResult& result) {
 	if (!m_subLayerPanelOpen || !isSubLayerPanelEligible()) {
 		result.command = CMD_REDRAW;
 		result.requestRedraw = true;
 		return;
 	}
+
+	// ---------------------------------------------------------
+// Sub-Layer 0 — collision setup.
+// ---------------------------------------------------------
+	if (isSingleParticleReferenceSubLayer()) {
+
+		if (m_activeSubLayerPanelItem ==
+			SP0_LIST_COLLISION_SHAPE) {
+
+			cycleSPCollisionShape(dir);
+		}
+
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		result.rebuildMenu = true;
+		return;
+	}
+
+	// ---------------------------------------------------------
+	// Sub-Layer 1 — rendering setup.
+	// ---------------------------------------------------------
+	if (isShapeEditSubLayer()) {
+
+		switch (m_activeSubLayerPanelItem) {
+
+		case SP1_LIST_RENDER_SOURCE:
+
+			toggleParticleRenderMode();
+
+			result.command =
+				CMD_PARTICLE_RENDER_MODE_CHANGED;
+			break;
+
+		case SP1_LIST_MESH_BOUND:
+
+			cycleSPMeshBoundMode(dir);
+
+			result.command =
+				CMD_REDRAW;
+			break;
+
+		case SP1_LIST_DISPLAY_MODE:
+
+			cycleSPDisplayMode(dir);
+
+			result.command =
+				CMD_REDRAW;
+			break;
+
+		case SP1_LIST_RENDER_CAGE:
+
+			toggleSPRenderCage();
+
+			result.command =
+				CMD_REDRAW;
+			break;
+
+		default:
+		case SP1_LIST_MESH_PREVIEW_EDIT:
+		case SP1_LIST_COLLISION_SETUP:
+		case SP1_LIST_COUNT:
+
+			result.command =
+				CMD_REDRAW;
+			break;
+		}
+
+		result.requestRedraw = true;
+		result.rebuildMenu = true;
+		return;
+	}
+
 
 	// Sub-layer 3 currently contains action rows only.
 	if (isMarchingCubesSubLayer()) {
@@ -3546,6 +4156,123 @@ void TheArbiter::handleSubLayerPanelAdjust(float dir, ArbiterResult& result) {
 void TheArbiter::activateSubLayerPanelItem(ArbiterResult& result) {
 	if (!m_subLayerPanelOpen || !isSubLayerPanelEligible()) {
 		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return;
+	}
+
+	// ---------------------------------------------------------
+// Sub-Layer 0 panel actions.
+// ---------------------------------------------------------
+	if (isSingleParticleReferenceSubLayer()) {
+
+		if (m_activeSubLayerPanelItem ==
+			SP0_LIST_RENDERING_SETUP) {
+
+			m_singleParticleSubLayer =
+				SP_SUB_LAYER_SHAPE_EDIT;
+
+			m_subLayerPanelOpen = true;
+
+			m_activeSubLayerPanelItem =
+				SP1_LIST_RENDER_SOURCE;
+
+			result.rebuildMenu = true;
+		}
+
+		// Collision shape row is an adjustment row.
+		// E does not activate reserved collision implementations.
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		return;
+	}
+
+	// ---------------------------------------------------------
+	// Sub-Layer 1 panel actions.
+	// ---------------------------------------------------------
+	if (isShapeEditSubLayer()) {
+
+		switch (m_activeSubLayerPanelItem) {
+
+		case SP1_LIST_RENDER_SOURCE:
+
+			toggleParticleRenderMode();
+
+			result.command =
+				CMD_PARTICLE_RENDER_MODE_CHANGED;
+			break;
+
+		case SP1_LIST_MESH_BOUND:
+
+			cycleSPMeshBoundMode(+1.0f);
+
+			result.command =
+				CMD_REDRAW;
+			break;
+
+		case SP1_LIST_DISPLAY_MODE:
+
+			cycleSPDisplayMode(+1.0f);
+
+			result.command =
+				CMD_REDRAW;
+			break;
+
+		case SP1_LIST_RENDER_CAGE:
+
+			toggleSPRenderCage();
+
+			result.command =
+				CMD_REDRAW;
+			break;
+
+		case SP1_LIST_MESH_PREVIEW_EDIT:
+
+			m_singleParticleSubLayer =
+				SP_SUB_LAYER_VOLUME_RENDER;
+
+			m_volumeAssemblyNode =
+				VOLUME_NODE_PREVIEW;
+
+			m_subLayerPanelOpen = true;
+
+			m_activeSubLayerPanelItem =
+				PREVIEW_LIST_INJECTION_MODE;
+
+			result.command =
+				CMD_REDRAW;
+
+			result.regenerateVolume =
+				true;
+
+			result.rebuildMenu =
+				true;
+			break;
+
+		case SP1_LIST_COLLISION_SETUP:
+
+			m_singleParticleSubLayer =
+				SP_SUB_LAYER_REFERENCE;
+
+			m_subLayerPanelOpen = true;
+
+			m_activeSubLayerPanelItem =
+				SP0_LIST_COLLISION_SHAPE;
+
+			result.command =
+				CMD_REDRAW;
+
+			result.rebuildMenu =
+				true;
+			break;
+
+		default:
+		case SP1_LIST_COUNT:
+
+			result.command =
+				CMD_REDRAW;
+			break;
+		}
+
 		result.requestRedraw = true;
 		return;
 	}

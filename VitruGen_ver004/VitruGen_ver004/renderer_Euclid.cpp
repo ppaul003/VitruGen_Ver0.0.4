@@ -1976,7 +1976,11 @@ void EuclidRenderer::displayParticleWorkspace(
     bool hoverValid,
     float hoverX,
     float hoverY,
-    bool useMeshRender) {
+    bool useMeshRender,
+    bool fillMeshBounds,
+    bool wireframe,
+    bool showCollisionProxy,
+    bool showRenderCage) {
 
     if (!m_psystem) return;
 
@@ -2061,7 +2065,22 @@ void EuclidRenderer::displayParticleWorkspace(
             drawParticleMeshOBJ(
                 p,
                 c,
-                selected
+                selected,
+                fillMeshBounds,
+                wireframe
+            );
+        }
+        else if (wireframe) {
+            const float4 wireColor = selected
+                ? make_float4(1.0f, 0.55f, 0.06f, 1.0f)
+                : c;
+
+            drawParticleWireSphere(
+                p,
+                wireColor,
+                selected ? 1.8f : 1.35f,
+                1.0f,
+                false
             );
         }
         else {
@@ -2091,6 +2110,22 @@ void EuclidRenderer::displayParticleWorkspace(
                     true
                 );
             }
+        }
+
+        // The only operational collision proxy in this sprint is the
+        // particle sphere. Reserved proxy selections never alter this pass.
+        if (showCollisionProxy) {
+            drawParticleWireSphere(
+                p,
+                make_float4(0.15f, 0.95f, 1.0f, 1.0f),
+                2.25f,
+                0.92f,
+                true
+            );
+        }
+
+        if (showRenderCage) {
+            drawParticleRenderCage(p);
         }
     }
     glUseProgram(0);
@@ -4241,10 +4276,195 @@ bool EuclidRenderer::checkShader(
     return true;
 }
 
+void EuclidRenderer::drawParticleWireSphere(
+    const ParticleProxy3D& p,
+    const float4& color,
+    float lineWidth,
+    float alpha,
+    bool overlay) {
+
+    if (p.radius <= 0.0f) return;
+
+    GLint oldProgram = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &oldProgram);
+
+    glPushAttrib(
+        GL_ENABLE_BIT |
+        GL_POLYGON_BIT |
+        GL_DEPTH_BUFFER_BIT |
+        GL_COLOR_BUFFER_BIT |
+        GL_CURRENT_BIT |
+        GL_LIGHTING_BIT |
+        GL_LINE_BIT |
+        GL_TEXTURE_BIT
+    );
+
+    glUseProgram(0);
+    glDisable(GL_TEXTURE_2D);
+    glDisable(GL_POINT_SPRITE_ARB);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_CULL_FACE);
+
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(overlay ? GL_FALSE : GL_TRUE);
+    glDepthFunc(overlay ? GL_LEQUAL : GL_LESS);
+
+    if (alpha < 1.0f) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    }
+    else {
+        glDisable(GL_BLEND);
+    }
+
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glLineWidth(lineWidth);
+    glColor4f(color.x, color.y, color.z, alpha);
+
+    glPushMatrix();
+    glTranslatef(p.position.x, p.position.y, p.position.z);
+
+    constexpr int kSegments = 32;
+    constexpr int kStacks = 12;
+
+    // Latitude rings.
+    for (int stack = 1; stack < kStacks; ++stack) {
+        const float phi =
+            -0.5f * static_cast<float>(M_PI) +
+            static_cast<float>(M_PI) *
+            static_cast<float>(stack) /
+            static_cast<float>(kStacks);
+
+        const float y = p.radius * sinf(phi);
+        const float ringRadius = p.radius * cosf(phi);
+
+        glBegin(GL_LINE_LOOP);
+        for (int segment = 0; segment < kSegments; ++segment) {
+            const float theta =
+                2.0f * static_cast<float>(M_PI) *
+                static_cast<float>(segment) /
+                static_cast<float>(kSegments);
+
+            glVertex3f(
+                ringRadius * cosf(theta),
+                y,
+                ringRadius * sinf(theta)
+            );
+        }
+        glEnd();
+    }
+
+    // Longitude arcs.
+    const int longitudeCount = kSegments / 2;
+    for (int longitude = 0; longitude < longitudeCount; ++longitude) {
+        const float theta =
+            2.0f * static_cast<float>(M_PI) *
+            static_cast<float>(longitude) /
+            static_cast<float>(longitudeCount);
+
+        glBegin(GL_LINE_STRIP);
+        for (int stack = 0; stack <= kStacks; ++stack) {
+            const float phi =
+                -0.5f * static_cast<float>(M_PI) +
+                static_cast<float>(M_PI) *
+                static_cast<float>(stack) /
+                static_cast<float>(kStacks);
+
+            const float ringRadius = p.radius * cosf(phi);
+
+            glVertex3f(
+                ringRadius * cosf(theta),
+                p.radius * sinf(phi),
+                ringRadius * sinf(theta)
+            );
+        }
+        glEnd();
+    }
+
+    glPopMatrix();
+    glPopAttrib();
+    glUseProgram(static_cast<GLuint>(oldProgram));
+}
+
+void EuclidRenderer::drawParticleRenderCage(
+    const ParticleProxy3D& p) {
+
+    if (p.radius <= 0.0f) return;
+
+    GLint oldProgram = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &oldProgram);
+
+    glPushAttrib(
+        GL_ENABLE_BIT |
+        GL_POLYGON_BIT |
+        GL_DEPTH_BUFFER_BIT |
+        GL_COLOR_BUFFER_BIT |
+        GL_CURRENT_BIT |
+        GL_LIGHTING_BIT |
+        GL_LINE_BIT |
+        GL_TEXTURE_BIT
+    );
+
+    glUseProgram(0);
+    glDisable(GL_TEXTURE_2D);
+    glDisable(GL_POINT_SPRITE_ARB);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_CULL_FACE);
+
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    glDepthFunc(GL_LEQUAL);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glLineWidth(1.5f);
+    glColor4f(1.0f, 0.88f, 0.25f, 0.82f);
+
+    const float x0 = p.position.x - p.radius;
+    const float x1 = p.position.x + p.radius;
+    const float y0 = p.position.y - p.radius;
+    const float y1 = p.position.y + p.radius;
+    const float z0 = p.position.z - p.radius;
+    const float z1 = p.position.z + p.radius;
+
+    const float corners[8][3] = {
+        { x0, y0, z0 },
+        { x1, y0, z0 },
+        { x1, y1, z0 },
+        { x0, y1, z0 },
+        { x0, y0, z1 },
+        { x1, y0, z1 },
+        { x1, y1, z1 },
+        { x0, y1, z1 }
+    };
+
+    const int edges[12][2] = {
+        { 0, 1 }, { 1, 2 }, { 2, 3 }, { 3, 0 },
+        { 4, 5 }, { 5, 6 }, { 6, 7 }, { 7, 4 },
+        { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 }
+    };
+
+    glBegin(GL_LINES);
+    for (const auto& edge : edges) {
+        const float* a = corners[edge[0]];
+        const float* b = corners[edge[1]];
+        glVertex3f(a[0], a[1], a[2]);
+        glVertex3f(b[0], b[1], b[2]);
+    }
+    glEnd();
+
+    glPopAttrib();
+    glUseProgram(static_cast<GLuint>(oldProgram));
+}
+
 void EuclidRenderer::drawParticleMeshOBJ(
     const ParticleProxy3D& p,
     const float4& color,
-    bool selected) {
+    bool selected,
+    bool fillMeshBounds,
+    bool wireframe) {
 
     if (!hasParticleMeshOBJ()) return;
     if (!m_meshProgram) return;
@@ -4283,8 +4503,15 @@ void EuclidRenderer::drawParticleMeshOBJ(
     glEnable(GL_BLEND);
     glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    const float targetDiameter = 2.0f *p.radius;
-    const float meshScale = targetDiameter / m_particleMeshMaxExtent;
+    const float targetDiameter = 2.0f * p.radius;
+    const float fillScale = targetDiameter / m_particleMeshMaxExtent;
+
+    // DEFAULT preserves authored unit scale when it already fits, and only
+    // shrinks oversized meshes. FILL expands or shrinks uniformly until the
+    // longest authored dimension reaches the particle-bound cage.
+    const float meshScale = fillMeshBounds
+        ? fillScale
+        : std::min(1.0f, fillScale);
 
     glPushMatrix();
 
@@ -4295,12 +4522,18 @@ void EuclidRenderer::drawParticleMeshOBJ(
         p.position.z
     );
 
-    // Preserve the authored OBJ offset. Do not subtract
-    // m_particleMeshCenter from the vertices.
     glScalef(
         meshScale,
         meshScale,
         meshScale
+    );
+
+    // Fit about the authored bounds center so both DEFAULT and FILL remain
+    // inside the cage centered on the particle anchor.
+    glTranslatef(
+        -m_particleMeshCenter.x,
+        -m_particleMeshCenter.y,
+        -m_particleMeshCenter.z
     );
 
     glUseProgram(m_meshProgram);
@@ -4342,45 +4575,61 @@ void EuclidRenderer::drawParticleMeshOBJ(
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(ParticleMeshVertex),
         reinterpret_cast<const GLvoid*>(offsetof(ParticleMeshVertex, normal)));
 
-    // ---------------------------------------------------------
-    // Filled shaded mesh pass.
-    // ---------------------------------------------------------
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-    glDrawArrays(GL_TRIANGLES, 0, m_particleMeshVertexCount);
-
-    // ---------------------------------------------------------
-    // Selected mesh outline.
-    // ---------------------------------------------------------
-    if (selected) {
-
-        if (m_meshColorLocation >= 0) {
+    if (wireframe) {
+        if (selected && m_meshColorLocation >= 0) {
             glUniform4f(
                 m_meshColorLocation,
                 1.0f,
                 0.55f,
                 0.06f,
-                0.95f
+                1.0f
             );
         }
 
-        // An ambient value of 1 makes the outline unlit,
-        // preserving a consistent neon-orange selection color.
         if (m_meshAmbientLocation >= 0) {
             glUniform1f(m_meshAmbientLocation, 1.0f);
         }
 
-        glEnable(GL_POLYGON_OFFSET_LINE);
-        glPolygonOffset(-1.0f, -1.0f);
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
-        glLineWidth(1.5f);
-        glDepthFunc(GL_LEQUAL);
+        glLineWidth(selected ? 1.8f : 1.35f);
+        glDrawArrays(GL_TRIANGLES, 0, m_particleMeshVertexCount);
+    }
+    else {
+        // Filled shaded mesh pass.
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         glDrawArrays(GL_TRIANGLES, 0, m_particleMeshVertexCount);
 
-        glDepthFunc(GL_LESS);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-        glDisable(GL_POLYGON_OFFSET_LINE);
+        // Selected mesh outline.
+        if (selected) {
+
+            if (m_meshColorLocation >= 0) {
+                glUniform4f(
+                    m_meshColorLocation,
+                    1.0f,
+                    0.55f,
+                    0.06f,
+                    0.95f
+                );
+            }
+
+            // An ambient value of 1 makes the outline unlit,
+            // preserving a consistent neon-orange selection color.
+            if (m_meshAmbientLocation >= 0) {
+                glUniform1f(m_meshAmbientLocation, 1.0f);
+            }
+
+            glEnable(GL_POLYGON_OFFSET_LINE);
+            glPolygonOffset(-1.0f, -1.0f);
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+            glLineWidth(1.5f);
+            glDepthFunc(GL_LEQUAL);
+            glDrawArrays(GL_TRIANGLES, 0, m_particleMeshVertexCount);
+
+            glDepthFunc(GL_LESS);
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            glDisable(GL_POLYGON_OFFSET_LINE);
+        }
     }
 
     glDisableVertexAttribArray(1);

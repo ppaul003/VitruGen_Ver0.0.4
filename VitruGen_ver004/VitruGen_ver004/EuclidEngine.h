@@ -191,6 +191,27 @@ private:
 	static constexpr int MENU_COMMIT_NEW_BASE_VECTOR = 1301;
 	// Node_1 injection-brush local basis commit.
 	static constexpr int MENU_COMMIT_BRUSH_BASE = 1302;
+	// SUB_LAYER_0 selection/collision setup.
+	static constexpr int MENU_SP_PRIMARY_ACTION = 2001;
+	static constexpr int MENU_SP_COLLISION_SPHERE = 2002;
+	static constexpr int MENU_SP_COLLISION_BLOCK = 2003;
+	static constexpr int MENU_SP_COLLISION_CAPSULE = 2004;
+	static constexpr int MENU_SP_COLLISION_CONE = 2005;
+	static constexpr int MENU_SP_COLLISION_DEFORMABLE_SPHERE = 2006;
+	static constexpr int MENU_SP_RENDERING_SETUP = 2007;
+	static constexpr int MENU_SP_RETURN_TO_LAYER_2 = 2008;
+	// SUB_LAYER_1 rendering setup.
+	static constexpr int MENU_SP_RENDER_SOURCE_PARTICLE = 2101;
+	static constexpr int MENU_SP_RENDER_SOURCE_MESH = 2102;
+	static constexpr int MENU_SP_MESH_BOUND_DEFAULT = 2103;
+	static constexpr int MENU_SP_MESH_BOUND_FILL = 2104;
+	static constexpr int MENU_SP_DISPLAY_RENDER = 2105;
+	static constexpr int MENU_SP_DISPLAY_RENDER_COLLISION = 2106;
+	static constexpr int MENU_SP_DISPLAY_WIREFRAME = 2107;
+	static constexpr int MENU_SP_RENDER_CAGE_ON = 2108;
+	static constexpr int MENU_SP_RENDER_CAGE_OFF = 2109;
+	static constexpr int MENU_SP_VOLUME_PREVIEW = 2110;
+	static constexpr int MENU_SP_COLLISION_SETUP = 2111;
 
 	static constexpr float kMarchingCubesIsoValue = 0.0f;
 

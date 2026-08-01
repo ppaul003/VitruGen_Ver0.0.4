@@ -300,6 +300,344 @@ void ViewPort::drawSubLayerPanel(const TheArbiter& arbiter, const MarchingCubesP
 		drawText2D(sectionX, y, text, GLUT_BITMAP_HELVETICA_18);
 	};
 
+	// =========================================================
+// SUB-LAYER 0 — COLLISION SETUP
+// =========================================================
+	if (arbiter.isSingleParticleReferenceSubLayer()) {
+
+		glColor4f(
+			0.85f,
+			0.95f,
+			1.0f,
+			alpha
+		);
+
+		drawText2D(
+			sectionX,
+			y0 + 40.0f,
+			"SINGLE_PARTICLE MODE",
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		drawText2D(
+			sectionX,
+			y0 + 70.0f,
+			"SUB-LAYER_0 -> COLLISION SETUP",
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		drawDivider(
+			y0 + 105.0f
+		);
+
+		drawSectionTitle(
+			y0 + 145.0f,
+			"Particle Object:"
+		);
+
+		char objectLine[160];
+
+		snprintf(
+			objectLine,
+			sizeof(objectLine),
+			"OBJECT TYPE { %s }",
+			arbiter.getSingleParticleObjectTypeName()
+		);
+
+		glColor4f(
+			0.72f,
+			0.78f,
+			0.82f,
+			alpha
+		);
+
+		drawText2D(
+			labelX,
+			y0 + 185.0f,
+			objectLine,
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		drawDivider(
+			y0 + 225.0f
+		);
+
+		drawSectionTitle(
+			y0 + 265.0f,
+			"Collision Proxy:"
+		);
+
+		char collisionLine[160];
+
+		snprintf(
+			collisionLine,
+			sizeof(collisionLine),
+			"[1] COLLISION SHAPE { %s }",
+			arbiter.getSPCollisionShapeName()
+		);
+
+		const int activeItem =
+			arbiter.getActiveSubLayerPanelItem();
+
+		drawSubLayerPanelLine(
+			labelX,
+			y0 + 307.0f,
+			activeItem ==
+			TheArbiter::SP0_LIST_COLLISION_SHAPE,
+			collisionLine,
+			alpha
+		);
+
+		const bool sphereAvailable =
+			arbiter.getSPCollisionShape() ==
+			TheArbiter::SPCollisionShape::Sphere;
+
+		if (sphereAvailable) {
+
+			glColor4f(
+				0.45f,
+				1.0f,
+				0.65f,
+				alpha
+			);
+
+			drawText2D(
+				sectionX,
+				y0 + 347.0f,
+				"SPHERE COLLISION PROXY AVAILABLE",
+				GLUT_BITMAP_HELVETICA_12
+			);
+		}
+		else {
+
+			glColor4f(
+				1.0f,
+				0.82f,
+				0.45f,
+				alpha
+			);
+
+			drawText2D(
+				sectionX,
+				y0 + 347.0f,
+				"SELECTED COLLISION PROXY RESERVED",
+				GLUT_BITMAP_HELVETICA_12
+			);
+		}
+
+		drawDivider(
+			y0 + 385.0f
+		);
+
+		drawSectionTitle(
+			y0 + 425.0f,
+			"Next Sub-Layer:"
+		);
+
+		drawSubLayerPanelLine(
+			labelX,
+			y0 + 467.0f,
+			activeItem ==
+			TheArbiter::SP0_LIST_RENDERING_SETUP,
+			"[2] RENDERING SETUP",
+			alpha
+		);
+
+		drawDivider(
+			y1 - 92.0f
+		);
+
+		glColor4f(
+			0.75f,
+			0.75f,
+			0.75f,
+			alpha
+		);
+
+		drawText2D(
+			sectionX,
+			y1 - 58.0f,
+			"W/S: Select    A/D: Change value    E: Activate    TAB: Hide    Q: Back",
+			GLUT_BITMAP_HELVETICA_12
+		);
+
+		glLineWidth(1.0f);
+		return;
+	}
+
+	// =========================================================
+	// SUB-LAYER 1 — RENDERING SETUP
+	// =========================================================
+	if (arbiter.isShapeEditSubLayer()) {
+
+		glColor4f(
+			0.85f,
+			0.95f,
+			1.0f,
+			alpha
+		);
+
+		drawText2D(
+			sectionX,
+			y0 + 40.0f,
+			"SINGLE_PARTICLE MODE",
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		drawText2D(
+			sectionX,
+			y0 + 70.0f,
+			"SUB-LAYER_1 -> RENDERING SETUP",
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		drawDivider(
+			y0 + 105.0f
+		);
+
+		const int activeItem =
+			arbiter.getActiveSubLayerPanelItem();
+
+		drawSectionTitle(
+			y0 + 145.0f,
+			"Render Source:"
+		);
+
+		char line[192];
+
+		snprintf(
+			line,
+			sizeof(line),
+			"[1] RENDER SOURCE { %s }",
+			arbiter.getSPRenderSourceName()
+		);
+
+		drawSubLayerPanelLine(
+			labelX,
+			y0 + 185.0f,
+			activeItem ==
+			TheArbiter::SP1_LIST_RENDER_SOURCE,
+			line,
+			alpha
+		);
+
+		drawDivider(
+			y0 + 220.0f
+		);
+
+		drawSectionTitle(
+			y0 + 260.0f,
+			"Mesh Scale Bound:"
+		);
+
+		snprintf(
+			line,
+			sizeof(line),
+			"[2] MESH BOUND { %s }",
+			arbiter.getSPMeshBoundModeName()
+		);
+
+		drawSubLayerPanelLine(
+			labelX,
+			y0 + 300.0f,
+			activeItem ==
+			TheArbiter::SP1_LIST_MESH_BOUND,
+			line,
+			alpha
+		);
+
+		drawDivider(
+			y0 + 335.0f
+		);
+
+		drawSectionTitle(
+			y0 + 375.0f,
+			"Debug Presentation:"
+		);
+
+		snprintf(
+			line,
+			sizeof(line),
+			"[3] DISPLAY MODE { %s }",
+			arbiter.getSPDisplayModeName()
+		);
+
+		drawSubLayerPanelLine(
+			labelX,
+			y0 + 415.0f,
+			activeItem ==
+			TheArbiter::SP1_LIST_DISPLAY_MODE,
+			line,
+			alpha
+		);
+
+		snprintf(
+			line,
+			sizeof(line),
+			"[4] RENDER CAGE { %s }",
+			arbiter.isSPRenderCageVisible()
+			? "ON"
+			: "OFF"
+		);
+
+		drawSubLayerPanelLine(
+			labelX,
+			y0 + 457.0f,
+			activeItem ==
+			TheArbiter::SP1_LIST_RENDER_CAGE,
+			line,
+			alpha
+		);
+
+		drawDivider(
+			y0 + 492.0f
+		);
+
+		drawSectionTitle(
+			y0 + 532.0f,
+			"Next / Previous Sub-Layer:"
+		);
+
+		drawSubLayerPanelLine(
+			labelX,
+			y0 + 574.0f,
+			activeItem ==
+			TheArbiter::SP1_LIST_MESH_PREVIEW_EDIT,
+			"[5] MESH / VOLUME PREVIEW AND EDIT",
+			alpha
+		);
+
+		drawSubLayerPanelLine(
+			labelX,
+			y0 + 616.0f,
+			activeItem ==
+			TheArbiter::SP1_LIST_COLLISION_SETUP,
+			"[6] RETURN TO COLLISION SETUP",
+			alpha
+		);
+
+		drawDivider(
+			y1 - 92.0f
+		);
+
+		glColor4f(
+			0.75f,
+			0.75f,
+			0.75f,
+			alpha
+		);
+
+		drawText2D(
+			sectionX,
+			y1 - 58.0f,
+			"W/S: Select    A/D: Change value    E: Activate    TAB: Hide    Q: Back",
+			GLUT_BITMAP_HELVETICA_12
+		);
+
+		glLineWidth(1.0f);
+		return;
+	}
+
 	// ---------------------------------------------------------------------
 	// Header and assembly-track indicator.
 	// ---------------------------------------------------------------------
@@ -2332,30 +2670,47 @@ void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 
 		const char* helpLine = nullptr;
 
-		if (arbiter.isWorkplaneParticleSelectSubLayer()) {
-			helpLine = "W/S: Move workplane    LMB: Select particle    Q: Back    RMB: Menu";
-		}
-		else if (arbiter.isVolumeRenderSubLayer()) {
+		if (arbiter.isSingleParticleReferenceSubLayer()) {
+
 			if (arbiter.isSubLayerPanelOpen()) {
-				helpLine = "TAB: Hide panel    W/S: Select panel item    A/D: Change selected item    E: Marching Cubes    Q: Back";
+
+				helpLine =
+					"TAB: Hide panel    W/S: Select item    "
+					"A/D: Change value    E: Activate    Q: Back";
+			}
+			else if (arbiter.hasSelectedParticle()) {
+
+				helpLine =
+					"E: Deselect particle    "
+					"TAB: Collision setup panel    Q: Back";
+			}
+			else if (arbiter.isSPSelectionArmed()) {
+
+				helpLine =
+					"W/S: Move workplane    LMB: Select particle    "
+					"E: Cancel selection mode    Q: Back";
 			}
 			else {
-				if (arbiter.getVolumeAssemblyNode() ==
-					TheArbiter::VOLUME_NODE_OFFSET_OBJECT) {
 
-					helpLine =
-						"TAB: Object panel    W/S: Move along selected vector    "
-						"RMB: Edit menu    E: Next node    Q: Back";
-				}
-				else {
-					helpLine =
-						"TAB: Object panel    W/S: Scale selected mode    "
-						"A/D: Rotate selected mode    RMB: Edit menu    "
-						"E: Next node    Q: Back";
-				}
+				helpLine =
+					"E: Arm particle selection    Q: Back";
 			}
 		}
-		else if (arbiter.isMarchingCubesSubLayer()) {
+		else if (arbiter.isShapeEditSubLayer()) {
+
+			if (arbiter.isSubLayerPanelOpen()) {
+
+				helpLine =
+					"TAB: Hide panel    W/S: Select item    "
+					"A/D: Change value    E: Activate    Q: Back";
+			}
+			else {
+
+				helpLine =
+					"TAB: Rendering setup panel    Q: Collision setup";
+			}
+		}
+		else if (arbiter.isVolumeRenderSubLayer()) {
 			helpLine = "TAB: Toggle sub-layer panel    E: Return to reference    Q: Back    RMB: Menu";
 		}
 		else {

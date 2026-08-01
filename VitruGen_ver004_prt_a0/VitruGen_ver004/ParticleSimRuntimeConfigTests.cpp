@@ -42,6 +42,14 @@ int main() {
 		"DEFAULT mode should resolve the default count"
 	);
 
+	require(
+		defaultConfig.radiusMode ==
+			TheArbiter::ParticleRadiusMode::Uniform &&
+		defaultConfig.uniformRadius == 0.0120f &&
+		defaultConfig.placementRadius == 0.0120f,
+		"Default uniform radius should resolve as the placement radius"
+	);
+
 	draft.colorMode = TheArbiter::ParticleColorMode::RGB;
 	draft.redCount = 420;
 	draft.greenCount = 240;
@@ -108,8 +116,79 @@ int main() {
 		"Counts above capacity must be rejected"
 	);
 
+	draft.greenCount = 0;
+	draft.redCount = 1;
+	draft.radiusMode = TheArbiter::ParticleRadiusMode::Random;
+	draft.minimumRadius = 0.0060f;
+	draft.maximumRadius = 0.0140f;
+
+	const ParticleSimRuntimeConfig randomRadius =
+		resolve(draft);
+
+	require(
+		randomRadius.minimumRadius == 0.0060f &&
+		randomRadius.maximumRadius == 0.0140f &&
+		randomRadius.placementRadius == 0.0140f,
+		"Random mode should use its maximum radius for safe placement"
+	);
+
+	draft.minimumRadius = 0.0100f;
+	draft.maximumRadius = 0.0100f;
+	const ParticleSimRuntimeConfig degenerateRandomRadius =
+		resolve(draft);
+
+	require(
+		degenerateRandomRadius.placementRadius == 0.0100f,
+		"A degenerate random range should resolve as a safe constant radius"
+	);
+
+	draft.minimumRadius = 0.0f;
+	require(
+		!ParticleSimRuntimeConfig::resolve(
+			draft,
+			TheArbiter::kParticleSimCapacity,
+			rejected
+		),
+		"Zero random minimum radius must be rejected"
+	);
+
+	draft.minimumRadius = 0.0140f;
+	draft.maximumRadius = 0.0100f;
+	require(
+		!ParticleSimRuntimeConfig::resolve(
+			draft,
+			TheArbiter::kParticleSimCapacity,
+			rejected
+		),
+		"An inverted random radius range must be rejected"
+	);
+
+	draft.minimumRadius = 0.0100f;
+	draft.maximumRadius =
+		ParticleSimRuntimeConfig::kMaximumSupportedRadius + 0.0001f;
+	require(
+		!ParticleSimRuntimeConfig::resolve(
+			draft,
+			TheArbiter::kParticleSimCapacity,
+			rejected
+		),
+		"Random radii above the supported maximum must be rejected"
+	);
+
+	draft.radiusMode = TheArbiter::ParticleRadiusMode::Uniform;
+	draft.uniformRadius = 0.0f;
+	require(
+		!ParticleSimRuntimeConfig::resolve(
+			draft,
+			TheArbiter::kParticleSimCapacity,
+			rejected
+		),
+		"Zero uniform radius must be rejected"
+	);
+
 	std::cout
-		<< "PASS: PARTICLE_SIM runtime configuration resolution tests\n";
+		<< "PASS: PARTICLE_SIM count, color, and radius "
+		<< "configuration resolution tests\n";
 
 	return EXIT_SUCCESS;
 }

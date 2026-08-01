@@ -95,11 +95,11 @@ public:
 
 	// --- WORKSPACE INSTANCE STATE ---
 	struct PSSimulationConfig {
-		float fixedTimestep = 0.002f;
+		float fixedTimestep = 0.025f;
 		int solverIterations = 1;
 
-		float globalDamping = 1.0f;
-		float gravityMagnitude = 0.0003f;
+		float globalDamping = 0.9995f;
+		float gravityMagnitude = 0.00098f;
 		float collisionSpring = 0.5f;
 		float collisionDamping = 0.02f;
 		float collisionShear = 0.1f;

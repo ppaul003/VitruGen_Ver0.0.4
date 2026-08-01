@@ -14,6 +14,7 @@
 #include <memory.h>
 #include <cstdio>
 #include <cstdlib>
+#include <random>
 
 #include <GL/glew.h>
 
@@ -394,11 +395,14 @@ void ParticleSystem::dumpParticles(uint start, uint count) {
 }
 
 void ParticleSystem::dumpRadii(float* rad) {
-	dumpRadii(rad, m_numParticles);
+	dumpRadii(rad, m_activeParticleCount);
 }
 
 void ParticleSystem::dumpRadii(float* rad, uint count) {
-	if (!rad || count > m_numParticles || count == 0) return;
+	if (!rad ||
+		count > m_numParticles ||
+		count > m_activeParticleCount ||
+		count == 0) return;
 
 	copyArrayFromDevice(
 		m_hVel,
@@ -410,6 +414,95 @@ void ParticleSystem::dumpRadii(float* rad, uint count) {
 	for (uint i = 0; i < count; i++) {
 		rad[i] = m_hVel[i * 4 + 3];
 	}
+}
+
+bool ParticleSystem::setUniformActiveRadii(float radius) {
+	static constexpr float kMaximumSupportedRadius = 0.0156f;
+
+	if (!m_bInitialized ||
+		!std::isfinite(radius) ||
+		radius <= 0.0f ||
+		radius > kMaximumSupportedRadius) {
+
+		return false;
+	}
+
+	m_params.particleRadius = radius;
+	setParameters(&m_params);
+
+	if (m_activeParticleCount == 0)
+		return true;
+
+	copyArrayFromDevice(
+		m_hVel,
+		m_dVel,
+		0,
+		sizeof(float) * 4 * m_activeParticleCount
+	);
+
+	for (uint i = 0; i < m_activeParticleCount; ++i)
+		m_hVel[i * 4 + 3] = radius;
+
+	setArray(
+		VELOCITY,
+		m_hVel,
+		0,
+		static_cast<int>(m_activeParticleCount)
+	);
+
+	return true;
+}
+
+bool ParticleSystem::setRandomActiveRadii(
+	float minimumRadius,
+	float maximumRadius,
+	uint seed) {
+
+	static constexpr float kMaximumSupportedRadius = 0.0156f;
+
+	if (!m_bInitialized ||
+		!std::isfinite(minimumRadius) ||
+		!std::isfinite(maximumRadius) ||
+		minimumRadius <= 0.0f ||
+		minimumRadius > maximumRadius ||
+		maximumRadius > kMaximumSupportedRadius) {
+
+		return false;
+	}
+
+	// The maximum radius is the conservative scalar reference used by
+	// placement and renderer fallbacks. Each active particle still owns its
+	// exact collision/render radius in velocity.w.
+	m_params.particleRadius = maximumRadius;
+	setParameters(&m_params);
+
+	if (m_activeParticleCount == 0)
+		return true;
+
+	copyArrayFromDevice(
+		m_hVel,
+		m_dVel,
+		0,
+		sizeof(float) * 4 * m_activeParticleCount
+	);
+
+	std::mt19937 generator(seed);
+	std::uniform_real_distribution<float> radiusDistribution(
+		minimumRadius,
+		maximumRadius
+	);
+
+	for (uint i = 0; i < m_activeParticleCount; ++i)
+		m_hVel[i * 4 + 3] = radiusDistribution(generator);
+
+	setArray(
+		VELOCITY,
+		m_hVel,
+		0,
+		static_cast<int>(m_activeParticleCount)
+	);
+
+	return true;
 }
 
 float* ParticleSystem::getArray(ParticleArray array) {

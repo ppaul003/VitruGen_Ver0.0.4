@@ -557,21 +557,161 @@ void EuclidEngine::rebuildMenus() {
 
 	if (m_arbiter.isSingleParticleReferenceSubLayer()) {
 		glutAddMenuEntry(
-			"* Select Workplane/particle",
-			MENU_SELECT_WORKPLANE_PARTICLE
+			"- Sub-Layer 0: Particle Selection / Collision Setup",
+			MENU_NOP
+		);
+		glutAddMenuEntry("=========================================", MENU_NOP);
+
+		const char* primaryAction =
+			m_arbiter.hasSelectedParticle()
+			? "* Deselect particle"
+			: m_arbiter.isSPSelectionArmed()
+			? "* Cancel particle selection"
+			: "* Arm particle selection";
+
+		glutAddMenuEntry(
+			primaryAction,
+			MENU_SP_PRIMARY_ACTION
 		);
 
 		glutAddMenuEntry("=========================================", MENU_NOP);
-	}
-	else if (m_arbiter.isWorkplaneParticleSelectSubLayer()) {
-		if (m_arbiter.hasSelectedParticle()) {
-			glutAddMenuEntry(
-				"* Edit Particle Mesh",
-				MENU_EDIT_PARTICLE_MESH
-			);
-		}
+		glutAddMenuEntry("Collision Proxy:", MENU_NOP);
 
-		glutAddMenuEntry("* Go back", MENU_GO_BACK_SUBLAYER);
+		const auto collisionShape =
+			m_arbiter.getSPCollisionShape();
+
+		glutAddMenuEntry(
+			collisionShape == TheArbiter::SPCollisionShape::Sphere
+			? "* Sphere { SELECTED / OPERATIONAL }"
+			: "* Sphere { OPERATIONAL }",
+			MENU_SP_COLLISION_SPHERE
+		);
+		glutAddMenuEntry(
+			collisionShape == TheArbiter::SPCollisionShape::Block
+			? "* Block { SELECTED / RESERVED }"
+			: "* Block { RESERVED }",
+			MENU_SP_COLLISION_BLOCK
+		);
+		glutAddMenuEntry(
+			collisionShape == TheArbiter::SPCollisionShape::Capsule
+			? "* Capsule { SELECTED / RESERVED }"
+			: "* Capsule { RESERVED }",
+			MENU_SP_COLLISION_CAPSULE
+		);
+		glutAddMenuEntry(
+			collisionShape == TheArbiter::SPCollisionShape::Cone
+			? "* Cone { SELECTED / RESERVED }"
+			: "* Cone { RESERVED }",
+			MENU_SP_COLLISION_CONE
+		);
+		glutAddMenuEntry(
+			collisionShape == TheArbiter::SPCollisionShape::DeformableSphere
+			? "* Deformable Sphere { SELECTED / RESERVED }"
+			: "* Deformable Sphere { RESERVED }",
+			MENU_SP_COLLISION_DEFORMABLE_SPHERE
+		);
+
+		glutAddMenuEntry("=========================================", MENU_NOP);
+		glutAddMenuEntry("Next Sub-Layer:", MENU_NOP);
+		glutAddMenuEntry(
+			m_arbiter.hasSelectedParticle()
+			? "* Rendering Setup"
+			: "- Rendering Setup { SELECT PARTICLE FIRST }",
+			m_arbiter.hasSelectedParticle()
+			? MENU_SP_RENDERING_SETUP
+			: MENU_NOP
+		);
+
+		glutAddMenuEntry("=========================================", MENU_NOP);
+		glutAddMenuEntry("* Return to Layer 2", MENU_SP_RETURN_TO_LAYER_2);
+		glutAddMenuEntry("=========================================", MENU_NOP);
+	}
+	else if (m_arbiter.isShapeEditSubLayer()) {
+		glutAddMenuEntry(
+			"- Sub-Layer 1: Rendering Setup",
+			MENU_NOP
+		);
+		glutAddMenuEntry("=========================================", MENU_NOP);
+
+		glutAddMenuEntry("Render Source:", MENU_NOP);
+		glutAddMenuEntry(
+			!m_arbiter.isParticleRenderMesh()
+			? "* Particle { SELECTED }"
+			: "* Particle",
+			MENU_SP_RENDER_SOURCE_PARTICLE
+		);
+		glutAddMenuEntry(
+			m_arbiter.isParticleRenderMesh()
+			? "* Mesh { SELECTED }"
+			: "* Mesh",
+			MENU_SP_RENDER_SOURCE_MESH
+		);
+
+		glutAddMenuEntry("=========================================", MENU_NOP);
+		glutAddMenuEntry("Mesh Bound:", MENU_NOP);
+		glutAddMenuEntry(
+			m_arbiter.getSPMeshBoundMode() ==
+			TheArbiter::SPMeshBoundMode::Default
+			? "* Default { SELECTED }"
+			: "* Default",
+			MENU_SP_MESH_BOUND_DEFAULT
+		);
+		glutAddMenuEntry(
+			m_arbiter.getSPMeshBoundMode() ==
+			TheArbiter::SPMeshBoundMode::Fill
+			? "* Fill { SELECTED }"
+			: "* Fill",
+			MENU_SP_MESH_BOUND_FILL
+		);
+
+		glutAddMenuEntry("=========================================", MENU_NOP);
+		glutAddMenuEntry("Display Mode:", MENU_NOP);
+		glutAddMenuEntry(
+			m_arbiter.getSPDisplayMode() ==
+			TheArbiter::SPDisplayMode::Render
+			? "* Render { SELECTED }"
+			: "* Render",
+			MENU_SP_DISPLAY_RENDER
+		);
+		glutAddMenuEntry(
+			m_arbiter.getSPDisplayMode() ==
+			TheArbiter::SPDisplayMode::RenderAndCollision
+			? "* Render + Collision { SELECTED }"
+			: "* Render + Collision",
+			MENU_SP_DISPLAY_RENDER_COLLISION
+		);
+		glutAddMenuEntry(
+			m_arbiter.getSPDisplayMode() ==
+			TheArbiter::SPDisplayMode::Wireframe
+			? "* Wireframe { SELECTED }"
+			: "* Wireframe",
+			MENU_SP_DISPLAY_WIREFRAME
+		);
+
+		glutAddMenuEntry("=========================================", MENU_NOP);
+		glutAddMenuEntry("Render Cage:", MENU_NOP);
+		glutAddMenuEntry(
+			m_arbiter.isSPRenderCageVisible()
+			? "* On { SELECTED }"
+			: "* On",
+			MENU_SP_RENDER_CAGE_ON
+		);
+		glutAddMenuEntry(
+			!m_arbiter.isSPRenderCageVisible()
+			? "* Off { SELECTED }"
+			: "* Off",
+			MENU_SP_RENDER_CAGE_OFF
+		);
+
+		glutAddMenuEntry("=========================================", MENU_NOP);
+		glutAddMenuEntry(
+			"* Mesh / Volume Preview and Edit",
+			MENU_SP_VOLUME_PREVIEW
+		);
+		glutAddMenuEntry(
+			"* Return to Collision Setup",
+			MENU_SP_COLLISION_SETUP
+		);
 		glutAddMenuEntry("=========================================", MENU_NOP);
 	}
 	else if (m_arbiter.isVolumeRenderSubLayer()) {
@@ -1122,6 +1262,12 @@ void EuclidEngine::sMainMenu(int value) {
 			s_instance->exportCurrentMeshOBJ();
 		}
 
+		if (result.command ==
+			TheArbiter::CMD_PARTICLE_RENDER_MODE_CHANGED) {
+
+			s_instance->applySingleParticleConfigToSystem();
+		}
+
 		s_instance->syncCameraBehaviorFromArbiter();
 
 		if (result.rebuildMenu) {
@@ -1158,6 +1304,149 @@ void EuclidEngine::sMainMenu(int value) {
 	};
 
 	switch (value) {
+		// =========================================================
+		// Sub-Layer 0: selection and collision setup
+		// =========================================================
+	case MENU_SP_PRIMARY_ACTION:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.activateSPPrimaryActionFromMenu()
+		);
+		return;
+
+	case MENU_SP_COLLISION_SPHERE:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.setSPCollisionShapeFromMenu(
+				TheArbiter::SPCollisionShape::Sphere
+			)
+		);
+		return;
+
+	case MENU_SP_COLLISION_BLOCK:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.setSPCollisionShapeFromMenu(
+				TheArbiter::SPCollisionShape::Block
+			)
+		);
+		return;
+
+	case MENU_SP_COLLISION_CAPSULE:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.setSPCollisionShapeFromMenu(
+				TheArbiter::SPCollisionShape::Capsule
+			)
+		);
+		return;
+
+	case MENU_SP_COLLISION_CONE:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.setSPCollisionShapeFromMenu(
+				TheArbiter::SPCollisionShape::Cone
+			)
+		);
+		return;
+
+	case MENU_SP_COLLISION_DEFORMABLE_SPHERE:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.setSPCollisionShapeFromMenu(
+				TheArbiter::SPCollisionShape::DeformableSphere
+			)
+		);
+		return;
+
+	case MENU_SP_RENDERING_SETUP:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.enterSPRenderingSetupFromMenu()
+		);
+		return;
+
+	case MENU_SP_RETURN_TO_LAYER_2:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.returnSPToLayer2FromMenu()
+		);
+		return;
+
+		// =========================================================
+		// Sub-Layer 1: rendering setup
+		// =========================================================
+	case MENU_SP_RENDER_SOURCE_PARTICLE:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.setSPRenderSourceFromMenu(
+				TheArbiter::PARTICLE_RENDER_DEFAULT
+			)
+		);
+		return;
+
+	case MENU_SP_RENDER_SOURCE_MESH:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.setSPRenderSourceFromMenu(
+				TheArbiter::PARTICLE_RENDER_MESH
+			)
+		);
+		return;
+
+	case MENU_SP_MESH_BOUND_DEFAULT:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.setSPMeshBoundModeFromMenu(
+				TheArbiter::SPMeshBoundMode::Default
+			)
+		);
+		return;
+
+	case MENU_SP_MESH_BOUND_FILL:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.setSPMeshBoundModeFromMenu(
+				TheArbiter::SPMeshBoundMode::Fill
+			)
+		);
+		return;
+
+	case MENU_SP_DISPLAY_RENDER:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.setSPDisplayModeFromMenu(
+				TheArbiter::SPDisplayMode::Render
+			)
+		);
+		return;
+
+	case MENU_SP_DISPLAY_RENDER_COLLISION:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.setSPDisplayModeFromMenu(
+				TheArbiter::SPDisplayMode::RenderAndCollision
+			)
+		);
+		return;
+
+	case MENU_SP_DISPLAY_WIREFRAME:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.setSPDisplayModeFromMenu(
+				TheArbiter::SPDisplayMode::Wireframe
+			)
+		);
+		return;
+
+	case MENU_SP_RENDER_CAGE_ON:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.setSPRenderCageVisibleFromMenu(true)
+		);
+		return;
+
+	case MENU_SP_RENDER_CAGE_OFF:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.setSPRenderCageVisibleFromMenu(false)
+		);
+		return;
+
+	case MENU_SP_VOLUME_PREVIEW:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.enterSPVolumePreviewFromMenu()
+		);
+		return;
+
+	case MENU_SP_COLLISION_SETUP:
+		applyArbiterMenuResult(
+			s_instance->m_arbiter.returnSPCollisionSetupFromMenu()
+		);
+		return;
 
 		// =========================================================
 		// Assembly-node navigation
@@ -2154,7 +2443,7 @@ void EuclidEngine::onMouse(int button, int state, int x, int y) {
 		(m_arbiter.isSimulationRunLayer() &&
 			m_arbiter.isSingleParticleSelected() &&
 			(m_arbiter.isSingleParticleReferenceSubLayer() ||
-				m_arbiter.isWorkplaneParticleSelectSubLayer()));
+				m_arbiter.isShapeEditSubLayer()));
 
 	const bool singleParticleVolumeCameraActive =
 		m_arbiter.isSimulationRunLayer() &&

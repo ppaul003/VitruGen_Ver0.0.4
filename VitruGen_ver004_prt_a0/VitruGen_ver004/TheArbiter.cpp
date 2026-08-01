@@ -503,6 +503,82 @@ void TheArbiter::toggleParticleRenderMode() {
 		? PARTICLE_RENDER_MESH
 		: PARTICLE_RENDER_DEFAULT;
 }
+void TheArbiter::cycleSingleParticleRenderSource(int dir) {
+	if (dir == 0) return;
+	toggleParticleRenderMode();
+	m_singleParticleStatus = SingleParticleStatus::None;
+}
+void TheArbiter::cycleSingleParticleCollisionShape(int dir) {
+	const int current =
+		static_cast<int>(m_singleParticleCollisionShape);
+
+	const int count =
+		static_cast<int>(SingleParticleCollisionShape::Count);
+
+	m_singleParticleCollisionShape =
+		static_cast<SingleParticleCollisionShape>(
+			wrapIndex(current, count, dir)
+			);
+
+	m_singleParticleStatus = SingleParticleStatus::None;
+}
+void TheArbiter::cycleSingleParticleMeshBoundMode(int dir) {
+	const int current =
+		static_cast<int>(m_singleParticleMeshBoundMode);
+
+	const int count =
+		static_cast<int>(SingleParticleMeshBoundMode::Count);
+
+	m_singleParticleMeshBoundMode =
+		static_cast<SingleParticleMeshBoundMode>(
+			wrapIndex(current, count, dir)
+			);
+
+	m_singleParticleStatus = SingleParticleStatus::None;
+}
+void TheArbiter::cycleSingleParticleDisplayMode(int dir) {
+	const int current =
+		static_cast<int>(m_singleParticleDisplayMode);
+
+	const int count =
+		static_cast<int>(SingleParticleDisplayMode::Count);
+
+	m_singleParticleDisplayMode =
+		static_cast<SingleParticleDisplayMode>(
+			wrapIndex(current, count, dir)
+			);
+
+	m_singleParticleStatus = SingleParticleStatus::None;
+}
+void TheArbiter::toggleSingleParticleRenderCage() {
+	m_spRenderCageEnabled = !m_spRenderCageEnabled;
+	m_singleParticleStatus = SingleParticleStatus::None;
+}
+void TheArbiter::clearSingleParticleSelectionState(
+	bool clearConfiguration) {
+
+	m_spSelectionArmed = false;
+	m_selectedParticle = false;
+	m_hoverValid = false;
+	m_hoverX = 0.0f;
+	m_hoverY = 0.0f;
+	m_workplaneSlice = 0;
+	m_subLayerPanelOpen = false;
+	m_activeSubLayerPanelItem = 0;
+	m_singleParticleStatus = SingleParticleStatus::None;
+
+	if (clearConfiguration) {
+		m_singleParticleObjectType =
+			SingleParticleObjectType::Static;
+		m_singleParticleCollisionShape =
+			SingleParticleCollisionShape::Sphere;
+		m_singleParticleMeshBoundMode =
+			SingleParticleMeshBoundMode::Default;
+		m_singleParticleDisplayMode =
+			SingleParticleDisplayMode::Render;
+		m_spRenderCageEnabled = true;
+	}
+}
 
 void TheArbiter::increaseParticleRadius() {
 	m_particleRadius += kParticleRadiusStep;
@@ -529,6 +605,101 @@ bool TheArbiter::isParticleSimLayer1PanelContext() const {
 	const WorkspaceId workspace = getSelectedWorkspace();
 	return workspace == WorkspaceId::PARTICLE_SIMULATION ||
 		workspace == WorkspaceId::SANDBOX_SIM;
+}
+
+bool TheArbiter::isSingleParticleLayer1PanelContext() const {
+	return m_navigation.layer == ApplicationLayer::DOMAIN_SELECTION &&
+		m_navigation.selectedDomain == WorkspaceDomain::GRID_3D &&
+		isSingleParticleSelected();
+}
+
+void TheArbiter::moveSingleParticleLayer1Cursor(int dir) {
+	const int count =
+		static_cast<int>(SingleParticleLayer1Item::Count);
+
+	const int current =
+		static_cast<int>(m_singleParticleLayer1Selection);
+
+	m_singleParticleLayer1Selection =
+		static_cast<SingleParticleLayer1Item>(
+			wrapIndex(current, count, dir)
+			);
+
+	m_singleParticleStatus = SingleParticleStatus::None;
+}
+
+void TheArbiter::cycleSingleParticleObjectType(int dir) {
+	const int current =
+		static_cast<int>(m_singleParticleObjectType);
+
+	const int count =
+		static_cast<int>(SingleParticleObjectType::Count);
+
+	m_singleParticleObjectType =
+		static_cast<SingleParticleObjectType>(
+			wrapIndex(current, count, dir)
+			);
+
+	m_singleParticleStatus = SingleParticleStatus::None;
+}
+
+void TheArbiter::handleSingleParticleLayer1Adjust(
+	int dir,
+	ArbiterResult& result) {
+
+	switch (m_singleParticleLayer1Selection) {
+	case SingleParticleLayer1Item::Workspace:
+		cycleWorkspaceSelection(dir);
+		break;
+
+	case SingleParticleLayer1Item::ParticleType:
+		cycleSingleParticleObjectType(dir);
+		break;
+
+	default:
+	case SingleParticleLayer1Item::Configure:
+	case SingleParticleLayer1Item::Count:
+		break;
+	}
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+}
+
+void TheArbiter::activateSingleParticleLayer1Item(
+	ArbiterResult& result) {
+
+	if (m_singleParticleLayer1Selection ==
+		SingleParticleLayer1Item::Configure) {
+
+		if (m_singleParticleObjectType ==
+			SingleParticleObjectType::Static) {
+
+			setApplicationLayer(
+				ApplicationLayer::WORKSPACE_CONFIGURATION
+			);
+
+			m_activeParticleConfigList =
+				PARTICLE_LIST_COLOR;
+
+			m_singleParticleStatus =
+				SingleParticleStatus::None;
+		}
+		else if (m_singleParticleObjectType ==
+			SingleParticleObjectType::Composite) {
+
+			m_singleParticleStatus =
+				SingleParticleStatus::CompositeReserved;
+		}
+		else {
+			m_singleParticleStatus =
+				SingleParticleStatus::AtomicReserved;
+		}
+	}
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
 }
 
 int TheArbiter::getParticleSimLayer2RowCount() const {
@@ -1549,22 +1720,9 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 		return result;
 	}
 
-	// Global layer retreat. Layer 0 absorbs Q.
-	// SINGLE_PARTICLE sub-layer 1 has one extra rule:
-	// if particle 0 is selected, Q clears selection first.
-	// If nothing is selected, Q goes back one layer/sub-layer as usual.
+	// Q is structural navigation only. Selection changes belong to E
+	// while SINGLE_PARTICLE Sub-Layer 0 owns the active object gate.
 	if (event.signal == KeyboardInput::KEY_Q) {
-		if (isWorkplaneParticleSelectSubLayer() &&
-			m_selectedParticle) {
-
-			m_selectedParticle = false;
-
-			result.command = CMD_REDRAW;
-			result.requestRedraw = true;
-			result.rebuildMenu = true;
-			return result;
-		}
-
 		goBackOneLayer(result);
 		return result;
 	}
@@ -1627,7 +1785,35 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 
 			switch (event.signal) {
 			case KeyboardInput::KEY_E:
-				advanceSingleParticleSubLayer(result);
+				if (isSingleParticleReferenceSubLayer()) {
+					if (m_selectedParticle) {
+						m_selectedParticle = false;
+						m_subLayerPanelOpen = false;
+						m_activeSubLayerPanelItem = 0;
+						m_singleParticleStatus =
+							SingleParticleStatus::None;
+					}
+					else {
+						m_spSelectionArmed =
+							!m_spSelectionArmed;
+
+						if (!m_spSelectionArmed) {
+							m_hoverValid = false;
+						}
+					}
+
+					result.command = CMD_REDRAW;
+					result.requestRedraw = true;
+					result.rebuildMenu = true;
+				}
+				else if (isShapeEditSubLayer()) {
+					// Sub-Layer 1 navigation is panel-owned.
+					result.command = CMD_REDRAW;
+					result.requestRedraw = true;
+				}
+				else {
+					advanceSingleParticleSubLayer(result);
+				}
 				break;
 
 			case KeyboardInput::KEY_W:
@@ -1858,6 +2044,40 @@ void TheArbiter::handleGlobalShellKeyboard(
 void TheArbiter::handleDomainSelectionKeyboard(
 	const KeyboardInput::KeyEvent& event,
 	ArbiterResult& result) {
+
+	if (isSingleParticleLayer1PanelContext()) {
+		switch (event.signal) {
+		case KeyboardInput::KEY_W:
+			moveSingleParticleLayer1Cursor(-1);
+			result.command = CMD_REDRAW;
+			result.requestRedraw = true;
+			break;
+
+		case KeyboardInput::KEY_S:
+			moveSingleParticleLayer1Cursor(+1);
+			result.command = CMD_REDRAW;
+			result.requestRedraw = true;
+			break;
+
+		case KeyboardInput::KEY_A:
+			handleSingleParticleLayer1Adjust(-1, result);
+			break;
+
+		case KeyboardInput::KEY_D:
+			handleSingleParticleLayer1Adjust(+1, result);
+			break;
+
+		case KeyboardInput::KEY_E:
+		case KeyboardInput::KEY_ENTER:
+			activateSingleParticleLayer1Item(result);
+			break;
+
+		default:
+			break;
+		}
+
+		return;
+	}
 
 	if (isParticleSimLayer1PanelContext()) {
 		switch (event.signal) {
@@ -2227,16 +2447,16 @@ const char* TheArbiter::getParticleSimResetModeName() const {
 const char* TheArbiter::getSingleParticleSubLayerName() const {
 	switch (m_singleParticleSubLayer) {
 	case SP_SUB_LAYER_REFERENCE:
-		return "SUB_LAYER_0_SINGLE_PARTICLE_REFERENCE";
+		return "SUB_LAYER_0 COLLISION SETUP";
 
 	case SP_SUB_LAYER_SHAPE_EDIT:
-		return "SUB_LAYER_1_SHAPE_SELECTION_AND_EDIT";
+		return "SUB_LAYER_1 RENDERING SETUP";
 
 	case SP_SUB_LAYER_VOLUME_RENDER:
-		return "SUB_LAYER_2_VOLUME_RENDER_MODE";
+		return "SUB_LAYER_2 MESH PREVIEW / EDIT";
 
 	case SP_SUB_LAYER_MARCHING_CUBES:
-		return "SUB_LAYER_3_MARCHING_CUBES_MODE";
+		return "SUB_LAYER_3 MARCHING CUBES";
 
 	default:
 		return "UNKNOWN_SINGLE_PARTICLE_SUB_LAYER";
@@ -2275,13 +2495,82 @@ const char* TheArbiter::getVolumePrimitiveName() const {
 const char* TheArbiter::getParticleRenderModeName() const {
 	switch (m_particleRenderMode) {
 	case PARTICLE_RENDER_DEFAULT:
-		return "DEFAULT";
+		return "PARTICLE";
 
 	case PARTICLE_RENDER_MESH:
 		return "MESH";
 
 	default:
 		return "UNKNOWN_RENDER_MODE";
+	}
+}
+const char* TheArbiter::getSingleParticleObjectTypeName() const {
+	switch (m_singleParticleObjectType) {
+	case SingleParticleObjectType::Static:
+		return "STATIC";
+	case SingleParticleObjectType::Composite:
+		return "COMPOSITE";
+	case SingleParticleObjectType::Atomic:
+		return "ATOMIC";
+	default:
+	case SingleParticleObjectType::Count:
+		return "UNKNOWN";
+	}
+}
+const char* TheArbiter::getSingleParticleCollisionShapeName() const {
+	switch (m_singleParticleCollisionShape) {
+	case SingleParticleCollisionShape::Sphere:
+		return "SPHERE";
+	case SingleParticleCollisionShape::Block:
+		return "BLOCK";
+	case SingleParticleCollisionShape::Capsule:
+		return "CAPSULE";
+	case SingleParticleCollisionShape::Cone:
+		return "CONE";
+	case SingleParticleCollisionShape::DeformableSphere:
+		return "DEFORMABLE_SPHERE";
+	default:
+	case SingleParticleCollisionShape::Count:
+		return "UNKNOWN";
+	}
+}
+const char* TheArbiter::getSingleParticleMeshBoundModeName() const {
+	switch (m_singleParticleMeshBoundMode) {
+	case SingleParticleMeshBoundMode::Default:
+		return "DEFAULT";
+	case SingleParticleMeshBoundMode::Fill:
+		return "FILL";
+	default:
+	case SingleParticleMeshBoundMode::Count:
+		return "UNKNOWN";
+	}
+}
+const char* TheArbiter::getSingleParticleDisplayModeName() const {
+	switch (m_singleParticleDisplayMode) {
+	case SingleParticleDisplayMode::Render:
+		return "RENDER";
+	case SingleParticleDisplayMode::RenderAndCollision:
+		return "RENDER_AND_COLLISION";
+	case SingleParticleDisplayMode::Wireframe:
+		return "WIREFRAME";
+	default:
+	case SingleParticleDisplayMode::Count:
+		return "UNKNOWN";
+	}
+}
+const char* TheArbiter::getSingleParticleStatusMessage() const {
+	switch (m_singleParticleStatus) {
+	case SingleParticleStatus::SelectParticleFirst:
+		return "SELECT A PARTICLE FIRST";
+	case SingleParticleStatus::CompositeReserved:
+		return "COMPOSITE PARTICLE PIPELINE RESERVED";
+	case SingleParticleStatus::AtomicReserved:
+		return "ATOMIC PARTICLE PIPELINE RESERVED";
+	case SingleParticleStatus::CollisionProxyReserved:
+		return "SELECTED COLLISION PROXY IS RESERVED";
+	default:
+	case SingleParticleStatus::None:
+		return "";
 	}
 }
 const char* TheArbiter::getObjectEditModeName() const {

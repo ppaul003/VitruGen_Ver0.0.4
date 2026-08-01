@@ -188,6 +188,16 @@ bool Tesseract::consumeCameraFocusRequest() {
 }
 
 bool Tesseract::applyWorkspaceBoundaryGridVisual() {
+	return applyGridVisual(m_workspaceGridVisual);
+}
+
+bool Tesseract::applyPSGridVisual() {
+	return applyGridVisual(m_PSWorkspace.gridVisual.render);
+}
+
+bool Tesseract::applyGridVisual(
+	const WorkspaceGridVisualConfig& visual) {
+
 	if (!m_renderer ||
 		!m_particleSimSystem) 
 		return false;
@@ -220,11 +230,62 @@ bool Tesseract::applyWorkspaceBoundaryGridVisual() {
 	);
 
 	m_renderer->setGridStyle(
-		m_workspaceGridVisual.majorStride,
-		m_workspaceGridVisual.drawMinor
+		visual.majorStride,
+		visual.drawMinor
+	);
+
+	m_renderer->setWorkspaceGridVisibility(
+		visual.drawBoundary,
+		visual.drawMajor,
+		visual.drawMinor,
+		visual.drawAxes
 	);
 
 	return true;
+}
+
+bool Tesseract::setPSGridLayout(
+	TheArbiter::ParticleGridLayout layout) {
+
+	PSGridVisualState next;
+	next.layout = layout;
+	next.render.majorStride = 8;
+	next.render.drawBoundary = true;
+	next.render.drawAxes = true;
+	next.dynamicPlaceholder = false;
+
+	switch (layout) {
+	case TheArbiter::ParticleGridLayout::Full:
+		next.render.drawMajor = true;
+		next.render.drawMinor = true;
+		break;
+
+	case TheArbiter::ParticleGridLayout::Minimal:
+		next.render.drawMajor = true;
+		next.render.drawMinor = false;
+		break;
+
+	case TheArbiter::ParticleGridLayout::None:
+		next.render.drawMajor = false;
+		next.render.drawMinor = false;
+		break;
+
+	case TheArbiter::ParticleGridLayout::Dynamic:
+		next.render.drawMajor = true;
+		next.render.drawMinor = true;
+		next.dynamicPlaceholder = true;
+		break;
+
+	default:
+	case TheArbiter::ParticleGridLayout::Count:
+		return false;
+	}
+
+	const bool changed =
+		m_PSWorkspace.gridVisual.layout != next.layout;
+
+	m_PSWorkspace.gridVisual = next;
+	return changed;
 }
 
 int Tesseract::getWorkspaceGridHalfSliceRange() const {
@@ -527,10 +588,6 @@ void Tesseract::applyPSConfig() {
 	m_particleSimSystem->setCollideShear(config.collisionShear);
 	m_particleSimSystem->setCollideAttraction(config.collisionAttraction);
 	m_particleSimSystem->setSimulationDomain(config.simulationBoxSize);
-
-	// Keep the universal visual boundary aligned with
-	// the currently configured simulation boundary.
-	m_workspaceGridVisual.majorStride = config.simulationBoxSize;
 }
 //
 void Tesseract::syncPSRendering() {
@@ -552,7 +609,7 @@ void Tesseract::syncPSRendering() {
 	m_renderer->setGridMode3D();
 	m_renderer->setParticleHighlighted(false);
 
-	applyWorkspaceBoundaryGridVisual();
+	applyPSGridVisual();
 }
 //
 void Tesseract::renderParticleSimulation(
