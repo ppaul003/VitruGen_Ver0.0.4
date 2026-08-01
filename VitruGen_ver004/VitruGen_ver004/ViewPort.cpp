@@ -301,7 +301,7 @@ void ViewPort::drawSubLayerPanel(const TheArbiter& arbiter, const MarchingCubesP
 	};
 
 	// =========================================================
-// SUB-LAYER 0 — COLLISION SETUP
+// SUB-LAYER 0 â€” COLLISION SETUP
 // =========================================================
 	if (arbiter.isSingleParticleReferenceSubLayer()) {
 
@@ -466,7 +466,7 @@ void ViewPort::drawSubLayerPanel(const TheArbiter& arbiter, const MarchingCubesP
 	}
 
 	// =========================================================
-	// SUB-LAYER 1 — RENDERING SETUP
+	// SUB-LAYER 1 â€” RENDERING SETUP
 	// =========================================================
 	if (arbiter.isShapeEditSubLayer()) {
 
@@ -1739,7 +1739,7 @@ void ViewPort::drawSingleParticleLayer1Config(const TheArbiter& arbiter) {
 		arbiter.getSingleParticleLayer1Selection();
 
 	// ---------------------------------------------------------
-	// Row [1] — GRID_3D workspace selection.
+	// Row [1] â€” GRID_3D workspace selection.
 	// ---------------------------------------------------------
 	char workspaceLine[256];
 
@@ -1759,7 +1759,7 @@ void ViewPort::drawSingleParticleLayer1Config(const TheArbiter& arbiter) {
 	);
 
 	// ---------------------------------------------------------
-	// Row [2] — particle object type.
+	// Row [2] â€” particle object type.
 	// ---------------------------------------------------------
 	char particleTypeLine[256];
 
@@ -1779,7 +1779,7 @@ void ViewPort::drawSingleParticleLayer1Config(const TheArbiter& arbiter) {
 	);
 
 	// ---------------------------------------------------------
-	// Row [3] — configure STATIC particle pipeline.
+	// Row [3] â€” configure STATIC particle pipeline.
 	// ---------------------------------------------------------
 	drawSelectableLine(
 		95.0f,
@@ -1999,7 +1999,7 @@ void ViewPort::drawParticleSimLayer1Config(
 		arbiter.getParticleSimLayer1Selection();
 
 	// ---------------------------------------------------------
-	// Row [1] — SIMCAD workspace.
+	// Row [1] â€” SIMCAD workspace.
 	// ---------------------------------------------------------
 	char workspaceLine[256];
 
@@ -2019,7 +2019,7 @@ void ViewPort::drawParticleSimLayer1Config(
 	);
 
 	// ---------------------------------------------------------
-	// Row [2] — grid layout.
+	// Row [2] â€” grid layout.
 	// ---------------------------------------------------------
 	char gridLine[256];
 
@@ -2039,7 +2039,7 @@ void ViewPort::drawParticleSimLayer1Config(
 	);
 
 	// ---------------------------------------------------------
-	// Row [3] — color mode.
+	// Row [3] â€” color mode.
 	// ---------------------------------------------------------
 	char colorLine[256];
 
@@ -2059,7 +2059,7 @@ void ViewPort::drawParticleSimLayer1Config(
 	);
 
 	// ---------------------------------------------------------
-	// Row [4] — radius mode.
+	// Row [4] â€” radius mode.
 	// ---------------------------------------------------------
 	char radiusLine[256];
 
@@ -2079,7 +2079,7 @@ void ViewPort::drawParticleSimLayer1Config(
 	);
 
 	// ---------------------------------------------------------
-	// Row [5] — configure.
+	// Row [5] â€” configure.
 	// ---------------------------------------------------------
 	drawSelectableLine(
 		95.0f,
@@ -2561,8 +2561,14 @@ void ViewPort::drawParticleSimLayer2Config(const TheArbiter& arbiter) {
 	drawWorkspaceFrame(0.20f, nullptr);
 }
 
-void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
-	drawWorkspaceFrame(0.22f, nullptr);
+void ViewPort::drawLayer3SimulationRun(
+	const TheArbiter& arbiter,
+	bool paused) {
+
+	drawWorkspaceFrame(
+		0.22f,
+		nullptr
+	);
 
 	const bool particleSimLayer =
 		!arbiter.isSingleParticleSelected();
@@ -2572,28 +2578,216 @@ void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 		arbiter.getParticleSimDraftConfig().gridLayout ==
 		TheArbiter::ParticleGridLayout::Dynamic;
 
+	// ---------------------------------------------------------
+	// Shared-overlap status is only relevant during Node_1
+	// object editing and Node_2 offset editing.
+	// ---------------------------------------------------------
+	const bool showOverlapStatus =
+		!particleSimLayer &&
+		arbiter.isVolumeRenderSubLayer() &&
+		arbiter.hasInjectionVoxelSelected() &&
+		(
+			arbiter.getVolumeAssemblyNode() ==
+			TheArbiter::VOLUME_NODE_EDIT_OBJECT ||
+
+			arbiter.getVolumeAssemblyNode() ==
+			TheArbiter::VOLUME_NODE_OFFSET_OBJECT
+			);
+
 	const float panelBottom =
 		particleSimLayer
-		? (dynamicGridLayout ? 236.0f : 210.0f)
+		? (
+			dynamicGridLayout
+			? 236.0f
+			: 210.0f
+			)
 		: 184.0f;
 
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_TEXTURE_2D);
-	glUseProgram(0);
+	const float panelLeft =
+		24.0f;
 
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	const float panelTop =
+		24.0f;
 
-	glColor4f(0.02f, 0.04f, 0.06f, 0.55f);
-	glBegin(GL_QUADS);
-	glVertex2f(24.0f, 24.0f);
-	glVertex2f(1120.0f, 24.0f);
-	glVertex2f(1120.0f, panelBottom);
-	glVertex2f(24.0f, panelBottom);
+	const float viewportRight =
+		(std::max)(
+			panelLeft + 640.0f,
+			static_cast<float>(m_window_w) -
+			24.0f
+			);
+
+	const float normalPanelRight =
+		(std::min)(
+			1120.0f,
+			viewportRight
+			);
+
+	// Expand the top panel across the screen only while the
+	// overlap-status column is required.
+	const float panelRight =
+		showOverlapStatus
+		? viewportRight
+		: normalPanelRight;
+
+	// ---------------------------------------------------------
+	// Determine the right-side overlap column.
+	// ---------------------------------------------------------
+	const float availableOverlapWidth =
+		panelRight -
+		760.0f;
+
+	const float overlapColumnWidth =
+		(std::min)(
+			520.0f,
+			(std::max)(
+				360.0f,
+				availableOverlapWidth
+				)
+			);
+
+	const float overlapDividerX =
+		panelRight -
+		overlapColumnWidth;
+
+	const float overlapTextX =
+		overlapDividerX +
+		24.0f;
+
+	glDisable(
+		GL_DEPTH_TEST
+	);
+
+	glDisable(
+		GL_TEXTURE_2D
+	);
+
+	glUseProgram(
+		0
+	);
+
+	glEnable(
+		GL_BLEND
+	);
+
+	glBlendFunc(
+		GL_SRC_ALPHA,
+		GL_ONE_MINUS_SRC_ALPHA
+	);
+
+	// =========================================================
+	// COMPLETE TOP RUNTIME PANEL
+	// =========================================================
+	glColor4f(
+		0.02f,
+		0.04f,
+		0.06f,
+		0.55f
+	);
+
+	glBegin(
+		GL_QUADS
+	);
+
+	glVertex2f(
+		panelLeft,
+		panelTop
+	);
+
+	glVertex2f(
+		panelRight,
+		panelTop
+	);
+
+	glVertex2f(
+		panelRight,
+		panelBottom
+	);
+
+	glVertex2f(
+		panelLeft,
+		panelBottom
+	);
+
 	glEnd();
 
-	glColor3f(0.85f, 0.95f, 1.0f);
+	// =========================================================
+	// OVERLAP STATUS COLUMN BACKGROUND
+	// =========================================================
+	if (showOverlapStatus) {
+
+		glColor4f(
+			0.01f,
+			0.02f,
+			0.04f,
+			0.30f
+		);
+
+		glBegin(
+			GL_QUADS
+		);
+
+		glVertex2f(
+			overlapDividerX,
+			panelTop
+		);
+
+		glVertex2f(
+			panelRight,
+			panelTop
+		);
+
+		glVertex2f(
+			panelRight,
+			panelBottom
+		);
+
+		glVertex2f(
+			overlapDividerX,
+			panelBottom
+		);
+
+		glEnd();
+
+		// Vertical divider.
+		glLineWidth(
+			1.0f
+		);
+
+		glColor4f(
+			0.55f,
+			0.72f,
+			0.82f,
+			0.52f
+		);
+
+		glBegin(
+			GL_LINES
+		);
+
+		glVertex2f(
+			overlapDividerX,
+			panelTop + 16.0f
+		);
+
+		glVertex2f(
+			overlapDividerX,
+			panelBottom - 16.0f
+		);
+
+		glEnd();
+	}
+
+	// =========================================================
+	// MAIN RUNTIME COLUMN
+	// =========================================================
+	glColor3f(
+		0.85f,
+		0.95f,
+		1.0f
+	);
+
 	char modeLine[256];
+
 	snprintf(
 		modeLine,
 		sizeof(modeLine),
@@ -2601,19 +2795,50 @@ void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 		arbiter.getSelectedWorkspaceDisplayName()
 	);
 
-	drawText2D(40.0f, 52.0f, modeLine, GLUT_BITMAP_HELVETICA_18);
+	drawText2D(
+		40.0f,
+		52.0f,
+		modeLine,
+		GLUT_BITMAP_HELVETICA_18
+	);
 
+	// =========================================================
+	// SINGLE_PARTICLE RUNTIME
+	// =========================================================
 	if (arbiter.isSingleParticleSelected()) {
+
+		glColor3f(
+			0.85f,
+			0.95f,
+			1.0f
+		);
+
 		char subLayerLine[256];
+
 		snprintf(
 			subLayerLine,
 			sizeof(subLayerLine),
 			"SINGLE_PARTICLE: %s",
 			arbiter.getSingleParticleSubLayerName()
 		);
-		drawText2D(40.0f, 82.0f, subLayerLine, GLUT_BITMAP_HELVETICA_18);
 
-		char primitiveLine[256];
+		drawText2D(
+			40.0f,
+			82.0f,
+			subLayerLine,
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		// -----------------------------------------------------
+		// Active object/transform information.
+		// -----------------------------------------------------
+		char primitiveLine[512];
+
+		snprintf(
+			primitiveLine,
+			sizeof(primitiveLine),
+			"OBJECT: SINGLE_PARTICLE"
+		);
 
 		if (arbiter.isVolumeRenderSubLayer()) {
 
@@ -2649,7 +2874,9 @@ void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 				snprintf(
 					primitiveLine,
 					sizeof(primitiveLine),
-					"OBJECT: %s | MODE: %s | SCALE %s %.2f/%.2f/%.2f/%.2f | ROT %s %.0f/%.0f/%.0f | Deg %d",
+					"OBJECT: %s | MODE: %s | "
+					"SCALE %s %.2f/%.2f/%.2f/%.2f | "
+					"ROT %s %.0f/%.0f/%.0f | Deg %d",
 					arbiter.getVolumePrimitiveName(),
 					arbiter.getObjectTransformModeName(),
 					arbiter.getObjectEditModeName(),
@@ -2666,9 +2893,18 @@ void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 			}
 		}
 
-		drawText2D(40.0f, 108.0f, primitiveLine, GLUT_BITMAP_HELVETICA_18);
+		drawText2D(
+			40.0f,
+			108.0f,
+			primitiveLine,
+			GLUT_BITMAP_HELVETICA_18
+		);
 
-		const char* helpLine = nullptr;
+		// -----------------------------------------------------
+		// Controls/help line.
+		// -----------------------------------------------------
+		const char* helpLine =
+			nullptr;
 
 		if (arbiter.isSingleParticleReferenceSubLayer()) {
 
@@ -2707,29 +2943,135 @@ void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 			else {
 
 				helpLine =
-					"TAB: Rendering setup panel    Q: Collision setup";
+					"TAB: Rendering setup panel    "
+					"Q: Collision setup";
 			}
 		}
 		else if (arbiter.isVolumeRenderSubLayer()) {
-			helpLine = "TAB: Toggle sub-layer panel    E: Return to reference    Q: Back    RMB: Menu";
+
+			helpLine =
+				"TAB: Toggle sub-layer panel    "
+				"E: Return to reference    "
+				"Q: Back    RMB: Menu";
 		}
 		else {
-			helpLine = "E: Advance sub-layer    Q: Back    RMB: Menu";
+
+			helpLine =
+				"E: Advance sub-layer    "
+				"Q: Back    RMB: Menu";
 		}
 
-		drawText2D(40.0f, 134.0f, helpLine, GLUT_BITMAP_HELVETICA_18);
+		drawText2D(
+			40.0f,
+			134.0f,
+			helpLine,
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		// =====================================================
+		// RIGHT-SIDE OVERLAP STATUS COLUMN
+		// =====================================================
+		if (showOverlapStatus) {
+
+			char overlapLine[160];
+
+			snprintf(
+				overlapLine,
+				sizeof(overlapLine),
+				"OVERLAP PREVIEW { %s }",
+				arbiter.getSPOverlapPreviewStatusName()
+			);
+
+			switch (
+				arbiter.getSPOverlapPreviewStatus()
+				) {
+
+			case TheArbiter::SP_OVERLAP_ACTIVE:
+
+				glColor3f(
+					0.28f,
+					1.00f,
+					0.42f
+				);
+
+				break;
+
+			case TheArbiter::SP_OVERLAP_OUTSIDE_CAGE:
+
+				glColor3f(
+					1.00f,
+					0.55f,
+					0.08f
+				);
+
+				break;
+
+			default:
+			case TheArbiter::SP_OVERLAP_POSITION_IN_NODE_2:
+
+				glColor3f(
+					0.56f,
+					0.64f,
+					0.68f
+				);
+
+				break;
+			}
+
+			drawText2D(
+				overlapTextX,
+				64.0f,
+				overlapLine,
+				GLUT_BITMAP_HELVETICA_18
+			);
+
+			glColor3f(
+				0.85f,
+				0.95f,
+				1.0f
+			);
+
+			drawText2D(
+				overlapTextX,
+				90.0f,
+				"REFERENCE FRAME { VOLUME_0 }",
+				GLUT_BITMAP_HELVETICA_18
+			);
+
+			char targetLine[160];
+
+			snprintf(
+				targetLine,
+				sizeof(targetLine),
+				"EDIT TARGET     { %s }",
+				arbiter.getVolumeEditTargetName()
+			);
+
+			drawText2D(
+				overlapTextX,
+				116.0f,
+				targetLine,
+				GLUT_BITMAP_HELVETICA_18
+			);
+		}
 
 		return;
 	}
+
+	// =========================================================
+	// PARTICLE_SIM RUNTIME
+	// =========================================================
 	const TheArbiter::ParticleSimDraftConfig& draft =
 		arbiter.getParticleSimDraftConfig();
 
 	const unsigned int activeCount =
-		draft.colorMode == TheArbiter::ParticleColorMode::Default
+		draft.colorMode ==
+		TheArbiter::ParticleColorMode::Default
 		? draft.defaultParticleCount
 		: arbiter.getParticleSimRGBTotal();
 
 	char gridLine[256];
+
 	snprintf(
 		gridLine,
 		sizeof(gridLine),
@@ -2745,17 +3087,22 @@ void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 	);
 
 	char colorLine[256];
-	if (draft.colorMode == TheArbiter::ParticleColorMode::RGB) {
+
+	if (draft.colorMode ==
+		TheArbiter::ParticleColorMode::RGB) {
+
 		snprintf(
 			colorLine,
 			sizeof(colorLine),
-			"COLOR MODE: RGB     RED %u | GREEN %u | BLUE %u",
+			"COLOR MODE: RGB     "
+			"RED %u | GREEN %u | BLUE %u",
 			draft.redCount,
 			draft.greenCount,
 			draft.blueCount
 		);
 	}
 	else {
+
 		snprintf(
 			colorLine,
 			sizeof(colorLine),
@@ -2771,16 +3118,21 @@ void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 	);
 
 	char statusLine[256];
+
 	snprintf(
 		statusLine,
 		sizeof(statusLine),
-		"ACTIVE: %u / %u     RESET: %s     STATUS: %s",
+		"ACTIVE: %u / %u     "
+		"RESET: %s     STATUS: %s",
 		activeCount,
 		TheArbiter::kParticleSimCapacity,
-		draft.resetMode == TheArbiter::ParticleSimResetMode::Random
+		draft.resetMode ==
+		TheArbiter::ParticleSimResetMode::Random
 		? "RANDOM"
 		: "DEFAULT",
-		paused ? "PAUSED" : "RUNNING"
+		paused
+		? "PAUSED"
+		: "RUNNING"
 	);
 
 	drawText2D(
@@ -2791,20 +3143,26 @@ void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 	);
 
 	char radiusLine[256];
-	if (draft.radiusMode == TheArbiter::ParticleRadiusMode::Random) {
+
+	if (draft.radiusMode ==
+		TheArbiter::ParticleRadiusMode::Random) {
+
 		snprintf(
 			radiusLine,
 			sizeof(radiusLine),
-			"RADIUS MODE: RANDOM     RADIUS RANGE: %.4f - %.4f",
+			"RADIUS MODE: RANDOM     "
+			"RADIUS RANGE: %.4f - %.4f",
 			draft.minimumRadius,
 			draft.maximumRadius
 		);
 	}
 	else {
+
 		snprintf(
 			radiusLine,
 			sizeof(radiusLine),
-			"RADIUS MODE: UNIFORM     RADIUS: %.4f",
+			"RADIUS MODE: UNIFORM     "
+			"RADIUS: %.4f",
 			draft.uniformRadius
 		);
 	}
@@ -2817,25 +3175,34 @@ void ViewPort::drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused) {
 	);
 
 	if (dynamicGridLayout) {
+
 		drawText2D(
 			40.0f,
 			186.0f,
-			"HASH DEBUG: RESERVED     VISUAL FALLBACK: FULL",
+			"HASH DEBUG: RESERVED     "
+			"VISUAL FALLBACK: FULL",
 			GLUT_BITMAP_HELVETICA_18
 		);
 	}
 
 	char controlsLine[256];
+
 	snprintf(
 		controlsLine,
 		sizeof(controlsLine),
-		"Q: Back one layer    SPACE: %s    ENTER: Step    RMB: Rotate    Wheel: Zoom",
-		paused ? "Resume" : "Pause"
+		"Q: Back one layer    "
+		"SPACE: %s    ENTER: Step    "
+		"RMB: Rotate    Wheel: Zoom",
+		paused
+		? "Resume"
+		: "Pause"
 	);
 
 	drawText2D(
 		40.0f,
-		dynamicGridLayout ? 212.0f : 186.0f,
+		dynamicGridLayout
+		? 212.0f
+		: 186.0f,
 		controlsLine,
 		GLUT_BITMAP_HELVETICA_18
 	);

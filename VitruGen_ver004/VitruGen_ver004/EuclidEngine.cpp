@@ -1642,6 +1642,9 @@ void EuclidEngine::destroyPixelBuffer() {
 void EuclidEngine::freeVolumeField() {
 	m_tesseract.releaseSPVolumeBoundarySensor();
 	m_arbiter.setVolumeBoundaryStatus(false, 0);
+	m_arbiter.setSPOverlapPreviewStatus(
+		TheArbiter::SP_OVERLAP_POSITION_IN_NODE_2
+	);
 
 	float* dPreviewVolume = m_tesseract.getVolume();
 	if (dPreviewVolume) {
@@ -2161,11 +2164,39 @@ void EuclidEngine::syncCameraBehaviorFromArbiter() {
 }
 
 void EuclidEngine::syncVolumeBoundaryStatusFromTesseract() {
-	const bool changed =
+	const bool boundaryChanged =
 		m_arbiter.setVolumeBoundaryStatus(m_tesseract.isSPVolumeBoundarySensorReady(),
 			m_tesseract.getSPVolumeBoundaryUnsafeCount());
 
-	if (changed && m_arbiter.isVolumeRenderSubLayer()) {
+	TheArbiter::SPOverlapPreviewStatus overlapStatus =
+		TheArbiter::SP_OVERLAP_POSITION_IN_NODE_2;
+
+	const bool overlapContext =
+		m_arbiter.isVolumeRenderSubLayer() &&
+		m_arbiter.hasInjectionVoxelSelected() &&
+		(m_arbiter.getVolumeAssemblyNode() ==
+			TheArbiter::VOLUME_NODE_EDIT_OBJECT ||
+			m_arbiter.getVolumeAssemblyNode() ==
+			TheArbiter::VOLUME_NODE_OFFSET_OBJECT);
+
+	if (overlapContext &&
+		m_tesseract.isSPOverlapPreviewSensorReady()) {
+
+		if (m_tesseract.getSPOverlapPreviewUnsafeCount() > 0) {
+			overlapStatus =
+				TheArbiter::SP_OVERLAP_OUTSIDE_CAGE;
+		}
+		else if (m_tesseract.getSPOverlapPreviewInsideSampleCount() > 0) {
+			overlapStatus =
+				TheArbiter::SP_OVERLAP_ACTIVE;
+		}
+	}
+
+	const bool overlapChanged =
+		m_arbiter.setSPOverlapPreviewStatus(overlapStatus);
+
+	if ((boundaryChanged || overlapChanged) &&
+		m_arbiter.isVolumeRenderSubLayer()) {
 		rebuildMenus();
 	}
 }

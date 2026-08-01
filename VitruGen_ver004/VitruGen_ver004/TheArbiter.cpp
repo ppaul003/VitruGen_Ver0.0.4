@@ -2266,6 +2266,17 @@ bool TheArbiter::setVolumeBoundaryStatus(
 	return changed;
 }
 
+bool TheArbiter::setSPOverlapPreviewStatus(
+	SPOverlapPreviewStatus status) {
+
+	const bool changed =
+		m_spOverlapPreviewStatus != status;
+
+	m_spOverlapPreviewStatus = status;
+
+	return changed;
+}
+
 bool TheArbiter::isSubLayerPanelItemSelectable(int item) const {
 	if (m_volumeAssemblyNode == VOLUME_NODE_OFFSET_OBJECT) {
 		if (hasInjectionVoxelSelected()) {
@@ -2827,6 +2838,19 @@ const char* TheArbiter::getVolumeEditTargetName() const {
 	default:
 	case VOLUME_EDIT_TARGET_VOXEL_0:
 		return "VOLUME_0";
+	}
+}
+const char* TheArbiter::getSPOverlapPreviewStatusName() const {
+	switch (m_spOverlapPreviewStatus) {
+	case SP_OVERLAP_ACTIVE:
+		return "ACTIVE";
+
+	case SP_OVERLAP_OUTSIDE_CAGE:
+		return "OUTSIDE CAGE";
+
+	default:
+	case SP_OVERLAP_POSITION_IN_NODE_2:
+		return "POSITION IN NODE_2";
 	}
 }
 const char* TheArbiter::getVolumeEditTargetObjectName() const {

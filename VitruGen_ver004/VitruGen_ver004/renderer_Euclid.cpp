@@ -2900,7 +2900,8 @@ void EuclidRenderer::displayVolumeInjectionEditTargetPreview(
     int injectionDx,
     int injectionDy,
     int injectionDz,
-    bool editingVoxel1) {
+    bool editingVoxel1,
+    bool sharedOverlapActive) {
     if (volumeDim <= 0) return;
 
     const bool hasInjectionVoxel =
@@ -2982,7 +2983,7 @@ void EuclidRenderer::displayVolumeInjectionEditTargetPreview(
     //     anchor cage shifts to the opposite side
     // ---------------------------------------------------------
     const vec3 previewOrigin =
-        editingVoxel1
+		editingVoxel1 && !sharedOverlapActive
         ? injectionCenter
         : anchorCenter;
 
@@ -3011,7 +3012,21 @@ void EuclidRenderer::displayVolumeInjectionEditTargetPreview(
     // Edit { VOXEL_1 }:
     //     show VOXEL_0 as neon-orange helper cage.
     // ---------------------------------------------------------
-    if (!editingVoxel1) {
+    if (sharedOverlapActive) {
+
+		// Shared contained preview owns one immutable reference frame:
+		// the VOLUME_0 cage at the anchor origin. No helper chamber or
+		// chamber-to-chamber rail is drawn in this mode.
+		drawVolumeBoundaryCage(
+			volumeDim,
+			majorEvery,
+			alphaScale,
+			orangeMajor,
+			orangeMinor,
+			orangeEdge
+		);
+	}
+	else if (!editingVoxel1) {
 
         glPushMatrix();
 
@@ -3044,6 +3059,7 @@ void EuclidRenderer::displayVolumeInjectionEditTargetPreview(
         );
     }
 
+	if (!sharedOverlapActive) {
     // ---------------------------------------------------------
     // Focus marker.
     //
@@ -3108,6 +3124,7 @@ void EuclidRenderer::displayVolumeInjectionEditTargetPreview(
     glVertex3f(anchorCenter.x, anchorCenter.y, anchorCenter.z);
     glVertex3f(injectionCenter.x, injectionCenter.y, injectionCenter.z);
     glEnd();
+	}
 
     // ---------------------------------------------------------
     // Restore normal rendering state.

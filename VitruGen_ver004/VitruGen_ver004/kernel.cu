@@ -458,6 +458,7 @@ extern "C" {
 	}
 	void classifyVolumeBoundaryLauncher(
 		const float* d_volume, uchar* d_boundaryMask, uint* d_unsafeCount,
+		uint* d_insideSampleCount,
 		int3 volSize, float isoValue, float safetyBand) {
 
 		if (!d_volume || !d_boundaryMask || !d_unsafeCount) return;
@@ -481,6 +482,9 @@ extern "C" {
 
 		cudaMemset(d_boundaryMask, 0, maskBytes);
 		cudaMemset(d_unsafeCount, 0, sizeof(uint));
+		if (d_insideSampleCount) {
+			cudaMemset(d_insideSampleCount, 0, sizeof(uint));
+		}
 
 		const dim3 blockSize(VOLUME_BOUNDARY_BLOCK_SIZE, 1, 1);
 		const dim3 gridSize(divUpInt(static_cast<int>(totalSlots),
@@ -493,6 +497,33 @@ extern "C" {
 		getLastCudaError(
 			"classifyVolumeBoundaryKernel failed"
 		);
+
+		if (d_insideSampleCount) {
+			const uint volumeSampleCount =
+				static_cast<uint>(volSize.x) *
+				static_cast<uint>(volSize.y) *
+				static_cast<uint>(volSize.z);
+
+			const dim3 volumeGridSize(
+				divUpInt(
+					static_cast<int>(volumeSampleCount),
+					VOLUME_BOUNDARY_BLOCK_SIZE
+				),
+				1,
+				1
+			);
+
+			countVolumeInsideSamplesKernel << <volumeGridSize, blockSize >> > (
+				d_volume,
+				d_insideSampleCount,
+				volSize,
+				isoValue
+			);
+
+			getLastCudaError(
+				"countVolumeInsideSamplesKernel failed"
+			);
+		}
 		// The kernel overwrites all valid and padding slots, but clearing
 		// here also guarantees deterministic safe state if the layout changes.
 	}

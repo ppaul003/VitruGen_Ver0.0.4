@@ -278,6 +278,14 @@ public:
 
 	bool isSPVolumeBoundarySensorReady() const { return m_volumeBoundarySensorReady; }
 	unsigned int getSPVolumeBoundaryUnsafeCount() const { return m_volumeBoundaryUnsafeCount; }
+	bool isSPOverlapPreviewSensorReady() const { return m_spOverlapPreviewSensorReady; }
+	bool isSPOverlapPreviewActive() const {
+		return m_spOverlapPreviewSensorReady &&
+			m_spOverlapPreviewUnsafeCount == 0 &&
+			m_spOverlapPreviewInsideSampleCount > 0;
+	}
+	unsigned int getSPOverlapPreviewUnsafeCount() const { return m_spOverlapPreviewUnsafeCount; }
+	unsigned int getSPOverlapPreviewInsideSampleCount() const { return m_spOverlapPreviewInsideSampleCount; }
 	void releaseSPVolumeBoundarySensor();
 
 private:
@@ -415,6 +423,19 @@ private:
 		float safetyBand
 	);
 
+	bool classifySPVolumeBoundaryForSource(
+		const float* dSourceVolume,
+		float isoValue,
+		float safetyBand,
+		bool& sensorReady,
+		unsigned int& unsafeCount,
+		unsigned int* insideSampleCount,
+		std::vector<unsigned char>* boundaryMaskCPU
+	);
+
+	void updateSPOverlapPreviewStatus(const TheArbiter& arbiter);
+	void clearSPOverlapPreviewStatus();
+
 	bool isSPVolumeBoundarySafe() const { return m_volumeBoundarySensorReady && m_volumeBoundaryUnsafeCount == 0; }
 	void markSPVolumeBoundarySafe();
 	//
@@ -476,10 +497,17 @@ private:
 	// Face order matches VolumeBoundaryFaceId in kernel.h.
 	unsigned char* m_dVolumeBoundaryMask = nullptr;
 	unsigned int* m_dVolumeBoundaryUnsafeCount = nullptr;
+	unsigned int* m_dVolumeInsideSampleCount = nullptr;
 	std::vector<unsigned char> m_volumeBoundaryMaskCPU;
 	unsigned int m_volumeBoundaryFaceStride = 0;
 	unsigned int m_volumeBoundaryUnsafeCount = 0;
 	bool m_volumeBoundarySensorReady = false;
+
+	// Shared overlap eligibility is intentionally independent from
+	// Node_2/Node_3 commit boundary safety.
+	unsigned int m_spOverlapPreviewUnsafeCount = 0;
+	unsigned int m_spOverlapPreviewInsideSampleCount = 0;
+	bool m_spOverlapPreviewSensorReady = false;
 };
 
 #endif

@@ -165,7 +165,8 @@ public:
 		int injectionDx = 0,
 		int injectionDy = 0,
 		int injectionDz = 0,
-		bool editingVoxel1 = false
+		bool editingVoxel1 = false,
+		bool sharedOverlapActive = false
 	);
 	void displayVolumeInjectionRailMarker(
 		float thetaRad,

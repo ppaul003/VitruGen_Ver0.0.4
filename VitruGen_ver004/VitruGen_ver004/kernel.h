@@ -188,6 +188,7 @@ extern "C" {
         const float* d_volume,
         uchar* d_boundaryMask,
         uint* d_unsafeCount,
+        uint* d_insideSampleCount,
         int3 volSize,
         float isoValue,
         float safetyBand

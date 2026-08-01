@@ -1429,7 +1429,15 @@ bool Tesseract::renderSPVolumeToPBO(
 
 	if (!m_dWorkingVolume) return false;
 	if (!m_cudaPboResourceSlot || !(*m_cudaPboResourceSlot)) return false;
-	const bool railTwoPassPreview =
+
+	// Overlap eligibility is classified from the complete rail-positioned
+	// VOLUME_1 brush regardless of FUSE/CUT or active edit target.
+	updateSPOverlapPreviewStatus(arbiter);
+
+	const bool sharedOverlapPreview =
+		isSPOverlapPreviewActive();
+
+	const bool legacyRailTwoPassPreview =
 		arbiter.hasInjectionVoxelSelected() &&
 		m_dBrushVolume != nullptr &&
 		arbiter.isVolumeRenderSubLayer() &&
@@ -1437,26 +1445,33 @@ bool Tesseract::renderSPVolumeToPBO(
 		TheArbiter::VOLUME_NODE_OFFSET_OBJECT &&
 		arbiter.isEditingInjectionVoxel0();
 
-	if (railTwoPassPreview) {
+	const bool twoPassPreview =
+		sharedOverlapPreview ||
+		legacyRailTwoPassPreview;
+
+	if (twoPassPreview) {
 		// pass source 0:
 		//		VOLUME_0 anchor field.
 		generateSPVolume0Field(arbiter, m_dWorkingVolume);
 
 		// pass source 1:
-		//		VOLUME_1 brush field, positioned by railT
-		generateSPVolume1BrushField(arbiter, m_dBrushVolume);
+		//		VOLUME_1 brush field, positioned by railT.
+		// updateSPOverlapPreviewStatus() generated and synchronized the
+		// exact brush immediately before this rendering block.
 
-		threadSync();
+		// Preserve the legacy Node_2 VOLUME_0 commit-boundary behavior.
+		// Shared overlap status remains separate and always classifies CUT.
+		if (legacyRailTwoPassPreview) {
+			if (arbiter.getVolumeInjectionMode() ==
+				TheArbiter::VOLUME_CUT) {
 
-		if (arbiter.getVolumeInjectionMode() ==
-			TheArbiter::VOLUME_CUT) {
-
-			markSPVolumeBoundarySafe();
-		}
-		else {
-			classifySPVolumeBoundaryForSource(
-				m_dBrushVolume, 0.0f, 0.0f
-			);
+				markSPVolumeBoundarySafe();
+			}
+			else {
+				classifySPVolumeBoundaryForSource(
+					m_dBrushVolume, 0.0f, 0.0f
+				);
+			}
 		}
 		m_volumeDirty = false;
 	}
@@ -1479,8 +1494,18 @@ bool Tesseract::renderSPVolumeToPBO(
 	float mainTintG = 0.0f;
 	float mainTintB = 0.0f;
 
+	if (sharedOverlapPreview &&
+		arbiter.isEditingInjectionVoxel1()) {
+
+		// VOLUME_0 remains visible as a dim fixed-frame reference while
+		// VOLUME_1 owns edits.
+		mainTintR = 0.34f;
+		mainTintG = 0.025f;
+		mainTintB = 0.015f;
+	}
+
 	const bool standaloneCutBrush =
-		!railTwoPassPreview &&
+		!twoPassPreview &&
 		arbiter.hasInjectionVoxelSelected() &&
 		arbiter.isEditingInjectionVoxel1() &&
 		arbiter.getVolumeInjectionMode() == TheArbiter::VOLUME_CUT;
@@ -1500,7 +1525,7 @@ bool Tesseract::renderSPVolumeToPBO(
 		mainTintR, mainTintG, mainTintB
 	);
 
-	if (railTwoPassPreview) {
+	if (twoPassPreview) {
 		float brushTintR = 1.0f;
 		float brushTintG = 0.0f;
 		float brushTintB = 0.0f;
@@ -1519,6 +1544,11 @@ bool Tesseract::renderSPVolumeToPBO(
 		//     FUSE -> red
 		//     CUT  -> blue
 		// -----------------------------------------------------
+		const float brushAlpha =
+			sharedOverlapPreview
+			? (arbiter.isEditingInjectionVoxel1() ? 0.92f : 0.30f)
+			: 0.78f;
+
 		kernelOverlayLauncher(
 			dOut, m_dBrushVolume,
 			viewportW, viewportH,
@@ -1526,7 +1556,7 @@ bool Tesseract::renderSPVolumeToPBO(
 			zs, thetaRad, phiRad,
 			threshold, sliceDistance,
 			brushTintR, brushTintG, brushTintB,
-			0.78f
+			brushAlpha
 		);
 	}
 
@@ -1889,6 +1919,9 @@ void Tesseract::renderSPVolumeInjectionEditTargetPreview(
 	//
 	// That keeps the edit-target cages tied directly to List [1].
 	// ---------------------------------------------------------
+	const bool sharedOverlapActive =
+		isSPOverlapPreviewActive();
+
 	const bool targetListSelected =
 		arbiter.isVolumeRenderSubLayer() &&
 		arbiter.getVolumeAssemblyNode() == TheArbiter::VOLUME_NODE_EDIT_OBJECT &&
@@ -1896,7 +1929,9 @@ void Tesseract::renderSPVolumeInjectionEditTargetPreview(
 		arbiter.isSubLayerPanelOpen() &&
 		arbiter.getActiveSubLayerPanelItem() == TheArbiter::INJECTION_EDIT_LIST_TARGET;
 
-	if (!targetListSelected) return;
+	// In shared mode, VOLUME_0 is the permanent Node_1 reference cage;
+	// it no longer depends on List [1] owning the cursor.
+	if (!sharedOverlapActive && !targetListSelected) return;
 	m_renderer->displayVolumeInjectionEditTargetPreview(
 		thetaRad,
 		phiRad,
@@ -1906,7 +1941,8 @@ void Tesseract::renderSPVolumeInjectionEditTargetPreview(
 		arbiter.getInjectionVoxelDX(),
 		arbiter.getInjectionVoxelDY(),
 		arbiter.getInjectionVoxelDZ(),
-		arbiter.isEditingInjectionVoxel1()
+		arbiter.isEditingInjectionVoxel1(),
+		sharedOverlapActive
 	);
 
 }
@@ -1922,6 +1958,23 @@ void Tesseract::renderSPVolumeOffsetGrid(
 	if (!arbiter.isVolumeRenderSubLayer() ||
 		arbiter.getVolumeAssemblyNode() !=
 		TheArbiter::VOLUME_NODE_OFFSET_OBJECT) {
+
+		return;
+	}
+
+	if (isSPOverlapPreviewActive()) {
+		m_renderer->displayVolumeInjectionEditTargetPreview(
+			thetaRad,
+			phiRad,
+			zs,
+			m_volumeSize.x,
+			0.55f,
+			arbiter.getInjectionVoxelDX(),
+			arbiter.getInjectionVoxelDY(),
+			arbiter.getInjectionVoxelDZ(),
+			arbiter.isEditingInjectionVoxel1(),
+			true
+		);
 
 		return;
 	}
@@ -1961,7 +2014,8 @@ void Tesseract::renderSPVolumeOffsetGrid(
 			arbiter.getInjectionVoxelDX(),
 			arbiter.getInjectionVoxelDY(),
 			arbiter.getInjectionVoxelDZ(),
-			arbiter.isEditingInjectionVoxel1()
+			arbiter.isEditingInjectionVoxel1(),
+			false
 		);
 
 		return;
@@ -2095,6 +2149,7 @@ bool Tesseract::initializeSPVolumeBoundarySensor() {
 	const bool buffersAlreadyValid =
 		m_dVolumeBoundaryMask != nullptr &&
 		m_dVolumeBoundaryUnsafeCount != nullptr &&
+		m_dVolumeInsideSampleCount != nullptr &&
 		m_volumeBoundaryFaceStride ==
 		requiredFaceStride &&
 		m_volumeBoundaryMaskCPU.size() ==
@@ -2111,9 +2166,14 @@ bool Tesseract::initializeSPVolumeBoundarySensor() {
 		reinterpret_cast<void**>(&m_dVolumeBoundaryUnsafeCount),
 		sizeof(unsigned int)
 	);
+	allocateArray(
+		reinterpret_cast<void**>(&m_dVolumeInsideSampleCount),
+		sizeof(unsigned int)
+	);
 
 	if (!m_dVolumeBoundaryMask ||
-		!m_dVolumeBoundaryUnsafeCount) {
+		!m_dVolumeBoundaryUnsafeCount ||
+		!m_dVolumeInsideSampleCount) {
 
 		releaseSPVolumeBoundarySensor();
 		return false;
@@ -2154,8 +2214,31 @@ bool Tesseract::classifySPVolumeBoundaryForSource(
 	float isoValue,
 	float safetyBand) {
 
-	m_volumeBoundarySensorReady = false;
-	m_volumeBoundaryUnsafeCount = 0;
+	return classifySPVolumeBoundaryForSource(
+		dSourceVolume,
+		isoValue,
+		safetyBand,
+		m_volumeBoundarySensorReady,
+		m_volumeBoundaryUnsafeCount,
+		nullptr,
+		&m_volumeBoundaryMaskCPU
+	);
+}
+//
+bool Tesseract::classifySPVolumeBoundaryForSource(
+	const float* dSourceVolume,
+	float isoValue,
+	float safetyBand,
+	bool& sensorReady,
+	unsigned int& unsafeCount,
+	unsigned int* insideSampleCount,
+	std::vector<unsigned char>* boundaryMaskCPU) {
+
+	sensorReady = false;
+	unsafeCount = 0;
+	if (insideSampleCount) {
+		*insideSampleCount = 0;
+	}
 
 	if (!dSourceVolume) return false;
 	if (!initializeSPVolumeBoundarySensor())
@@ -2164,14 +2247,25 @@ bool Tesseract::classifySPVolumeBoundaryForSource(
 	const size_t maskBytes =
 		getVolumeBoundaryMaskBytes(m_volumeSize);
 
-	if (maskBytes == 0 ||
-		m_volumeBoundaryMaskCPU.size() != maskBytes)
+	if (maskBytes == 0)
 		return false;
+
+	if (boundaryMaskCPU &&
+		boundaryMaskCPU->size() != maskBytes) {
+
+		boundaryMaskCPU->assign(
+			maskBytes,
+			static_cast<unsigned char>(0)
+		);
+	}
 
 	classifyVolumeBoundaryLauncher(
 		dSourceVolume,
 		m_dVolumeBoundaryMask,
 		m_dVolumeBoundaryUnsafeCount,
+		insideSampleCount
+		? m_dVolumeInsideSampleCount
+		: nullptr,
 		m_volumeSize,
 		isoValue,
 		safetyBand
@@ -2180,33 +2274,80 @@ bool Tesseract::classifySPVolumeBoundaryForSource(
 	threadSync();
 
 	copyArrayFromDevice(
-		&m_volumeBoundaryUnsafeCount,
+		&unsafeCount,
 		m_dVolumeBoundaryUnsafeCount,
 		nullptr,
 		static_cast<int>(sizeof(unsigned int))
 	);
 
-	if (m_volumeBoundaryUnsafeCount == 0) {
+	if (insideSampleCount) {
+		copyArrayFromDevice(
+			insideSampleCount,
+			m_dVolumeInsideSampleCount,
+			nullptr,
+			static_cast<int>(sizeof(unsigned int))
+		);
+	}
+
+	if (boundaryMaskCPU && unsafeCount == 0) {
 
 		std::fill(
-			m_volumeBoundaryMaskCPU.begin(),
-			m_volumeBoundaryMaskCPU.end(),
+			boundaryMaskCPU->begin(),
+			boundaryMaskCPU->end(),
 			static_cast<unsigned char>(0)
 		);
 	}
-	else {
+	else if (boundaryMaskCPU) {
 
 		copyArrayFromDevice(
-			m_volumeBoundaryMaskCPU.data(),
+			boundaryMaskCPU->data(),
 			m_dVolumeBoundaryMask,
 			nullptr,
 			static_cast<int>(maskBytes)
 		);
 	}
 
-	m_volumeBoundarySensorReady = true;
+	sensorReady = true;
 
 	return true;
+}
+//
+void Tesseract::updateSPOverlapPreviewStatus(
+	const TheArbiter& arbiter) {
+
+	clearSPOverlapPreviewStatus();
+
+	const bool overlapContext =
+		arbiter.isVolumeRenderSubLayer() &&
+		arbiter.hasInjectionVoxelSelected() &&
+		m_dBrushVolume != nullptr &&
+		(arbiter.getVolumeAssemblyNode() ==
+			TheArbiter::VOLUME_NODE_EDIT_OBJECT ||
+			arbiter.getVolumeAssemblyNode() ==
+			TheArbiter::VOLUME_NODE_OFFSET_OBJECT);
+
+	if (!overlapContext) return;
+
+	// Generate the complete authored VOLUME_1 state: resolved primitive,
+	// scale, committed basis, live rotation, rail depth, and local offset.
+	generateSPVolume1BrushField(arbiter, m_dBrushVolume);
+	threadSync();
+
+	classifySPVolumeBoundaryForSource(
+		m_dBrushVolume,
+		0.0f,
+		0.0f,
+		m_spOverlapPreviewSensorReady,
+		m_spOverlapPreviewUnsafeCount,
+		&m_spOverlapPreviewInsideSampleCount,
+		nullptr
+	);
+}
+//
+void Tesseract::clearSPOverlapPreviewStatus() {
+	m_spOverlapPreviewSensorReady = false;
+	m_spOverlapPreviewUnsafeCount = 0;
+	m_spOverlapPreviewInsideSampleCount = 0;
 }
 //
 void Tesseract::releaseSPVolumeBoundarySensor() {
@@ -2223,12 +2364,19 @@ void Tesseract::releaseSPVolumeBoundarySensor() {
 		m_dVolumeBoundaryUnsafeCount = nullptr;
 	}
 
+	if (m_dVolumeInsideSampleCount) {
+		freeArray(m_dVolumeInsideSampleCount);
+
+		m_dVolumeInsideSampleCount = nullptr;
+	}
+
 	m_volumeBoundaryMaskCPU.clear();
 	m_volumeBoundaryMaskCPU.shrink_to_fit();
 
 	m_volumeBoundaryFaceStride = 0;
 	m_volumeBoundaryUnsafeCount = 0;
 	m_volumeBoundarySensorReady = false;
+	clearSPOverlapPreviewStatus();
 }
 //
 void Tesseract::markSPVolumeBoundarySafe() {

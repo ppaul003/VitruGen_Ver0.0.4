@@ -420,6 +420,12 @@ public:
 		VOLUME_EDIT_TARGET_COUNT
 	};
 
+	enum SPOverlapPreviewStatus {
+		SP_OVERLAP_POSITION_IN_NODE_2 = 0,
+		SP_OVERLAP_OUTSIDE_CAGE,
+		SP_OVERLAP_ACTIVE
+	};
+
 	enum ApplyToBasePanelItem {
 		APPLY_LIST_COMMIT = 0,
 		APPLY_LIST_OFFSET_OBJECT,
@@ -626,9 +632,12 @@ public:
 	bool isParticleSimLayer2RunSelected() const;
 	bool isVolumeBoundarySensorReady() const { return m_volumeBoundarySensorReady; }
 	bool isVolumeBoundarySafe() const { return m_volumeBoundarySensorReady && m_volumeBoundaryUnsafeCount == 0; }
+	SPOverlapPreviewStatus getSPOverlapPreviewStatus() const { return m_spOverlapPreviewStatus; }
+	bool isSPOverlapPreviewActive() const { return m_spOverlapPreviewStatus == SP_OVERLAP_ACTIVE; }
 	bool isEditingInjectionVoxel0() const { return m_volumeEditTarget == VOLUME_EDIT_TARGET_VOXEL_0; }
 	bool isEditingInjectionVoxel1() const { return m_volumeEditTarget == VOLUME_EDIT_TARGET_VOXEL_1; }
 	bool setVolumeBoundaryStatus(bool sensorReady, unsigned int unsafeCount);
+	bool setSPOverlapPreviewStatus(SPOverlapPreviewStatus status);
 	bool isSingleParticleReferenceSubLayer() const { return isSimulationRunLayer() && isSingleParticleSelected() && m_singleParticleSubLayer == SP_SUB_LAYER_REFERENCE; }
 	bool isShapeEditSubLayer() const { return isSimulationRunLayer() && isSingleParticleSelected() && m_singleParticleSubLayer == SP_SUB_LAYER_SHAPE_EDIT; }
 	bool isVolumeRenderSubLayer() const { return isSimulationRunLayer() && isSingleParticleSelected() && m_singleParticleSubLayer == SP_SUB_LAYER_VOLUME_RENDER; }
@@ -699,6 +708,7 @@ public:
 	const char* getVolumeInjectionVoxelName() const;
 	const char* getVolumeInjectionModeName() const;
 	const char* getVolumeEditTargetName() const;
+	const char* getSPOverlapPreviewStatusName() const;
 	const char* getVolumeEditTargetObjectName() const;
 	const char* getOffsetVectorName() const;
 	const char* getOffsetIncrementName() const;
@@ -963,6 +973,8 @@ private:
 	// --- SUB-LAYER PANEL / BOUNDARY STATUS ---
 	bool m_subLayerPanelOpen = false;
 	bool m_volumeBoundarySensorReady = false;
+	SPOverlapPreviewStatus m_spOverlapPreviewStatus =
+		SP_OVERLAP_POSITION_IN_NODE_2;
 	int m_activeSubLayerPanelItem = 0;
 	unsigned int m_volumeBoundaryUnsafeCount = 0;
 };

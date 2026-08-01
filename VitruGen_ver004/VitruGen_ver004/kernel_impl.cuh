@@ -2353,6 +2353,34 @@ bool volumeBoundaryPairIsUnsafe(
 // -----------------------------------------------------------------------------
 // VOLUME BOUNDARY SENSOR KERNEL
 // -----------------------------------------------------------------------------
+
+__global__
+void countVolumeInsideSamplesKernel(
+	const float* d_volume,
+	uint* d_insideSampleCount,
+	int3 volSize,
+	float isoValue) {
+
+	const uint index =
+		blockIdx.x * blockDim.x + threadIdx.x;
+
+	const uint sampleCount =
+		static_cast<uint>(volSize.x) *
+		static_cast<uint>(volSize.y) *
+		static_cast<uint>(volSize.z);
+
+	if (index >= sampleCount) return;
+	if (*d_insideSampleCount != 0) return;
+
+	const float distance = d_volume[index];
+
+	if (isfinite(distance) && distance <= isoValue) {
+		// Overlap containment needs a presence bit, not a full voxel count.
+		// Avoid serializing every interior sample on one counter.
+		atomicExch(d_insideSampleCount, 1u);
+	}
+}
+
 //
 // One CUDA thread owns one visual boundary patch.
 //
