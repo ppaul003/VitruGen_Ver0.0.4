@@ -142,6 +142,19 @@ public:
 		bool showCollisionProxy = false,
 		bool showRenderCage = false
 	);
+	// Displays the currently loaded StaticParticleAsset inside the
+	// SINGLE_PARTICLE volumetric-editor coordinate frame.
+	//
+	// This is a mesh-backed BASE preview. It does not imply that a
+	// CUDA scalar field or editable SDF exists.
+	void displayParticleMeshVolumeWorkspace(
+		float thetaRad,
+		float phiRad,
+		float zs,
+		int volumeDim,
+		bool selected,
+		bool wireframe
+	);
 	void displayXYWorkplane(
 		int slice,
 		bool hoverValid,

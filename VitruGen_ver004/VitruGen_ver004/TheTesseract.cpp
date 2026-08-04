@@ -845,14 +845,25 @@ void Tesseract::renderSingleParticleWorkspace(const WorkspaceRenderContext& ctx)
 
 	if (loadedStaticMeshOnly) {
 
-		renderSingleParticleMCAD(
-			arbiter,
-			ctx.thetaRad,
-			ctx.phiRad,
-			ctx.particleWorkspaceZs
-		);
+		const bool wireframe =
+			arbiter.getSPDisplayMode() ==
+			TheArbiter::SPDisplayMode::Wireframe;
 
-		// Keep the object's local/world orientation guides available.
+		if (m_renderer) {
+
+			m_renderer->displayParticleMeshVolumeWorkspace(
+				ctx.thetaRad,
+				ctx.phiRad,
+				ctx.volumeRenderZs,
+				m_volumeSize.x,
+				true,
+				wireframe
+			);
+		}
+
+		// Keep the same world/local axes used by procedural volume
+		// editing so BASE maintains the normal SP_MCAD orientation
+		// language.
 		renderSPVolumeOrientationAxes(
 			arbiter,
 			ctx.thetaRad,
@@ -861,6 +872,7 @@ void Tesseract::renderSingleParticleWorkspace(const WorkspaceRenderContext& ctx)
 
 		return;
 	}
+
 	if (arbiter.isVolumeRenderSubLayer()) {
 		renderSPVolumeToPBO(
 			arbiter,

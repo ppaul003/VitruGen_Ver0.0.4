@@ -2133,6 +2133,170 @@ void EuclidRenderer::displayParticleWorkspace(
     }
     glUseProgram(0);
 }
+void EuclidRenderer::displayParticleMeshVolumeWorkspace(
+    float thetaRad,
+    float phiRad,
+    float zs,
+    int volumeDim,
+    bool selected,
+    bool wireframe) {
+
+    if (!m_psystem ||
+        !hasParticleMeshOBJ() ||
+        volumeDim <= 0) {
+
+        return;
+    }
+
+    GLint previousMatrixMode = GL_MODELVIEW;
+    glGetIntegerv(
+        GL_MATRIX_MODE,
+        &previousMatrixMode
+    );
+
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+
+    glViewport(
+        0,
+        0,
+        m_window_w,
+        m_window_h
+    );
+
+    // ---------------------------------------------------------
+    // Use the same projection family as the volume overlays and
+    // Marching-Cubes workspace.
+    // ---------------------------------------------------------
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+
+    const float aspect =
+        m_window_h > 0
+        ? static_cast<float>(m_window_w) /
+        static_cast<float>(m_window_h)
+        : 1.0f;
+
+    gluPerspective(
+        m_fov,
+        aspect,
+        1.0f,
+        2000.0f
+    );
+
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    // Match the volumetric editor and its orientation guides.
+    glTranslatef(
+        0.0f,
+        0.0f,
+        -zs
+    );
+
+    glRotatef(
+        phiRad *
+        180.0f /
+        static_cast<float>(M_PI),
+        1.0f,
+        0.0f,
+        0.0f
+    );
+
+    glRotatef(
+        thetaRad *
+        180.0f /
+        static_cast<float>(M_PI),
+        0.0f,
+        1.0f,
+        0.0f
+    );
+
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
+    glDisable(GL_CULL_FACE);
+
+    // ---------------------------------------------------------
+    // Construct a temporary preview anchor in volume units.
+    //
+    // The normal particle workspace uses a tiny particle radius.
+    // The volume workspace instead spans approximately:
+    //
+    //     -volumeDim / 2 ... +volumeDim / 2
+    //
+    // A radius of 0.46 * volumeDim keeps the mesh slightly inside
+    // the permanent volume cage.
+    // ---------------------------------------------------------
+    ParticleProxy3D previewParticle =
+        m_psystem->getActiveParticle();
+
+    previewParticle.position.x = 0.0f;
+    previewParticle.position.y = 0.0f;
+    previewParticle.position.z = 0.0f;
+
+    previewParticle.radius =
+        0.46f *
+        static_cast<float>(volumeDim);
+
+    const float4 meshColor =
+        m_psystem->getUniformParticleColor();
+
+    // FILL is intentionally true here so the loaded BASE is
+    // normalized into the volumetric authoring cage.
+    drawParticleMeshOBJ(
+        previewParticle,
+        meshColor,
+        selected,
+        true,
+        wireframe
+    );
+
+    // ---------------------------------------------------------
+    // Draw the fixed volumetric domain cage around the mesh.
+    // ---------------------------------------------------------
+    glUseProgram(0);
+    glDisable(GL_TEXTURE_2D);
+    glDisable(GL_LIGHTING);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(
+        GL_SRC_ALPHA,
+        GL_ONE_MINUS_SRC_ALPHA
+    );
+
+    glDepthMask(GL_FALSE);
+
+    const int majorEvery =
+        std::max(
+            1,
+            volumeDim / 16
+        );
+
+    drawVolumeBoundaryCage(
+        volumeDim,
+        majorEvery,
+        1.0f
+    );
+
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+
+    // ---------------------------------------------------------
+    // Restore matrices and OpenGL state.
+    // ---------------------------------------------------------
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+
+    glMatrixMode(
+        static_cast<GLenum>(previousMatrixMode)
+    );
+
+    glPopAttrib();
+}
 void EuclidRenderer::displayXYWorkplane(
     int slice,
     bool hoverValid,
