@@ -3,6 +3,8 @@
 
 #include "MeshGeometry.h"
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -121,7 +123,39 @@ struct SourceProvenance {
 
 struct VolumetricSourceMetadata {
 	bool available = false;
+
+	// Portable path relative to the VSPA bundle root.
+	//
+	// Example:
+	//     volume/base_volume.f32
 	std::string file;
+
+	// Sprint A0 supports one canonical native format:
+	//
+	//     FLOAT32_SDF
+	//
+	// Each sample is one IEEE-754 32-bit float.
+	std::string format = "FLOAT32_SDF";
+
+	// X, Y, Z scalar-field dimensions.
+	std::array<std::uint32_t, 3> dimensions{
+		{ 0u, 0u, 0u }
+	};
+
+	float isoValue = 0.0f;
+
+	// CPU-side payload used during save/load.
+	//
+	// The VSPA JSON does not serialize this vector. It is written
+	// separately into file as raw FLOAT32_SDF data.
+	std::vector<float> samples;
+
+	std::size_t expectedSampleCount() const {
+		return
+			static_cast<std::size_t>(dimensions[0]) *
+			static_cast<std::size_t>(dimensions[1]) *
+			static_cast<std::size_t>(dimensions[2]);
+	}
 };
 
 struct StaticParticleAsset {

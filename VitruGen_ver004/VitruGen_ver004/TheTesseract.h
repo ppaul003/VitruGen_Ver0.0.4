@@ -224,6 +224,7 @@ public:
 	bool hasBrushVolume() const { return m_dBrushVolume != nullptr; }
 	bool hasMirrorBrushVolume() const { return m_dMirrorBrushVolume != nullptr; }
 	bool isVolumeDirty() const { return m_volumeDirty; }
+	bool hasCommittedGeometry() const { return m_hasCommittedGeometry; }
 
 	float* getVolume() const { return m_dWorkingVolume; }
 	float* getCommittedVolume() const { return m_dBaseVolume; }
@@ -266,6 +267,12 @@ public:
 	}
 
 	void copyCommittedVolumeToPreview();
+
+	// Copy the current editable CUDA field into CPU memory for VSPA save.
+	bool exportWorkingVolumeToHost(std::vector<float>& output) const;
+
+	// Restore a native VSPA scalar field into both BASE and preview buffers.
+	bool restoreCommittedVolumeFromHost(const std::vector<float>& input, const int3& sourceSize);
 
 	void markVolumeDirty() {
 		m_volumeDirty = true;

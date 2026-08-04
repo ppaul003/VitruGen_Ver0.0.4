@@ -48,6 +48,181 @@ bool writeReport(const fs::path& path, const StaticParticleAsset& asset, const s
 	return output.good();
 }
 
+bool writeFloat32Volume(
+	const fs::path& path,
+	const VolumetricSourceMetadata& volume,
+	std::string* error) {
+
+	if (!volume.available) {
+		setError(
+			error,
+			"Cannot write an unavailable volumetric source."
+		);
+		return false;
+	}
+
+	const std::size_t expectedSamples =
+		volume.expectedSampleCount();
+
+	if (expectedSamples == 0u) {
+		setError(
+			error,
+			"Volumetric source dimensions are invalid."
+		);
+		return false;
+	}
+
+	if (volume.samples.size() != expectedSamples) {
+		setError(
+			error,
+			"Volumetric source sample count does not match dimensions."
+		);
+		return false;
+	}
+
+	std::ofstream output(
+		path,
+		std::ios::binary |
+		std::ios::trunc
+	);
+
+	if (!output) {
+		setError(
+			error,
+			"Could not open volume file for writing: " +
+			path.string()
+		);
+		return false;
+	}
+
+	const std::size_t byteCount =
+		volume.samples.size() *
+		sizeof(float);
+
+	output.write(
+		reinterpret_cast<const char*>(
+			volume.samples.data()
+			),
+		static_cast<std::streamsize>(
+			byteCount
+			)
+	);
+
+	if (!output.good()) {
+		setError(
+			error,
+			"Volume file write failed: " +
+			path.string()
+		);
+		return false;
+	}
+
+	return true;
+}
+
+bool readFloat32Volume(
+	const fs::path& path,
+	VolumetricSourceMetadata& volume,
+	std::string* error) {
+
+	if (lowerText(volume.format) != "float32_sdf") {
+		setError(
+			error,
+			"Unsupported volume format: " +
+			volume.format
+		);
+		return false;
+	}
+
+	const std::size_t expectedSamples =
+		volume.expectedSampleCount();
+
+	if (expectedSamples == 0u) {
+		setError(
+			error,
+			"Volume dimensions are missing or invalid."
+		);
+		return false;
+	}
+
+	const std::size_t expectedBytes =
+		expectedSamples *
+		sizeof(float);
+
+	std::ifstream input(
+		path,
+		std::ios::binary |
+		std::ios::ate
+	);
+
+	if (!input) {
+		setError(
+			error,
+			"Could not open volume file: " +
+			path.string()
+		);
+		return false;
+	}
+
+	const std::streamoff fileBytes =
+		input.tellg();
+
+	if (fileBytes !=
+		static_cast<std::streamoff>(
+			expectedBytes
+			)) {
+
+		setError(
+			error,
+			"Volume file byte count does not match "
+			"the declared dimensions."
+		);
+		return false;
+	}
+
+	input.seekg(
+		0,
+		std::ios::beg
+	);
+
+	volume.samples.assign(
+		expectedSamples,
+		0.0f
+	);
+
+	input.read(
+		reinterpret_cast<char*>(
+			volume.samples.data()
+			),
+		static_cast<std::streamsize>(
+			expectedBytes
+			)
+	);
+
+	if (!input.good()) {
+		setError(
+			error,
+			"Volume file read failed: " +
+			path.string()
+		);
+		volume.samples.clear();
+		return false;
+	}
+
+	for (float sample : volume.samples) {
+		if (!std::isfinite(sample)) {
+			setError(
+				error,
+				"Volume file contains a non-finite sample."
+			);
+			volume.samples.clear();
+			return false;
+		}
+	}
+
+	return true;
+}
+
 const char* alphaName(AlphaMode mode) { return mode == AlphaMode::Mask ? "MASK" : mode == AlphaMode::Blend ? "BLEND" : "OPAQUE"; }
 
 void mergeManifestMetadata(const StaticParticleAsset& manifest, StaticParticleAsset& imported) {
@@ -161,7 +336,53 @@ bool loadStaticParticleBundle(const fs::path& manifestPath, StaticParticleAsset&
 	}
 	report.phase = "loading OBJ/MTL"; StaticParticleAsset imported; ObjImportReport importReport;
 	if (!importObjStaticParticle(objPath, report.assetRoot, imported, importReport)) { report.errors = importReport.errors; report.warnings.insert(report.warnings.end(), importReport.warnings.begin(), importReport.warnings.end()); return false; }
-	report.warnings.insert(report.warnings.end(), importReport.warnings.begin(), importReport.warnings.end()); mergeManifestMetadata(manifestAsset, imported);
+	report.warnings.insert(
+		report.warnings.end(),
+		importReport.warnings.begin(),
+		importReport.warnings.end()
+	);
+
+	mergeManifestMetadata(
+		manifestAsset,
+		imported
+	);
+
+	// ---------------------------------------------------------
+	// Load the optional native SP_MCAD scalar field.
+	//
+	// This is CPU-only bundle I/O. Upload to CUDA occurs later,
+	// on the EuclidEngine render/main thread.
+	// ---------------------------------------------------------
+	if (imported.volumetricSource.available) {
+
+		report.phase =
+			"loading volumetric source";
+
+		const fs::path volumePath =
+			report.assetRoot /
+			fs::path(
+				imported.volumetricSource.file
+			);
+
+		std::string volumeError;
+
+		if (!readFloat32Volume(
+			volumePath,
+			imported.volumetricSource,
+			&volumeError)) {
+
+			report.errors.push_back(
+				volumeError
+			);
+
+			return false;
+		}
+
+		report.filesWritten.push_back(
+			volumePath
+		);
+	}
+
 	// Preserve unassigned local compatibility resources as forward-compatible
 	// metadata. This keeps alpha/camo/control masks and cubemap faces in VSPA
 	// without pretending the A0 renderer supports those roles.
@@ -231,7 +452,42 @@ bool saveStaticParticleBundle(const StaticParticleAsset& source, const fs::path&
 	report.assetRoot = destination; report.manifestPath = destination / (safeName + ".vspa.json");
 	std::error_code error; fs::create_directories(staticRoot, error);
 	if (error || !safeGeneratedPath(temporary, staticRoot)) { report.errors.push_back("Output path is unsafe or unavailable."); return false; }
-	fs::remove_all(temporary, error); error.clear(); fs::create_directories(temporary / "geometry", error); fs::create_directories(temporary / "materials", error); fs::create_directories(temporary / "textures", error); fs::create_directories(temporary / "preview", error); fs::create_directories(temporary / "reports", error);
+	fs::remove_all(
+		temporary,
+		error
+	);
+
+	error.clear();
+
+	fs::create_directories(
+		temporary / "geometry",
+		error
+	);
+
+	fs::create_directories(
+		temporary / "materials",
+		error
+	);
+
+	fs::create_directories(
+		temporary / "textures",
+		error
+	);
+
+	fs::create_directories(
+		temporary / "volume",
+		error
+	);
+
+	fs::create_directories(
+		temporary / "preview",
+		error
+	);
+
+	fs::create_directories(
+		temporary / "reports",
+		error
+	);
 	if (error) { report.errors.push_back("Temporary bundle directory could not be created."); return false; }
 	if (asset.mesh.uvs.size() != asset.mesh.positions.size()) { report.phase = "generating UVs"; const MeshUVGenerationReport uv = generateBoxAtlasUVs(asset.mesh); if (!uv.success) { report.errors.insert(report.errors.end(), uv.errors.begin(), uv.errors.end()); fs::remove_all(temporary, error); return false; } }
 	asset.refreshDerivedData();
@@ -242,7 +498,66 @@ bool saveStaticParticleBundle(const StaticParticleAsset& source, const fs::path&
 	}
 	const std::string guideId = "tex_" + safeName + "_uv_guide";
 	if (!asset.findTexture(guideId)) { TextureResource guide; guide.id = guideId; guide.relativePath = "textures/" + safeName + "_uv_guide.png"; guide.usage = TextureUsage::Custom; guide.colorSpace = TextureColorSpace::SRGB; guide.renderingDeferred = true; asset.textures.push_back(std::move(guide)); }
-	asset.source.geometryFile = "geometry/" + safeName + ".obj"; asset.source.materialFile = "materials/" + safeName + ".mtl"; asset.source.assetRoot = destination.string(); asset.source.manifestFile = safeName + ".vspa.json";
+	asset.source.geometryFile =
+		"geometry/" +
+		safeName +
+		".obj";
+
+	asset.source.materialFile =
+		"materials/" +
+		safeName +
+		".mtl";
+
+	asset.source.assetRoot =
+		destination.string();
+
+	asset.source.manifestFile =
+		safeName +
+		".vspa.json";
+
+	// ---------------------------------------------------------
+	// Normalize native volume output.
+	// ---------------------------------------------------------
+	if (asset.volumetricSource.available) {
+
+		asset.volumetricSource.file =
+			"volume/base_volume.f32";
+
+		asset.volumetricSource.format =
+			"FLOAT32_SDF";
+
+		const std::size_t expectedSamples =
+			asset.volumetricSource.expectedSampleCount();
+
+		if (expectedSamples == 0u) {
+
+			report.errors.push_back(
+				"Native volume dimensions are invalid."
+			);
+
+			fs::remove_all(
+				temporary,
+				error
+			);
+
+			return false;
+		}
+
+		if (asset.volumetricSource.samples.size() !=
+			expectedSamples) {
+
+			report.errors.push_back(
+				"Native volume sample count does not match dimensions."
+			);
+
+			fs::remove_all(
+				temporary,
+				error
+			);
+
+			return false;
+		}
+	}
 	std::vector<std::string> validation; if (!asset.validate(&validation)) { report.errors.insert(report.errors.end(), validation.begin(), validation.end()); fs::remove_all(temporary, error); return false; }
 	const fs::path obj = temporary / asset.source.geometryFile; const fs::path mtl = temporary / asset.source.materialFile; std::string writeError;
 	report.phase = "writing OBJ"; if (!writeStaticParticleObj(asset, obj, "../materials/" + safeName + ".mtl", &writeError)) { report.errors.push_back(writeError); fs::remove_all(temporary, error); return false; } report.filesWritten.push_back(obj);
@@ -268,8 +583,77 @@ bool saveStaticParticleBundle(const StaticParticleAsset& source, const fs::path&
 		}
 		report.filesWritten.push_back(destinationTexture);
 	}
-	const fs::path guidePath = temporary / "textures" / (safeName + "_uv_guide.png"); if (!writeUvGuidePng(asset.mesh, guidePath, 1024u, &writeError)) { report.errors.push_back(writeError); fs::remove_all(temporary, error); return false; } report.filesWritten.push_back(guidePath);
-	report.phase = "writing VSPA"; VspaSaveReport manifestReport; const fs::path tempManifest = temporary / (safeName + ".vspa.json"); if (!writeVspaManifest(tempManifest, asset, manifestReport)) { report.errors = manifestReport.errors; fs::remove_all(temporary, error); return false; } report.filesWritten.push_back(tempManifest);
+
+	const fs::path guidePath =
+		temporary /
+		"textures" /
+		(safeName + "_uv_guide.png");
+
+	if (!writeUvGuidePng(
+		asset.mesh,
+		guidePath,
+		1024u,
+		&writeError)) {
+
+		report.errors.push_back(
+			writeError
+		);
+
+		fs::remove_all(
+			temporary,
+			error
+		);
+
+		return false;
+	}
+
+	report.filesWritten.push_back(
+		guidePath
+	);
+
+	// ---------------------------------------------------------
+	// Write the native scalar field before the manifest.
+	//
+	// Temporary-bundle validation will immediately read this file
+	// back and verify its dimensions and byte count.
+	// ---------------------------------------------------------
+	if (asset.volumetricSource.available) {
+
+		report.phase =
+			"writing native volume";
+
+		const fs::path volumePath =
+			temporary /
+			fs::path(
+				asset.volumetricSource.file
+			);
+
+		if (!writeFloat32Volume(
+			volumePath,
+			asset.volumetricSource,
+			&writeError)) {
+
+			report.errors.push_back(
+				writeError
+			);
+
+			fs::remove_all(
+				temporary,
+				error
+			);
+
+			return false;
+		}
+
+		report.filesWritten.push_back(
+			volumePath
+		);
+	}
+
+	report.phase =
+		"writing VSPA";
+	
+	VspaSaveReport manifestReport; const fs::path tempManifest = temporary / (safeName + ".vspa.json"); if (!writeVspaManifest(tempManifest, asset, manifestReport)) { report.errors = manifestReport.errors; fs::remove_all(temporary, error); return false; } report.filesWritten.push_back(tempManifest);
 	const fs::path saveReport = temporary / "reports" / "save_report.txt"; if (!writeReport(saveReport, asset, report.warnings)) { report.errors.push_back("Save report could not be written."); fs::remove_all(temporary, error); return false; } report.filesWritten.push_back(saveReport);
 	report.phase = "validating bundle"; StaticParticleAsset validated; StaticAssetOperationReport validationReport; if (!loadStaticParticleBundle(tempManifest, validated, validationReport, nullptr, {})) { report.errors.push_back("Temporary bundle validation failed."); report.errors.insert(report.errors.end(), validationReport.errors.begin(), validationReport.errors.end()); fs::remove_all(temporary, error); return false; }
 	if (!workspaceObj.empty()) { fs::create_directories(workspaceObj.parent_path(), error); const fs::path workspaceMtl = workspaceObj.parent_path() / (workspaceObj.stem().string() + ".mtl"); if (!writeStaticParticleMtl(validated, workspaceMtl, &writeError) || !writeStaticParticleObj(validated, workspaceObj, workspaceMtl.filename().generic_string(), &writeError)) { report.errors.push_back("p0.obj refresh failed: " + writeError); fs::remove_all(temporary, error); return false; } report.filesWritten.push_back(workspaceObj); }

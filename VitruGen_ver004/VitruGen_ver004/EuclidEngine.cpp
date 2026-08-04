@@ -6,6 +6,7 @@
 #include <Windows.h>
 #endif
 
+#include <vector>
 #include <cstdio>
 #include <chrono>
 #include <fstream>
@@ -2353,26 +2354,140 @@ void EuclidEngine::syncVolumeBoundaryStatusFromTesseract() {
 // =============================================================================
 bool EuclidEngine::makeCurrentStaticParticleAsset(
 	vitru::StaticParticleAsset& output) const {
-	if (m_arbiter.isMarchingCubesSubLayer() && m_marchingCubes &&
+
+	auto attachCurrentNativeVolume =
+		[this](
+			vitru::StaticParticleAsset& asset
+			) -> bool {
+
+				std::vector<float> samples;
+
+				if (!m_tesseract.exportWorkingVolumeToHost(
+					samples)) {
+
+					return false;
+				}
+
+				const int3& dimensions =
+					m_tesseract.getVolumeSize();
+
+				asset.volumetricSource.available =
+					true;
+
+				asset.volumetricSource.file =
+					"volume/base_volume.f32";
+
+				asset.volumetricSource.format =
+					"FLOAT32_SDF";
+
+				asset.volumetricSource.dimensions[0] =
+					static_cast<std::uint32_t>(
+						dimensions.x
+						);
+
+				asset.volumetricSource.dimensions[1] =
+					static_cast<std::uint32_t>(
+						dimensions.y
+						);
+
+				asset.volumetricSource.dimensions[2] =
+					static_cast<std::uint32_t>(
+						dimensions.z
+						);
+
+				asset.volumetricSource.isoValue =
+					0.0f;
+
+				asset.volumetricSource.samples =
+					std::move(samples);
+
+				return true;
+	};
+
+	// ---------------------------------------------------------
+	// Native SP_MCAD save from Marching Cubes.
+	//
+	// The canonical mesh and m_dWorkingVolume represent the same
+	// currently previewed object.
+	// ---------------------------------------------------------
+	if (m_arbiter.isMarchingCubesSubLayer() &&
+		m_marchingCubes &&
 		m_marchingCubes->hasTriangleData() &&
 		!m_marchingCubes->getCanonicalMesh().empty()) {
-		output = vitru::StaticParticleAsset{};
-		output.name = "Static Particle";
-		output.mesh = m_marchingCubes->getCanonicalMesh();
+
+		output =
+			vitru::StaticParticleAsset{};
+
+		output.name =
+			"Static Particle";
+
+		output.mesh =
+			m_marchingCubes->getCanonicalMesh();
+
 		output.materials.emplace_back();
-		output.source.kind = "NATIVE_SP_MCAD";
-		output.anchor.particleIndex = 0u;
-		output.anchor.pivotMode = vitru::ParticlePivotMode::GroundCenter;
-		output.anchor.fitMode = vitru::ParticleFitMode::CollisionSafe;
-		output.collision.shape = vitru::CollisionProxy::Shape::Sphere;
-		output.collision.radius = m_arbiter.getParticleRadius();
+
+		output.source.kind =
+			"NATIVE_SP_MCAD";
+
+		output.anchor.particleIndex =
+			0u;
+
+		output.anchor.pivotMode =
+			vitru::ParticlePivotMode::GroundCenter;
+
+		output.anchor.fitMode =
+			vitru::ParticleFitMode::CollisionSafe;
+
+		output.collision.shape =
+			vitru::CollisionProxy::Shape::Sphere;
+
+		output.collision.radius =
+			m_arbiter.getParticleRadius();
+
 		output.refreshDerivedData();
+
+		if (!attachCurrentNativeVolume(
+			output)) {
+
+			printf(
+				"[EuclidEngine] Static asset save failed: "
+				"native scalar field could not be captured.\n"
+			);
+
+			return false;
+		}
+
 		return true;
 	}
+
+	// ---------------------------------------------------------
+	// Existing active StaticParticleAsset.
+	// ---------------------------------------------------------
 	const vitru::StaticParticleAsset* active =
 		m_assetRepository.activeStaticParticle();
-	if (!active) return false;
-	output = *active;
+
+	if (!active) {
+		return false;
+	}
+
+	output =
+		*active;
+
+	// Refresh the persisted field after native-volume editing.
+	if (m_tesseract.hasCommittedGeometry()) {
+
+		if (!attachCurrentNativeVolume(
+			output)) {
+
+			printf(
+				"[EuclidEngine] Static asset save failed: "
+				"active native scalar field could not be captured.\n"
+			);
+
+			return false;
+		}
+	}
+
 	return true;
 }
 
@@ -2538,12 +2653,59 @@ void EuclidEngine::advanceStaticParticleAssetJob() {
 		return;
 	}
 
-	// Register the loaded asset as the current BASE.
-	//
-	// chest_attempt0 has no saved scalar field, so this becomes a
-	// mesh-backed BASE rather than a procedural volume-backed BASE.
+	// ---------------------------------------------------------
+// Restore the optional native scalar field on the main thread.
+//
+// Bundle parsing and binary file reading happened in the async
+// worker. CUDA upload happens here, where the application CUDA/GL
+// context is active.
+// ---------------------------------------------------------
+	bool editableVolumeRestored = false;
+
+	if (active->volumetricSource.available) {
+
+		const int3 sourceDimensions =
+			make_int3(
+				static_cast<int>(
+					active->volumetricSource.dimensions[0]
+					),
+				static_cast<int>(
+					active->volumetricSource.dimensions[1]
+					),
+				static_cast<int>(
+					active->volumetricSource.dimensions[2]
+					)
+			);
+
+		if (!m_tesseract.restoreCommittedVolumeFromHost(
+			active->volumetricSource.samples,
+			sourceDimensions)) {
+
+			m_staticAssetPanel.mode =
+				ViewPort::ObjExportPanelMode::FAILED;
+
+			m_staticAssetPanel.statusText =
+				"Native volume GPU restore failed.";
+
+			m_staticAssetPanel.logLines.push_back(
+				"[ERROR] FLOAT32_SDF could not be restored "
+				"into the SP_MCAD CUDA volume."
+			);
+
+			return;
+		}
+
+		editableVolumeRestored = true;
+
+		m_staticAssetPanel.logLines.push_back(
+			"[VSPA] native FLOAT32_SDF volume restored"
+		);
+	}
+
+	// A volume-backed load enters the normal CUDA volume path.
+	// A mesh-only load retains the mesh-backed BASE path.
 	m_arbiter.activateLoadedStaticParticleBase(
-		active->volumetricSource.available
+		editableVolumeRestored
 	);
 
 	m_arbiter.setParticleRenderMode(
@@ -2554,7 +2716,10 @@ void EuclidEngine::advanceStaticParticleAssetJob() {
 
 	m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::COMPLETE;
 	m_staticAssetPanel.progressPercent = 100;
-	m_staticAssetPanel.statusText = "geometry, materials, textures and p0 ready";
+	m_staticAssetPanel.statusText =
+		editableVolumeRestored
+		? "geometry, materials, textures, p0 and native volume ready"
+		: "geometry, materials, textures and p0 ready";
 	m_staticAssetPanel.logLines.push_back("[VSPA] active repository and p0.obj refreshed");
 	m_staticAssetPanel.logLines.push_back("[EuclidRenderer] textured material ranges uploaded");
 	rebuildMenus();

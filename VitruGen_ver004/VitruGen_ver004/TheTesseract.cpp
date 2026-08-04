@@ -1068,6 +1068,210 @@ size_t Tesseract::getVolumeBytes() const {
 		static_cast<size_t>(m_volumeSize.z) *
 		sizeof(float);
 }
+
+bool Tesseract::exportWorkingVolumeToHost(std::vector<float>& output) const {
+
+	output.clear();
+
+	if (!m_dWorkingVolume) {
+
+		printf(
+			"[Tesseract] Native volume export failed: "
+			"working volume is unavailable.\n"
+		);
+
+		return false;
+	}
+
+	const std::size_t sampleCount =
+		static_cast<std::size_t>(m_volumeSize.x) *
+		static_cast<std::size_t>(m_volumeSize.y) *
+		static_cast<std::size_t>(m_volumeSize.z);
+
+	if (sampleCount == 0u) {
+		return false;
+	}
+
+	output.resize(
+		sampleCount
+	);
+
+	const cudaError_t copyStatus =
+		cudaMemcpy(
+			output.data(),
+			m_dWorkingVolume,
+			getVolumeBytes(),
+			cudaMemcpyDeviceToHost
+		);
+
+	if (copyStatus != cudaSuccess) {
+
+		printf(
+			"[Tesseract] Native volume export failed: %s\n",
+			cudaGetErrorString(copyStatus)
+		);
+
+		output.clear();
+		return false;
+	}
+
+	threadSync();
+
+	for (float sample : output) {
+		if (!std::isfinite(sample)) {
+
+			printf(
+				"[Tesseract] Native volume export failed: "
+				"non-finite sample detected.\n"
+			);
+
+			output.clear();
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool Tesseract::restoreCommittedVolumeFromHost(
+	const std::vector<float>& input,
+	const int3& sourceSize) {
+
+	if (!m_dBaseVolume ||
+		!m_dWorkingVolume) {
+
+		printf(
+			"[Tesseract] Native volume restore failed: "
+			"CUDA volume buffers are unavailable.\n"
+		);
+
+		return false;
+	}
+
+	if (sourceSize.x != m_volumeSize.x ||
+		sourceSize.y != m_volumeSize.y ||
+		sourceSize.z != m_volumeSize.z) {
+
+		printf(
+			"[Tesseract] Native volume restore failed: "
+			"source dimensions %d x %d x %d do not match "
+			"runtime dimensions %d x %d x %d.\n",
+			sourceSize.x,
+			sourceSize.y,
+			sourceSize.z,
+			m_volumeSize.x,
+			m_volumeSize.y,
+			m_volumeSize.z
+		);
+
+		return false;
+	}
+
+	const std::size_t expectedSamples =
+		static_cast<std::size_t>(m_volumeSize.x) *
+		static_cast<std::size_t>(m_volumeSize.y) *
+		static_cast<std::size_t>(m_volumeSize.z);
+
+	if (input.size() != expectedSamples) {
+
+		printf(
+			"[Tesseract] Native volume restore failed: "
+			"sample count mismatch.\n"
+		);
+
+		return false;
+	}
+
+	for (float sample : input) {
+		if (!std::isfinite(sample)) {
+
+			printf(
+				"[Tesseract] Native volume restore failed: "
+				"non-finite sample detected.\n"
+			);
+
+			return false;
+		}
+	}
+
+	const cudaError_t baseCopyStatus =
+		cudaMemcpy(
+			m_dBaseVolume,
+			input.data(),
+			getVolumeBytes(),
+			cudaMemcpyHostToDevice
+		);
+
+	if (baseCopyStatus != cudaSuccess) {
+
+		printf(
+			"[Tesseract] Native BASE restore failed: %s\n",
+			cudaGetErrorString(baseCopyStatus)
+		);
+
+		return false;
+	}
+
+	const cudaError_t previewCopyStatus =
+		cudaMemcpy(
+			m_dWorkingVolume,
+			input.data(),
+			getVolumeBytes(),
+			cudaMemcpyHostToDevice
+		);
+
+	if (previewCopyStatus != cudaSuccess) {
+
+		printf(
+			"[Tesseract] Native preview restore failed: %s\n",
+			cudaGetErrorString(previewCopyStatus)
+		);
+
+		return false;
+	}
+
+	// Reset transient brush fields. They are not part of the
+	// committed native BASE snapshot.
+	if (m_dBrushVolume) {
+
+		clearVolumeKernelLauncher(
+			m_dBrushVolume,
+			m_volumeSize,
+			1.0e6f
+		);
+	}
+
+	if (m_dMirrorBrushVolume) {
+
+		clearVolumeKernelLauncher(
+			m_dMirrorBrushVolume,
+			m_volumeSize,
+			1.0e6f
+		);
+	}
+
+	threadSync();
+
+	m_committedVolumeReady = true;
+	m_hasCommittedGeometry = true;
+	m_volumeDirty = false;
+
+	m_volumeBoundarySensorReady = false;
+	m_volumeBoundaryUnsafeCount = 0;
+
+	clearSPOverlapPreviewStatus();
+
+	printf(
+		"[Tesseract] Native volume restored: "
+		"%d x %d x %d, %zu samples.\n",
+		m_volumeSize.x,
+		m_volumeSize.y,
+		m_volumeSize.z,
+		expectedSamples
+	);
+
+	return true;
+}
 //
 bool Tesseract::commitSPWorkingVolume(const TheArbiter& arbiter) {
 	if (!m_dBaseVolume || !m_dWorkingVolume) return false;

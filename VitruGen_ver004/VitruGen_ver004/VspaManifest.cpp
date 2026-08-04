@@ -156,10 +156,120 @@ bool loadVspaManifest(const fs::path& manifestPath, StaticParticleAsset& output,
 	asset.anchor.particleIndex = static_cast<std::uint32_t>(number(member(anchor, "particle_index"), 0.0)); asset.anchor.pivotMode = pivotMode(text(member(anchor, "pivot_mode"))); asset.anchor.fitMode = fitMode(text(member(anchor, "fit_mode")));
 	asset.anchor.translation = readVec3(member(anchor, "translation"), readVec3(member(anchor, "local_translation"))); asset.anchor.rotationDegrees = readVec3(member(anchor, "rotation_degrees"), readVec3(member(anchor, "local_rotation_degrees"))); asset.anchor.scale = readVec3(member(anchor, "scale"), readVec3(member(anchor, "local_scale"), { 1,1,1 }));
 	asset.collision.radius = static_cast<float>(number(member(anchor, "radius"), 0.5)); asset.anchor.collision = asset.collision;
-	const JsonValue* volumetric = parsed.value.find("volumetric_source"); asset.volumetricSource.available = boolean(member(volumetric, "available"), false); asset.volumetricSource.file = text(member(volumetric, "file"));
+	const JsonValue* volumetric =
+		parsed.value.find("volumetric_source");
+
+	asset.volumetricSource.available =
+		boolean(
+			member(volumetric, "available"),
+			false
+		);
+
+	asset.volumetricSource.file =
+		text(
+			member(volumetric, "file")
+		);
+
+	asset.volumetricSource.format =
+		text(
+			member(volumetric, "format"),
+			"FLOAT32_SDF"
+		);
+
+	asset.volumetricSource.isoValue =
+		static_cast<float>(
+			number(
+				member(volumetric, "iso_value"),
+				0.0
+			)
+			);
+
+	const JsonValue* volumeDimensions =
+		member(
+			volumetric,
+			"dimensions"
+		);
+
+	if (volumeDimensions &&
+		volumeDimensions->isArray() &&
+		volumeDimensions->arrayItems().size() >= 3u) {
+
+		asset.volumetricSource.dimensions[0] =
+			static_cast<std::uint32_t>(
+				number(
+					&volumeDimensions->arrayItems()[0],
+					0.0
+				)
+				);
+
+		asset.volumetricSource.dimensions[1] =
+			static_cast<std::uint32_t>(
+				number(
+					&volumeDimensions->arrayItems()[1],
+					0.0
+				)
+				);
+
+		asset.volumetricSource.dimensions[2] =
+			static_cast<std::uint32_t>(
+				number(
+					&volumeDimensions->arrayItems()[2],
+					0.0
+				)
+				);
+	}
+
+	// A manifest that claims an available native volume must
+	// reference a real bundle file.
+	if (asset.volumetricSource.available) {
+
+		if (asset.volumetricSource.file.empty()) {
+
+			report.errors.push_back(
+				"VSPA volumetric source is marked available "
+				"but has no file."
+			);
+		}
+		else {
+
+			const fs::path volumePath =
+				resolveBundleFile(
+					report.assetRoot,
+					asset.volumetricSource.file,
+					report,
+					true
+				);
+
+			if (volumePath.empty()) {
+
+				report.errors.push_back(
+					"VSPA volumetric source file is missing: " +
+					asset.volumetricSource.file
+				);
+			}
+			else {
+
+				asset.volumetricSource.file =
+					portableRelativePath(
+						volumePath,
+						report.assetRoot
+					);
+			}
+		}
+	}
+
 	output = std::move(asset);
-	if (!report.filesMissing.empty()) report.errors.push_back("VSPA required geometry is missing.");
-	report.success = report.errors.empty(); return report.success;
+
+	if (geometryPath.empty()) {
+		report.errors.push_back(
+			"VSPA required geometry is missing."
+		);
+	}
+
+	report.success =
+		report.errors.empty();
+
+	return report.success;
 }
 
 bool writeVspaManifest(const fs::path& manifestPath, const StaticParticleAsset& asset, VspaSaveReport& report) {
@@ -175,7 +285,63 @@ bool writeVspaManifest(const fs::path& manifestPath, const StaticParticleAsset& 
 	JsonValue source = JsonValue::object(); source["kind"] = JsonValue(asset.source.kind); source["original_file"] = JsonValue(fs::path(asset.source.originalFile).filename().generic_string()); source["license_note"] = JsonValue(asset.source.licenseNote); source["source_units"] = JsonValue(asset.source.sourceUnits); source["source_up_axis"] = JsonValue(asset.source.sourceUpAxis); root["source"] = source;
 	JsonValue workspace = JsonValue::object(); workspace["file"] = JsonValue("SINGLE_PARTICLE_DATA/p0.obj"); workspace["canonical_asset_file"] = JsonValue(false); root["workspace_register"] = workspace;
 	JsonValue compatibility = JsonValue::object(); compatibility["minimum_vitrugen_version"] = JsonValue("0.0.4"); compatibility["asset_revision"] = JsonValue(static_cast<double>(asset.assetRevision)); root["compatibility"] = compatibility;
-	JsonValue volume = JsonValue::object(); volume["available"] = JsonValue(asset.volumetricSource.available); volume["file"] = asset.volumetricSource.file.empty() ? JsonValue() : JsonValue(asset.volumetricSource.file); root["volumetric_source"] = volume;
+	JsonValue volume =
+		JsonValue::object();
+
+	volume["available"] =
+		JsonValue(
+			asset.volumetricSource.available
+		);
+
+	volume["file"] =
+		JsonValue(
+			fs::path(
+				asset.volumetricSource.file
+			).generic_string()
+		);
+
+	volume["format"] =
+		JsonValue(
+			asset.volumetricSource.format
+		);
+
+	JsonValue volumeDimensions =
+		JsonValue::array();
+
+	volumeDimensions.push(
+		JsonValue(
+			static_cast<double>(
+				asset.volumetricSource.dimensions[0]
+				)
+		)
+	);
+
+	volumeDimensions.push(
+		JsonValue(
+			static_cast<double>(
+				asset.volumetricSource.dimensions[1]
+				)
+		)
+	);
+
+	volumeDimensions.push(
+		JsonValue(
+			static_cast<double>(
+				asset.volumetricSource.dimensions[2]
+				)
+		)
+	);
+
+	volume["dimensions"] =
+		std::move(volumeDimensions);
+
+	volume["iso_value"] =
+		JsonValue(
+			asset.volumetricSource.isoValue
+		);
+
+	root["volumetric_source"] =
+		std::move(volume);
 	if (!writeFile(manifestPath, writeJson(root, 2))) { report.errors.push_back("VSPA manifest could not be written: " + manifestPath.string()); return false; }
 	report.filesWritten.push_back(manifestPath); report.success = true; return true;
 }

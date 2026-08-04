@@ -92,8 +92,72 @@ bool StaticParticleAsset::validate(std::vector<std::string>* errors) const {
 		actualBounds.min.x > actualBounds.max.x || actualBounds.min.y > actualBounds.max.y ||
 		actualBounds.min.z > actualBounds.max.z)
 		reject("Asset bounds are invalid.");
-	if (!finite(anchor.scale) || anchor.scale.x <= 0.0f || anchor.scale.y <= 0.0f || anchor.scale.z <= 0.0f)
-		reject("Particle anchor scale must be finite and positive.");
+	if (!finite(anchor.scale) ||
+		anchor.scale.x <= 0.0f ||
+		anchor.scale.y <= 0.0f ||
+		anchor.scale.z <= 0.0f) {
+
+		reject(
+			"Particle anchor scale must be finite and positive."
+		);
+	}
+
+	// ---------------------------------------------------------
+	// Optional native scalar-volume validation.
+	// ---------------------------------------------------------
+	if (volumetricSource.available) {
+
+		if (volumetricSource.file.empty()) {
+			reject(
+				"Volumetric source is marked available but has no file."
+			);
+		}
+
+		if (upper(volumetricSource.format) != "FLOAT32_SDF") {
+			reject(
+				"Unsupported volumetric source format: " +
+				volumetricSource.format
+			);
+		}
+
+		if (volumetricSource.dimensions[0] == 0u ||
+			volumetricSource.dimensions[1] == 0u ||
+			volumetricSource.dimensions[2] == 0u) {
+
+			reject(
+				"Volumetric source dimensions must be non-zero."
+			);
+		}
+
+		if (!finite(volumetricSource.isoValue)) {
+			reject(
+				"Volumetric source iso value must be finite."
+			);
+		}
+
+		const std::size_t expectedSamples =
+			volumetricSource.expectedSampleCount();
+
+		// Manifest-only parsing may temporarily have no samples.
+		// Once samples exist, their count must be exact.
+		if (!volumetricSource.samples.empty() &&
+			volumetricSource.samples.size() != expectedSamples) {
+
+			reject(
+				"Volumetric source sample count does not match dimensions."
+			);
+		}
+
+		for (float sample : volumetricSource.samples) {
+			if (!finite(sample)) {
+				reject(
+					"Volumetric source contains a non-finite sample."
+				);
+				break;
+			}
+		}
+	}
+
 	return ok;
 }
 
