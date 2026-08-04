@@ -3033,7 +3033,9 @@ void EuclidEngine::onDisplay() {
 	glutSwapBuffers();
 }
 void EuclidEngine::onMouse(int button, int state, int x, int y) {
-	if (isObjExportModalActive() || isStaticParticleAssetModalActive()) return;
+	if (isObjExportModalActive() || 
+		isStaticParticleAssetModalActive() ||
+		m_arbiter.isTextEntryActive()) return;
 
 	const bool isWheel = (button == 3 || button == 4);
 
@@ -3112,7 +3114,9 @@ void EuclidEngine::onMouse(int button, int state, int x, int y) {
 	}
 }
 void EuclidEngine::onMotion(int x, int y) {
-	if (isObjExportModalActive()) return;
+	if (isObjExportModalActive() ||
+		isStaticParticleAssetModalActive() ||
+		m_arbiter.isTextEntryActive()) return;
 
 	if (m_tesseract.handleWorkspaceMotion(
 		m_arbiter,
@@ -3135,8 +3139,11 @@ void EuclidEngine::onMotion(int x, int y) {
 		glutPostRedisplay();
 	}
 }
+
 void EuclidEngine::onPassiveMotion(int x, int y) {
-	if (isObjExportModalActive()) return;
+	if (isObjExportModalActive() ||
+		isStaticParticleAssetModalActive() ||
+		m_arbiter.isTextEntryActive()) return;
 
 	if (m_tesseract.handleWorkspacePassiveMotion(
 		m_arbiter,

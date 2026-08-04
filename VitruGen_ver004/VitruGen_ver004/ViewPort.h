@@ -104,6 +104,14 @@ private:
 	void drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused);
 
 	void drawObjExportPanel(const ObjExportPanelData& data);
+	// Global text-entry modal used by workflows that request
+	// keyboard text outside the normal configuration panels.
+	//
+	// Current use:
+	//     SINGLE_PARTICLE_MCAD
+	//     SUB_LAYER_3
+	//     SAVE STATIC PARTICLE AS
+	void drawTextEntryPanel(const TheArbiter& arbiter);
 
 	float panelOffsetX() const;
 	float panelX(float x) const { return x + panelOffsetX(); }

@@ -196,6 +196,359 @@ void ViewPort::updateSubLayerPanelAnimation(bool visible) {
 	if (m_subLayerPanelSlide > 0.999f) m_subLayerPanelSlide = 1.0f;
 }
 
+void ViewPort::drawTextEntryPanel(
+	const TheArbiter& arbiter) {
+
+	if (!arbiter.isTextEntryActive()) {
+		return;
+	}
+
+	// ---------------------------------------------------------
+	// Global modal layout.
+	//
+	// This panel does not depend on:
+	//     m_panelSlide
+	//     m_subLayerPanelSlide
+	//
+	// It must remain visible while the underlying workspace is
+	// Layer 3 / Sub-Layer 3.
+	// ---------------------------------------------------------
+	const float windowW =
+		static_cast<float>(m_window_w);
+
+	const float windowH =
+		static_cast<float>(m_window_h);
+
+	const float panelW =
+		(std::min)(
+			760.0f,
+			windowW - 100.0f
+			);
+
+	const float panelH =
+		270.0f;
+
+	const float x0 =
+		0.5f *
+		(windowW - panelW);
+
+	const float y0 =
+		0.5f *
+		(windowH - panelH);
+
+	const float x1 =
+		x0 + panelW;
+
+	const float y1 =
+		y0 + panelH;
+
+	const float textX =
+		x0 + 38.0f;
+
+	// ---------------------------------------------------------
+	// Modal backdrop.
+	// ---------------------------------------------------------
+	glDisable(
+		GL_DEPTH_TEST
+	);
+
+	glDisable(
+		GL_TEXTURE_2D
+	);
+
+	glUseProgram(
+		0
+	);
+
+	glEnable(
+		GL_BLEND
+	);
+
+	glBlendFunc(
+		GL_SRC_ALPHA,
+		GL_ONE_MINUS_SRC_ALPHA
+	);
+
+	// Dim the active workspace behind the dialog.
+	glColor4f(
+		0.0f,
+		0.0f,
+		0.0f,
+		0.52f
+	);
+
+	glBegin(
+		GL_QUADS
+	);
+
+	glVertex2f(
+		0.0f,
+		0.0f
+	);
+
+	glVertex2f(
+		windowW,
+		0.0f
+	);
+
+	glVertex2f(
+		windowW,
+		windowH
+	);
+
+	glVertex2f(
+		0.0f,
+		windowH
+	);
+
+	glEnd();
+
+	// Main panel.
+	glColor4f(
+		0.015f,
+		0.03f,
+		0.045f,
+		0.98f
+	);
+
+	glBegin(
+		GL_QUADS
+	);
+
+	glVertex2f(
+		x0,
+		y0
+	);
+
+	glVertex2f(
+		x1,
+		y0
+	);
+
+	glVertex2f(
+		x1,
+		y1
+	);
+
+	glVertex2f(
+		x0,
+		y1
+	);
+
+	glEnd();
+
+	// Main border.
+	glLineWidth(
+		1.5f
+	);
+
+	glColor4f(
+		0.78f,
+		0.94f,
+		1.0f,
+		1.0f
+	);
+
+	glBegin(
+		GL_LINE_LOOP
+	);
+
+	glVertex2f(
+		x0,
+		y0
+	);
+
+	glVertex2f(
+		x1,
+		y0
+	);
+
+	glVertex2f(
+		x1,
+		y1
+	);
+
+	glVertex2f(
+		x0,
+		y1
+	);
+
+	glEnd();
+
+	// ---------------------------------------------------------
+	// Header and prompt.
+	// ---------------------------------------------------------
+	glColor4f(
+		0.82f,
+		0.96f,
+		1.0f,
+		1.0f
+	);
+
+	drawText2D(
+		textX,
+		y0 + 38.0f,
+		"VITRUGEN TEXT ENTRY",
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	glColor4f(
+		0.45f,
+		1.0f,
+		0.65f,
+		1.0f
+	);
+
+	drawText2D(
+		textX,
+		y0 + 76.0f,
+		arbiter.getTextEntryPrompt().c_str(),
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	// ---------------------------------------------------------
+	// Text-entry box.
+	// ---------------------------------------------------------
+	const float inputX0 =
+		textX;
+
+	const float inputY0 =
+		y0 + 100.0f;
+
+	const float inputX1 =
+		x1 - 38.0f;
+
+	const float inputY1 =
+		inputY0 + 54.0f;
+
+	glColor4f(
+		0.005f,
+		0.012f,
+		0.020f,
+		1.0f
+	);
+
+	glBegin(
+		GL_QUADS
+	);
+
+	glVertex2f(
+		inputX0,
+		inputY0
+	);
+
+	glVertex2f(
+		inputX1,
+		inputY0
+	);
+
+	glVertex2f(
+		inputX1,
+		inputY1
+	);
+
+	glVertex2f(
+		inputX0,
+		inputY1
+	);
+
+	glEnd();
+
+	glLineWidth(
+		1.0f
+	);
+
+	glColor4f(
+		1.0f,
+		0.82f,
+		0.42f,
+		1.0f
+	);
+
+	glBegin(
+		GL_LINE_LOOP
+	);
+
+	glVertex2f(
+		inputX0,
+		inputY0
+	);
+
+	glVertex2f(
+		inputX1,
+		inputY0
+	);
+
+	glVertex2f(
+		inputX1,
+		inputY1
+	);
+
+	glVertex2f(
+		inputX0,
+		inputY1
+	);
+
+	glEnd();
+
+	std::string visibleEntry =
+		arbiter.getTextEntryBuffer();
+
+	// Simple always-visible cursor for the immediate-mode UI.
+	visibleEntry += "_";
+
+	glColor4f(
+		1.0f,
+		0.88f,
+		0.54f,
+		1.0f
+	);
+
+	drawText2D(
+		inputX0 + 18.0f,
+		inputY0 + 34.0f,
+		visibleEntry.c_str(),
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	// ---------------------------------------------------------
+	// Status and controls.
+	// ---------------------------------------------------------
+	glColor4f(
+		0.72f,
+		0.80f,
+		0.84f,
+		1.0f
+	);
+
+	drawText2D(
+		textX,
+		y0 + 187.0f,
+		arbiter
+		.getTextEntryStatusMessage()
+		.c_str(),
+		GLUT_BITMAP_HELVETICA_12
+	);
+
+	glColor4f(
+		0.78f,
+		0.84f,
+		0.88f,
+		1.0f
+	);
+
+	drawText2D(
+		textX,
+		y0 + 226.0f,
+		"TYPE: Asset name    BACKSPACE: Delete    ENTER: Continue    ESC: Cancel",
+		GLUT_BITMAP_HELVETICA_12
+	);
+
+	glLineWidth(
+		1.0f
+	);
+}
+
 void ViewPort::drawOverlay(
 	const TheArbiter& arbiter,
 	const MarchingCubesPanelData* mcData,
@@ -228,14 +581,40 @@ void ViewPort::drawOverlay(
 		drawWorkspaceFrame(0.20f, nullptr);
 	}
 
-	if (exportData && exportData->mode !=
+	if (exportData &&
+		exportData->mode !=
 		ObjExportPanelMode::HIDDEN) {
 
-		drawObjExportPanel(*exportData);
+		drawObjExportPanel(
+			*exportData
+		);
 	}
 
-	glDisable(GL_BLEND);
-	glEnable(GL_DEPTH_TEST);
+	// ---------------------------------------------------------
+	// Global text-entry presentation.
+	//
+	// Asset-name entry is started from Marching Cubes, where the
+	// regular Layer 1/2 configuration text-entry indicators are not
+	// visible.
+	//
+	// Draw this last so it remains above every workspace panel.
+	// ---------------------------------------------------------
+	if (arbiter.isTextEntryActive() &&
+		arbiter.getTextEntryMode() ==
+		TextEntryMode::AssetName) {
+
+		drawTextEntryPanel(
+			arbiter
+		);
+	}
+
+	glDisable(
+		GL_BLEND
+	);
+
+	glEnable(
+		GL_DEPTH_TEST
+	);
 
 	endOverlay2D();
 }
