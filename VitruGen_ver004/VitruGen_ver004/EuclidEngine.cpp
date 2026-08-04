@@ -12,6 +12,7 @@
 #include <fstream>
 #include <string>
 #include <sstream>
+#include <filesystem>
 
 #include "kernel.h"
 #include "EuclidEngine.h"
@@ -194,6 +195,7 @@ bool EuclidEngine::init(int argc, char** argv) {
 	//
 	initRenderer();
 	initParticleSystems();
+	initTextureMapResources();
 	//
 	initVolumeField();
 	initPixelBuffer();
@@ -473,6 +475,71 @@ void EuclidEngine::initPixelBuffer() {
 		m_renderer->attachPixelBuffer(m_pbo);
 		m_renderer->attachTexture(m_tex);
 	}
+}
+
+void EuclidEngine::initTextureMapResources() {
+
+	namespace fs = std::filesystem;
+
+	const fs::path applicationRoot =
+		fs::current_path();
+
+	const fs::path outputRoot =
+		applicationRoot / "OUTPUT";
+
+	const fs::path outputStaticParticlesRoot =
+		outputRoot / "STATIC_PARTICLES";
+	
+	const fs::path baseMaterialsRoot =
+		applicationRoot /
+		"INPUTS" /
+		"TEXTURE_MAP_2D" /
+		"BASE_MATERIALS";
+
+	printf(
+		"[EuclidEngine] Application working root: %s\n",
+		applicationRoot.string().c_str()
+	);
+
+	std::error_code error;
+
+	// OUTPUT may legitimately be empty on the first run.
+	fs::create_directories(
+		outputStaticParticlesRoot,
+		error
+	);
+
+	if (error) {
+
+		printf(
+			"[EuclidEngine] WARNING: "
+			"Could not create OUTPUT static-particle directory: %s\n",
+			error.message().c_str()
+		);
+
+		return;
+	}
+
+	error.clear();
+
+	if (!fs::is_directory(
+		baseMaterialsRoot,
+		error)) {
+
+		printf(
+			"[EuclidEngine] WARNING: "
+			"Base-material directory was not found: %s\n",
+			baseMaterialsRoot.string().c_str()
+		);
+
+		return;
+	}
+
+	m_tesseract.bindTextureMapResources(
+		&m_assetRepository,
+		outputStaticParticlesRoot,
+		baseMaterialsRoot
+	);
 }
 
 void EuclidEngine::initMenus() {

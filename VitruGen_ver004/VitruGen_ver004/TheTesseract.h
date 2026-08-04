@@ -1,15 +1,16 @@
 #ifndef _THE_TESSERACT_H_
 #define _THE_TESSERACT_H_
 
+
 #include <GL/glew.h>
 #include <cstddef>
 #include <vector>
-
 #include <vector_types.h>
-
+#include <filesystem>
 #include "TheArbiter.h"
 #include "particleSystem.h"
 #include "renderer_Euclid.h"
+#include "TextureMapWorkspace.h"
 
 struct cudaGraphicsResource;
 class MarchingCubes;
@@ -132,6 +133,15 @@ public:
 		bool initialized = false;
 	};
 
+	struct TextureMapWorkspaceInstance {
+		WorkspaceId id = WorkspaceId::TEXTURE_MAP_2D;
+
+		bool initialized = false;
+		bool sharedResourcesBound = false;
+
+		vitru::TextureMapWorkspace runtime;
+	};
+
 	Tesseract() = default;
 	~Tesseract();
 
@@ -199,6 +209,12 @@ public:
 		ParticleSystem* particleSystem,
 		EuclidRenderer* renderer,
 		std::vector<float>* radiusBuffer
+	);
+
+	void bindTextureMapResources(
+		vitru::ProjectAssetRepository* repository,
+		const std::filesystem::path& outputStaticParticlesRoot,
+		const std::filesystem::path& baseMaterialsRoot
 	);
 
 	// --- PARTICLE_SIM CONTROLS ---
@@ -296,6 +312,7 @@ public:
 	bool isSPVolumeBoundarySensorReady() const { return m_volumeBoundarySensorReady; }
 	unsigned int getSPVolumeBoundaryUnsafeCount() const { return m_volumeBoundaryUnsafeCount; }
 	bool isSPOverlapPreviewSensorReady() const { return m_spOverlapPreviewSensorReady; }
+
 	bool isSPOverlapPreviewActive() const {
 		return m_spOverlapPreviewSensorReady &&
 			m_spOverlapPreviewUnsafeCount == 0 &&
@@ -305,12 +322,15 @@ public:
 				m_spMirrorOverlapPreviewUnsafeCount == 0 &&
 				m_spMirrorOverlapPreviewInsideSampleCount > 0));
 	}
+
 	unsigned int getSPOverlapPreviewUnsafeCount() const {
 		return m_spOverlapPreviewUnsafeCount + m_spMirrorOverlapPreviewUnsafeCount;
 	}
+
 	unsigned int getSPOverlapPreviewInsideSampleCount() const {
 		return m_spOverlapPreviewInsideSampleCount + m_spMirrorOverlapPreviewInsideSampleCount;
 	}
+
 	void releaseSPVolumeBoundarySensor();
 
 private:
@@ -336,6 +356,10 @@ private:
 	bool initializeLPWorkspace();
 	void updateLPWorkspace(const WorkspaceUpdateContext& ctx);
 	void renderLPWorkspace(const WorkspaceRenderContext& ctx);
+
+	bool initializeTextureMapWorkspace();
+	void updateTextureMapWorkspace(const WorkspaceUpdateContext& ctx);
+	void renderTextureMapWorkspace(const WorkspaceRenderContext& ctx);
 
 	// --- PARTICLE_SIM PIPELINE ---
 	void applyPSConfig();
@@ -495,9 +519,13 @@ private:
 
 	// --- WORKSPACE INSTANCES ---
 	WorkspaceId m_activeWorkspace = WorkspaceId::NONE;
+
 	PSWorkspaceInstance m_PSWorkspace;
+
 	SPWorkspaceInstance m_SPWorkspace;
 	LPWorkspaceInstance m_LPWorkspace;
+
+	TextureMapWorkspaceInstance m_textureMapWorkspace;
 
 	// --- ASSIGN PARTICLE WORKSPACE RESOURCES ---
 	ParticleSystem* m_particleSimSystem = nullptr;

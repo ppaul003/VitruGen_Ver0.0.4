@@ -34,6 +34,7 @@
 #include "particleSystem.h"
 #include "renderer_Euclid.h"
 #include "StaticParticleAssetIO.h"
+#include "ProjectAssetRepository.h"
 
 class EuclidEngine {
 public:
@@ -153,6 +154,9 @@ private:
 	bool isObjExportModalActive() const;
 	bool isObjExportWorking() const;
 
+	// --- TEXTURE_MAP_2D ---
+	void initTextureMapResources();
+
 	// --- NAMED STATIC PARTICLE ASSET JOBS ---
 	void openStaticParticleLoadPanel();
 	void openStaticParticleSaveConfirm(const std::string& displayName);
@@ -257,6 +261,8 @@ private:
 	ViewPort m_viewport;
 	CameraProcessor m_camera;
 
+	
+
 	// --- INPUT ---
 	MouseInput m_mouse;
 	KeyboardInput m_keyboard;
@@ -310,7 +316,9 @@ private:
 	int m_staticAssetLastSpinnerMs = 0;
 	std::string m_pendingStaticAssetName;
 	std::vector<vitru::StaticAssetCatalogEntry> m_staticAssetCatalog;
+
 	vitru::ProjectAssetRepository m_assetRepository;
+
 	std::filesystem::path m_inputsRoot = "INPUTS";
 	std::filesystem::path m_outputRoot = "OUTPUT";
 	std::filesystem::path m_workspaceObj = "SINGLE_PARTICLE_DATA/p0.obj";

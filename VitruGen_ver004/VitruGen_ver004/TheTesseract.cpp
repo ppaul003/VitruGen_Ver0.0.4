@@ -319,6 +319,11 @@ void Tesseract::enterWorkspace(WorkspaceId workspace) {
 		initializeLPWorkspace();
 		break;
 
+	case WorkspaceId::TEXTURE_MAP_2D:
+		initializeTextureMapWorkspace();
+		break;
+
+
 	default:
 	case WorkspaceId::NONE:
 		break;
@@ -340,6 +345,10 @@ void Tesseract::updateActiveWorkspace(const WorkspaceUpdateContext& ctx) {
 		updateLPWorkspace(ctx);
 		break;
 
+	case WorkspaceId::TEXTURE_MAP_2D:
+		updateTextureMapWorkspace(ctx);
+		break;
+
 	default:
 	case WorkspaceId::NONE:
 		break;
@@ -359,6 +368,10 @@ void Tesseract::renderActiveWorkspace(const WorkspaceRenderContext& ctx) {
 
 	case WorkspaceId::LINKED_PARTICLES_MCAD:
 		renderLPWorkspace(ctx);
+		break;
+
+	case WorkspaceId::TEXTURE_MAP_2D:
+		renderTextureMapWorkspace(ctx);
 		break;
 
 
@@ -535,6 +548,51 @@ void Tesseract::bindSingleParticleResources(
 
 	// Force initialization to run again if resources are rebound.
 	m_SPWorkspace.initialized = false;
+}
+
+void Tesseract::bindTextureMapResources(
+	vitru::ProjectAssetRepository* repository,
+	const std::filesystem::path& outputStaticParticlesRoot,
+	const std::filesystem::path& baseMaterialsRoot) {
+
+	// Rebinding invalidates the outer Tesseract workspace state.
+	m_textureMapWorkspace.initialized = false;
+
+	const bool runtimeInitialized =
+		m_textureMapWorkspace.runtime.initialize(
+			repository,
+			outputStaticParticlesRoot,
+			baseMaterialsRoot
+		);
+
+	// The repository and catalog roots initialize the CPU workspace.
+	// The renderer is also required before Layer 2/3 can show the mesh.
+	m_textureMapWorkspace.sharedResourcesBound =
+		runtimeInitialized &&
+		m_renderer != nullptr;
+
+	if (!m_textureMapWorkspace.sharedResourcesBound) {
+
+		printf(
+			"[Tesseract] TEXTURE_MAP_2D resource binding failed.\n"
+		);
+
+		return;
+	}
+
+	printf(
+		"[Tesseract] TEXTURE_MAP_2D resources bound.\n"
+	);
+
+	printf(
+		"  Output static particles: %s\n",
+		outputStaticParticlesRoot.string().c_str()
+	);
+
+	printf(
+		"  Base materials: %s\n",
+		baseMaterialsRoot.string().c_str()
+	);
 }
 
 // =============================================================================
@@ -3144,4 +3202,47 @@ void Tesseract::renderLinkedParticlesWorkspace(const WorkspaceRenderContext& ctx
 //
 bool Tesseract::updateLinkedParticlesMCAD() {
 	return m_LPWorkspace.initialized;
+}
+
+// =============================================================================
+// TEXTURE_MAP_2D WORKSPACE (GRID_2D)
+// =============================================================================
+bool Tesseract::initializeTextureMapWorkspace() {
+
+	if (!m_textureMapWorkspace.sharedResourcesBound)
+		return false;
+
+	if (!m_textureMapWorkspace.runtime.initialized())
+		return false;
+
+	m_textureMapWorkspace.initialized = true;
+
+	return true;
+}
+
+void Tesseract::updateTextureMapWorkspace(
+	const WorkspaceUpdateContext& ctx) {
+
+	(void)ctx;
+
+	if (!m_textureMapWorkspace.initialized &&
+		!initializeTextureMapWorkspace()) {
+
+		return;
+	}
+}
+
+void Tesseract::renderTextureMapWorkspace(
+	const WorkspaceRenderContext& ctx) {
+
+	(void)ctx;
+
+	if (!m_textureMapWorkspace.initialized &&
+		!initializeTextureMapWorkspace()) {
+
+		return;
+	}
+
+	// Checkpoint placeholder:
+	// Layer 1/2/3 rendering will be connected later.
 }
