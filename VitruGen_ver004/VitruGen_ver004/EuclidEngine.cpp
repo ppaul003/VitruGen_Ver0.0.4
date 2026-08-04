@@ -2518,15 +2518,40 @@ void EuclidEngine::advanceStaticParticleAssetJob() {
 	}
 	const vitru::AssetId id = m_assetRepository.addStaticParticle(result.asset);
 	m_assetRepository.setActiveStaticParticle(id);
-	vitru::StaticParticleAsset* active = m_assetRepository.activeStaticParticle();
-	if (!active || !m_renderer || !m_renderer->loadParticleStaticAsset(*active)) {
-		m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::FAILED;
-		m_staticAssetPanel.statusText = "GPU asset upload failed.";
-		m_staticAssetPanel.logLines.push_back("[ERROR] renderer could not upload the loaded asset");
+
+	vitru::StaticParticleAsset* active =
+		m_assetRepository.activeStaticParticle();
+
+	if (!active || !m_renderer ||
+		!m_renderer->loadParticleStaticAsset(*active)) {
+
+		m_staticAssetPanel.mode =
+			ViewPort::ObjExportPanelMode::FAILED;
+
+		m_staticAssetPanel.statusText =
+			"GPU asset upload failed.";
+
+		m_staticAssetPanel.logLines.push_back(
+			"[ERROR] renderer could not upload the loaded asset"
+		);
+
 		return;
 	}
-	m_arbiter.setParticleRenderMode(TheArbiter::PARTICLE_RENDER_MESH);
+
+	// Register the loaded asset as the current BASE.
+	//
+	// chest_attempt0 has no saved scalar field, so this becomes a
+	// mesh-backed BASE rather than a procedural volume-backed BASE.
+	m_arbiter.activateLoadedStaticParticleBase(
+		active->volumetricSource.available
+	);
+
+	m_arbiter.setParticleRenderMode(
+		TheArbiter::PARTICLE_RENDER_MESH
+	);
+
 	applySingleParticleConfigToSystem();
+
 	m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::COMPLETE;
 	m_staticAssetPanel.progressPercent = 100;
 	m_staticAssetPanel.statusText = "geometry, materials, textures and p0 ready";

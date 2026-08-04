@@ -978,6 +978,16 @@ void TheArbiter::activateParticleSimLayer2Item(
 // SINGLE_PARTICLE_MCAD EDIT SELECTIONS
 // =============================================================================
 void TheArbiter::cycleVolumePrimitiveSelection(float dir) {
+	// A loaded mesh-only StaticParticleAsset is the current BASE.
+	// Do not silently replace it with a procedural primitive.
+	if (isLoadedStaticMeshOnly() &&
+		isEditingInjectionVoxel0()) {
+
+		m_volume0State.primitive =
+			VOLUME_PRIMITIVE_BASE;
+
+		return;
+	}
 
 	VolumeObjectState& state = activeVolumeState();
 
@@ -1246,6 +1256,119 @@ void TheArbiter::resetAllVolumeStates() {
 	resetVolumeState(m_volume0State, VOLUME_PRIMITIVE_SPHERE);
 	resetVolumeState(m_volume1State, VOLUME_PRIMITIVE_SPHERE);
 	m_spMirrorMode = SP_MIRROR_NONE;
+}
+
+// =============================================================================
+// SINGLE_PARTICLE AUTHORING SOURCE
+// =============================================================================
+
+void TheArbiter::activateLoadedStaticParticleBase(bool hasEditableVolume) {
+
+	m_spAuthoringSource =
+		SPAuthoringSource::LoadedStaticMesh;
+
+	m_loadedStaticMeshHasEditableVolume =
+		hasEditableVolume;
+
+	// A loaded StaticParticleAsset is always presented through
+	// the mesh renderer unless a later command explicitly changes it.
+	m_particleRenderMode =
+		PARTICLE_RENDER_MESH;
+
+	// The imported mesh becomes VOLUME_0 / BASE from the user's
+	// perspective. It is not a new procedural sphere.
+	resetVolumeState(
+		m_volume0State,
+		VOLUME_PRIMITIVE_BASE
+	);
+
+	// VOLUME_1 remains the fresh procedural brush state for a
+	// future mesh-to-volume or restored-volume workflow.
+	resetVolumeState(
+		m_volume1State,
+		VOLUME_PRIMITIVE_SPHERE
+	);
+
+	m_volumeAssemblyNode =
+		VOLUME_NODE_PREVIEW;
+
+	m_volumeInjectionVoxel =
+		INJECTION_VOXEL_NONE;
+
+	m_volumeEditTarget =
+		VOLUME_EDIT_TARGET_VOXEL_0;
+
+	m_volumeInjectionMode =
+		VOLUME_FUSE;
+
+	m_spMirrorMode =
+		SP_MIRROR_NONE;
+
+	m_objectEditMode =
+		EDIT_SCALE_WHOLE;
+
+	m_objectRotationMode =
+		ROTATE_PITCH;
+
+	m_objectTransformMode =
+		TRANSFORM_SCALE;
+
+	m_offsetVectorSelection =
+		OFFSET_VECTOR_X;
+
+	m_injectionRailT = 0.0f;
+
+	m_volumeBoundarySensorReady = false;
+	m_volumeBoundaryUnsafeCount = 0;
+
+	m_spOverlapPreviewStatus =
+		SP_OVERLAP_POSITION_IN_NODE_2;
+}
+
+void TheArbiter::activateProceduralVolumeAuthoring() {
+
+	m_spAuthoringSource =
+		SPAuthoringSource::ProceduralVolume;
+
+	m_loadedStaticMeshHasEditableVolume =
+		false;
+
+	resetAllVolumeStates();
+
+	m_volumeAssemblyNode =
+		VOLUME_NODE_PREVIEW;
+
+	m_volumeInjectionVoxel =
+		INJECTION_VOXEL_NONE;
+
+	m_volumeEditTarget =
+		VOLUME_EDIT_TARGET_VOXEL_0;
+
+	m_volumeInjectionMode =
+		VOLUME_FUSE;
+
+	m_spMirrorMode =
+		SP_MIRROR_NONE;
+
+	m_objectEditMode =
+		EDIT_SCALE_WHOLE;
+
+	m_objectRotationMode =
+		ROTATE_PITCH;
+
+	m_objectTransformMode =
+		TRANSFORM_SCALE;
+
+	m_offsetVectorSelection =
+		OFFSET_VECTOR_X;
+
+	m_injectionRailT = 0.0f;
+
+	m_volumeBoundarySensorReady = false;
+	m_volumeBoundaryUnsafeCount = 0;
+
+	m_spOverlapPreviewStatus =
+		SP_OVERLAP_POSITION_IN_NODE_2;
 }
 
 void TheArbiter::adjustObjectOffset(float dir) {

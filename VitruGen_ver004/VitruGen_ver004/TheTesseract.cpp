@@ -829,6 +829,38 @@ void Tesseract::renderSingleParticleWorkspace(const WorkspaceRenderContext& ctx)
 		return;
 	}
 
+	// ---------------------------------------------------------
+	// LOADED STATIC MESH BASE
+	//
+	// A loaded OBJ/VSPA asset may not have a restored CUDA scalar
+	// field. In that case, Sub-Layer 2 must continue presenting the
+	// canonical indexed mesh instead of generating a procedural
+	// sphere in m_dWorkingVolume.
+	//
+	// The mesh is represented to the user as VOLUME_0 / BASE.
+	// ---------------------------------------------------------
+	const bool loadedStaticMeshOnly =
+		arbiter.isVolumeRenderSubLayer() &&
+		arbiter.isLoadedStaticMeshOnly();
+
+	if (loadedStaticMeshOnly) {
+
+		renderSingleParticleMCAD(
+			arbiter,
+			ctx.thetaRad,
+			ctx.phiRad,
+			ctx.particleWorkspaceZs
+		);
+
+		// Keep the object's local/world orientation guides available.
+		renderSPVolumeOrientationAxes(
+			arbiter,
+			ctx.thetaRad,
+			ctx.phiRad
+		);
+
+		return;
+	}
 	if (arbiter.isVolumeRenderSubLayer()) {
 		renderSPVolumeToPBO(
 			arbiter,

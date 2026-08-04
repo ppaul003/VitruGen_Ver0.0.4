@@ -223,6 +223,7 @@ public:
 		TRANSFORM_SCALE = 0,
 		TRANSFORM_ROTATION
 	};
+
 	enum OffsetVector {
 		OFFSET_VECTOR_X = 0,
 		OFFSET_VECTOR_Y,
@@ -233,6 +234,21 @@ public:
 	enum ParticleRenderMode {
 		PARTICLE_RENDER_DEFAULT = 0,
 		PARTICLE_RENDER_MESH = 1
+	};
+
+	// ---------------------------------------------------------
+	// SINGLE_PARTICLE authoring source.
+	//
+	// ProceduralVolume:
+	//     The asset is backed by the CUDA scalar-field workflow.
+	//
+	// LoadedStaticMesh:
+	//     The asset is backed by an imported or saved indexed mesh.
+	//     A scalar field may or may not also be available.
+	// ---------------------------------------------------------
+	enum class SPAuthoringSource {
+		ProceduralVolume = 0,
+		LoadedStaticMesh
 	};
 
 	enum SingleParticleSubLayer {
@@ -585,10 +601,15 @@ public:
 	ArbiterResult setSPMeshBoundModeFromMenu(SPMeshBoundMode mode);
 	ArbiterResult setSPDisplayModeFromMenu(SPDisplayMode mode);
 	ArbiterResult setSPRenderCageVisibleFromMenu(bool visible);
+
 	ArbiterResult enterSPVolumePreviewFromMenu();
 	ArbiterResult returnSPCollisionSetupFromMenu();
 	ArbiterResult returnSPToLayer2FromMenu();
 	ArbiterResult trySelectParticleAtCurrentSlice();
+
+	// --- SINGLE_PARTICLE AUTHORING SOURCE ---
+	void activateLoadedStaticParticleBase(bool hasEditableVolume);
+	void activateProceduralVolumeAuthoring();
 
 	// --- CANONICAL NAVIGATION QUERIES ---
 	ApplicationLayer getApplicationLayer() const { return m_navigation.layer; }
@@ -625,12 +646,12 @@ public:
 	ObjectBasis getEffectiveObjectBasis() const;
 	ObjectBasis orthonormalizeBasis(const ObjectBasis& basis) const;
 	VolumePrimitive getResolvedVolumePrimitiveSelection() const;
-
+	VolumeInjectionVoxel getMirroredInjectionVoxel() const;
 
 	int getInjectionVoxelDX() const;
 	int getInjectionVoxelDY() const;
 	int getInjectionVoxelDZ() const;
-	VolumeInjectionVoxel getMirroredInjectionVoxel() const;
+	
 	void getMirroredInjectionDirection(int& dx, int& dy, int& dz) const;
 	int getActiveSubLayerPanelItem() const { return m_activeSubLayerPanelItem; }
 	int getWorkplaneSlice() const { return m_workplaneSlice; }
@@ -652,7 +673,7 @@ public:
 	bool isParticleSimLayer2RunSelected() const;
 	bool isVolumeBoundarySensorReady() const { return m_volumeBoundarySensorReady; }
 	bool isVolumeBoundarySafe() const { return m_volumeBoundarySensorReady && m_volumeBoundaryUnsafeCount == 0; }
-	SPOverlapPreviewStatus getSPOverlapPreviewStatus() const { return m_spOverlapPreviewStatus; }
+	
 	bool isSPOverlapPreviewActive() const { return m_spOverlapPreviewStatus == SP_OVERLAP_ACTIVE; }
 	bool isEditingInjectionVoxel0() const { return m_volumeEditTarget == VOLUME_EDIT_TARGET_VOXEL_0; }
 	bool isEditingInjectionVoxel1() const { return m_volumeEditTarget == VOLUME_EDIT_TARGET_VOXEL_1; }
@@ -663,12 +684,17 @@ public:
 	bool isVolumeRenderSubLayer() const { return isSimulationRunLayer() && isSingleParticleSelected() && m_singleParticleSubLayer == SP_SUB_LAYER_VOLUME_RENDER; }
 	bool isMarchingCubesSubLayer() const { return isSimulationRunLayer() && isSingleParticleSelected() && m_singleParticleSubLayer == SP_SUB_LAYER_MARCHING_CUBES; }
 	bool isParticleRenderMesh() const { return m_particleRenderMode == PARTICLE_RENDER_MESH; }
+
+	bool isProceduralVolumeSource() const { return m_spAuthoringSource == SPAuthoringSource::ProceduralVolume; }
+	bool isLoadedStaticMeshSource() const { return m_spAuthoringSource == SPAuthoringSource::LoadedStaticMesh; }
+	bool loadedStaticMeshHasEditableVolume() const { return m_loadedStaticMeshHasEditableVolume; }
+	bool isLoadedStaticMeshOnly() const { return isLoadedStaticMeshSource() && !m_loadedStaticMeshHasEditableVolume; }
 	bool isSubLayerPanelOpen() const { return m_subLayerPanelOpen; }
 	bool hasSelectedParticle() const { return m_selectedParticle; }
 	bool hasHover() const { return m_hoverValid; }
 	bool hasEditableVolumePrimitive() const { return getVolumePrimitiveSelection() != VOLUME_PRIMITIVE_BASE; }
 	bool hasInjectionVoxelSelected() const { return m_volumeInjectionVoxel != INJECTION_VOXEL_NONE; }
-	SPMirrorMode getSPMirrorMode() const { return m_spMirrorMode; }
+	
 	bool isSPMirrorEnabled() const { return hasInjectionVoxelSelected() && m_spMirrorMode == SP_MIRROR_ON; }
 	bool canApplyVolumeToBase() const;
 	bool isInjectionBrushBaseSelected() const;
@@ -699,6 +725,9 @@ public:
 			isMarchingCubesSubLayer();
 	}
 
+	SPOverlapPreviewStatus getSPOverlapPreviewStatus() const { return m_spOverlapPreviewStatus; }
+	SPAuthoringSource getSPAuthoringSource() const { return m_spAuthoringSource; }
+	SPMirrorMode getSPMirrorMode() const { return m_spMirrorMode; }
 	SPCollisionShape getSPCollisionShape() const {return m_spCollisionShape;}
 	SPMeshBoundMode getSPMeshBoundMode() const {return m_spMeshBoundMode;}
 	SPDisplayMode getSPDisplayMode() const {return m_spDisplayMode;}
@@ -743,7 +772,6 @@ public:
 	void beginSingleParticleAssetNameEntry(
 		ArbiterResult& result,
 		const std::string& initialName = "Static Particle");
-
 
 	TextEntryMode getTextEntryMode() const { return m_textEntry.getMode(); }
 	TextEntryTarget getTextEntryTarget() const { return m_textEntryTarget; }
@@ -947,7 +975,16 @@ private:
 	ParticleColorSelection m_particleColorSelection = PARTICLE_COLOR_RED;
 	ParticleResetMode m_particleResetMode = PARTICLE_RESET_DEFAULT;
 	ParticleConfigList m_activeParticleConfigList = PARTICLE_LIST_COLOR;
+
 	ParticleRenderMode m_particleRenderMode = PARTICLE_RENDER_DEFAULT;
+
+	// Determines whether Sub-Layer 2 is editing a CUDA scalar field
+	// or presenting an imported/static indexed mesh.
+	SPAuthoringSource m_spAuthoringSource = SPAuthoringSource::ProceduralVolume;
+
+	// True only when a loaded mesh bundle also restored an editable
+	// volumetric source into the CAD volume pipeline.
+	bool m_loadedStaticMeshHasEditableVolume = false;
 
 	int m_particleSimLayer2Selection = 0;
 
