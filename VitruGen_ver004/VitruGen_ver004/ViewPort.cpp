@@ -148,6 +148,7 @@ void ViewPort::drawSelectableLine(float x, float y, bool active, const char* tex
 
 	drawText2D(px, y, text, GLUT_BITMAP_HELVETICA_18);
 }
+
 void ViewPort::drawHelpFooter(const char* line1, const char* line2) {
 	const float yBase = static_cast<float>(m_window_h) - 135.0f;
 
@@ -155,6 +156,7 @@ void ViewPort::drawHelpFooter(const char* line1, const char* line2) {
 	if (line1) drawText2D(95.0f, yBase, line1, GLUT_BITMAP_HELVETICA_18);
 	if (line2) drawText2D(95.0f, yBase + 34.0f, line2, GLUT_BITMAP_HELVETICA_18);
 }
+
 void ViewPort::drawWorkspaceFrame(float alpha, const char* label) {
 	const float margin = 24.0f;
 	const float x0 = margin;
@@ -554,7 +556,8 @@ void ViewPort::drawOverlay(
 	const MarchingCubesPanelData* mcData,
 	const ObjExportPanelData* exportData,
 	bool paused,
-	bool meshAvailable) {
+	bool meshAvailable,
+	const TextureMapLayer1PanelData* textureMapData) {
 
 	updatePanelAnimation(!arbiter.isSimulationRunLayer());
 	updateSubLayerPanelAnimation(
@@ -568,7 +571,7 @@ void ViewPort::drawOverlay(
 		drawLayer0Menu(arbiter);
 	}
 	else if (arbiter.isEnvironmentConfigLayer()) {
-		drawLayer1EnvironmentConfig(arbiter);
+		drawLayer1EnvironmentConfig(arbiter, textureMapData);
 	}
 	else if (arbiter.isParticleConfigLayer()) {
 		drawLayer2ParticleConfig(arbiter, meshAvailable);
@@ -2142,6 +2145,221 @@ void ViewPort::drawLayer0Menu(const TheArbiter& arbiter) {
 	drawWorkspaceFrame(0.30f);
 }
 
+void ViewPort::drawTextureMapLayer1Config(
+	const TheArbiter& arbiter,
+	const TextureMapLayer1PanelData* textureMapData) {
+
+	drawPanelBackground();
+
+	// ---------------------------------------------------------
+	// Header.
+	// ---------------------------------------------------------
+	glColor4f(
+		1.0f,
+		1.0f,
+		1.0f,
+		m_panelSlide
+	);
+
+	drawText2D(
+		panelX(95.0f),
+		180.0f,
+		"LAYER 1 -> GRID_2D WORKSPACE SELECTION",
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	drawText2D(
+		panelX(95.0f),
+		215.0f,
+		"DOMAIN: GRID_2D",
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	const TheArbiter::TextureMapLayer1Item selected =
+		arbiter.getTextureMapLayer1Selection();
+
+	// ---------------------------------------------------------
+	// Row [1] — GRID_2D workspace selection.
+	// ---------------------------------------------------------
+	char workspaceLine[256];
+
+	snprintf(
+		workspaceLine,
+		sizeof(workspaceLine),
+		"[1] GRID_2D SELECTION { %s }",
+		arbiter.getSelectedWorkspaceDisplayName()
+	);
+
+	drawSelectableLine(
+		95.0f,
+		280.0f,
+		selected ==
+		TheArbiter::TextureMapLayer1Item::Workspace,
+		workspaceLine
+	);
+
+	// ---------------------------------------------------------
+	// Determine the current presentation-only target state.
+	//
+	// During this visual checkpoint, EuclidEngine still passes
+	// no TextureMapLayer1PanelData. The panel therefore displays
+	// a safe pending state instead of inventing an asset.
+	// ---------------------------------------------------------
+	const char* targetName =
+		"NO OUTPUT ASSETS";
+
+	const char* targetBadge =
+		"CATALOG PENDING";
+
+	if (textureMapData != nullptr) {
+
+		if (!textureMapData->targetName.empty()) {
+			targetName =
+				textureMapData->targetName.c_str();
+		}
+
+		if (!textureMapData->catalogReady) {
+			targetBadge =
+				"CATALOG PENDING";
+		}
+		else if (!textureMapData->hasOutputAssets) {
+			targetBadge =
+				"NO OUTPUT ASSETS";
+		}
+		else if (textureMapData->selectedAssetValid) {
+			targetBadge =
+				"READY";
+		}
+		else {
+			targetBadge =
+				"INVALID";
+		}
+	}
+
+	// ---------------------------------------------------------
+	// Row [2] — selected output Static Particle target.
+	// ---------------------------------------------------------
+	char targetLine[320];
+
+	snprintf(
+		targetLine,
+		sizeof(targetLine),
+		"[2] TARGET SP { %.36s } [ %s ]",
+		targetName,
+		targetBadge
+	);
+
+	drawSelectableLine(
+		95.0f,
+		335.0f,
+		selected ==
+		TheArbiter::TextureMapLayer1Item::TargetStaticParticle,
+		targetLine
+	);
+
+	// ---------------------------------------------------------
+	// Row [3] — request loading the selected target.
+	// ---------------------------------------------------------
+	drawSelectableLine(
+		95.0f,
+		390.0f,
+		selected ==
+		TheArbiter::TextureMapLayer1Item::OpenConfiguration,
+		"[3] LOAD TARGET / OPEN CONFIGURATION"
+	);
+
+	// ---------------------------------------------------------
+	// Row [4] — request an OUTPUT catalog refresh.
+	// ---------------------------------------------------------
+	drawSelectableLine(
+		95.0f,
+		445.0f,
+		selected ==
+		TheArbiter::TextureMapLayer1Item::RefreshCatalog,
+		"[4] REFRESH OUTPUT CATALOG"
+	);
+
+	// ---------------------------------------------------------
+	// Row [5] — enter TEXTURE_MAP_2D Layer 2 configuration.
+	// ---------------------------------------------------------
+	drawSelectableLine(
+		95.0f,
+		500.0f,
+		selected ==
+		TheArbiter::TextureMapLayer1Item::Configure,
+		"[5] PRESS E TO CONFIGURE SIM."
+	);
+
+	// ---------------------------------------------------------
+	// Status message.
+	// ---------------------------------------------------------
+	const char* statusText =
+		"OUTPUT CATALOG PRESENTATION BRIDGE PENDING.";
+
+	float statusR = 1.0f;
+	float statusG = 0.82f;
+	float statusB = 0.45f;
+
+	if (textureMapData != nullptr) {
+
+		if (!textureMapData->statusMessage.empty()) {
+			statusText =
+				textureMapData->statusMessage.c_str();
+		}
+		else if (!textureMapData->catalogReady) {
+			statusText =
+				"OUTPUT CATALOG IS NOT INITIALIZED.";
+		}
+		else if (!textureMapData->hasOutputAssets) {
+			statusText =
+				"NO OUTPUT STATIC PARTICLE ASSETS FOUND.";
+		}
+		else if (!textureMapData->selectedAssetValid) {
+			statusText =
+				"SELECTED STATIC PARTICLE MANIFEST IS INVALID.";
+
+			statusR = 1.0f;
+			statusG = 0.45f;
+			statusB = 0.45f;
+		}
+		else {
+			statusText =
+				"STATIC PARTICLE TARGET READY.";
+
+			statusR = 0.45f;
+			statusG = 1.0f;
+			statusB = 0.65f;
+		}
+	}
+
+	glColor4f(
+		statusR,
+		statusG,
+		statusB,
+		m_panelSlide
+	);
+
+	drawText2D(
+		panelX(95.0f),
+		570.0f,
+		statusText,
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	// ---------------------------------------------------------
+	// Footer.
+	// ---------------------------------------------------------
+	drawHelpFooter(
+		"W / S: Select list     A / D: Change value",
+		"E: Activate selected row     Q: Back one layer"
+	);
+
+	drawWorkspaceFrame(
+		0.20f,
+		nullptr
+	);
+}
+
 void ViewPort::drawSingleParticleLayer1Config(const TheArbiter& arbiter) {
 
 	drawPanelBackground();
@@ -2299,7 +2517,21 @@ void ViewPort::drawSingleParticleLayer1Config(const TheArbiter& arbiter) {
 	);
 }
 
-void ViewPort::drawLayer1EnvironmentConfig(const TheArbiter& arbiter) {
+void ViewPort::drawLayer1EnvironmentConfig(
+	const TheArbiter& arbiter, 
+	const TextureMapLayer1PanelData* textureMapData) {
+	
+	// GRID_2D -> TEXTURE_MAP_2D uses its dedicated
+	// four-row Layer 1 target-selection panel.
+	if (arbiter.isTextureMapLayer1PanelContext()) {
+
+		drawTextureMapLayer1Config(
+			arbiter,
+			textureMapData
+		);
+
+		return;
+	}
 
 	// GRID_3D -> SINGLE_PARTICLE uses its dedicated
 	// three-row Layer 1 configuration panel.
@@ -2314,7 +2546,6 @@ void ViewPort::drawLayer1EnvironmentConfig(const TheArbiter& arbiter) {
 		drawParticleSimLayer1Config(arbiter);
 		return;
 	}
-
 
 	drawPanelBackground();
 	glColor4f(1.0f, 1.0f, 1.0f, m_panelSlide);

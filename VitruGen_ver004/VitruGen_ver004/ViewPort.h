@@ -37,6 +37,24 @@ public:
 		int selectedIndex = 0;
 	};
 
+	// ---------------------------------------------------------
+	// TEXTURE_MAP_2D Layer 1 presentation data.
+	//
+	// ViewPort receives already-prepared display information.
+	// It must not scan directories, parse manifests, load assets,
+	// or own the output catalog.
+	//
+	// EuclidEngine will populate this structure in a later pass.
+	// ---------------------------------------------------------
+	struct TextureMapLayer1PanelData {
+		bool catalogReady = false;
+		bool hasOutputAssets = false;
+		bool selectedAssetValid = false;
+
+		std::string targetName;
+		std::string statusMessage;
+	};
+
 	struct MarchingCubesPanelData {
 		bool available = false;
 		bool meshReady = false;
@@ -74,7 +92,8 @@ public:
 		const MarchingCubesPanelData* mcData,
 		const ObjExportPanelData* exportData,
 		bool paused = false,
-		bool meshAvailable = false
+		bool meshAvailable = false,
+		const TextureMapLayer1PanelData* textureMapData = nullptr
 	);
 
 	int getWidth() const { return m_window_w; }
@@ -96,9 +115,20 @@ private:
 	void drawSubLayerPanelLine(float x, float y, bool active, const char* text, float alpha);
 
 	void drawLayer0Menu(const TheArbiter& arbiter);
-	void drawLayer1EnvironmentConfig(const TheArbiter& arbiter);
+
+	void drawLayer1EnvironmentConfig(
+		const TheArbiter& arbiter,
+		const TextureMapLayer1PanelData* textureMapData
+	);
+
+	void drawTextureMapLayer1Config(
+		const TheArbiter& arbiter,
+		const TextureMapLayer1PanelData* textureMapData
+	);
+
 	void drawSingleParticleLayer1Config(const TheArbiter& arbiter);
 	void drawParticleSimLayer1Config(const TheArbiter& arbiter);
+	
 	void drawLayer2ParticleConfig(const TheArbiter& arbiter, bool meshAvailable);
 	void drawParticleSimLayer2Config(const TheArbiter& arbiter);
 	void drawLayer3SimulationRun(const TheArbiter& arbiter, bool paused);

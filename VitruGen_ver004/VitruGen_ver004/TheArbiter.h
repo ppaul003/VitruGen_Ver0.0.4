@@ -58,6 +58,22 @@ public:
 		RESERVED
 	};
 
+	enum class ParticleSimLayer1Item {
+		Workspace = 0,
+		GridLayout,
+		ColorMode,
+		RadiusMode,
+		Configure,
+		Count
+	};
+
+	enum class SingleParticleLayer1Item {
+		Workspace = 0,
+		ParticleType,
+		Configure,
+		Count
+	};
+
 	enum class SingleParticleObjectType {
 		Static = 0,
 		Composite,
@@ -65,9 +81,11 @@ public:
 		Count
 	};
 
-	enum class SingleParticleLayer1Item {
+	enum class TextureMapLayer1Item {
 		Workspace = 0,
-		ParticleType,
+		TargetStaticParticle,
+		OpenConfiguration,
+		RefreshCatalog,
 		Configure,
 		Count
 	};
@@ -156,14 +174,7 @@ public:
 		Count
 	};
 
-	enum class ParticleSimLayer1Item {
-		Workspace = 0,
-		GridLayout,
-		ColorMode,
-		RadiusMode,
-		Configure,
-		Count
-	};
+	
 
 	struct ParticleSimDraftConfig {
 		ParticleGridLayout gridLayout =
@@ -260,8 +271,8 @@ public:
 	};
 
 	// ---------------------------------------------------------
-// SINGLE_PARTICLE collision and rendering setup state.
-// ---------------------------------------------------------
+	// SINGLE_PARTICLE collision and rendering setup state.
+	// ---------------------------------------------------------
 	enum class SPCollisionShape {
 		Sphere = 0,
 		Block,
@@ -533,10 +544,17 @@ public:
 
 		bool enterMarchingCubes = false;
 		bool exportObjRequested = false;
-		bool saveStaticParticleRequested = false;
+
 		bool saveStaticParticleAsRequested = false;
 		bool loadStaticParticleRequested = false;
 		std::string staticParticleAssetName;
+
+		// TEXTURE_MAP_2D Layer 1 intents.
+		// These are commands for EuclidEngine to handle later.
+		// TheArbiter performs no catalog or filesystem work.
+		bool refreshTextureMapCatalogRequested = false;
+		bool loadTextureMapTargetRequested = false;
+		int textureMapCatalogStep = 0;
 
 		// Volume CAD action.
 		bool commitVolumeFuse = false;
@@ -617,9 +635,12 @@ public:
 	WorkspaceId getSelectedWorkspace() const;
 	WorkspaceId getWorkspaceSelection(WorkspaceDomain domain) const;
 
+	TextureMapLayer1Item getTextureMapLayer1Selection() const { return m_textureMapLayer1Selection; }
+
 	SingleParticleLayer1Item getSingleParticleLayer1Selection() const { return m_singleParticleLayer1Selection; }
 	SingleParticleObjectType getSingleParticleObjectType() const { return m_singleParticleObjectType; }
 	ParticleColorSelection getParticleColorSelection() const { return m_particleColorSelection; }
+	
 	ParticleResetMode getParticleResetMode() const { return m_particleResetMode; }
 	ParticleConfigList getActiveParticleConfigList() const { return m_activeParticleConfigList; }
 	const ParticleSimDraftConfig& getParticleSimDraftConfig() const { return m_particleSimDraftConfig; }
@@ -666,11 +687,15 @@ public:
 	bool isWorkspaceDomainsSelected() const { return m_navigation.globalShellSelection == GlobalShellSelection::WORKSPACE_DOMAINS; }
 	bool isTextEntryActive() const { return m_textEntry.isActive(); }
 	bool isStaticParticleObjectType() const { return m_singleParticleObjectType == SingleParticleObjectType::Static; };
+	
 	bool isSingleParticleSelected() const { return getSelectedWorkspace() == WorkspaceId::SINGLE_PARTICLE_MCAD; }
 	bool isParticleSimulationSelected() const { return getSelectedWorkspace() == WorkspaceId::PARTICLE_SIMULATION; }
+
+	bool isTextureMapLayer1PanelContext() const;
 	bool isSingleParticleLayer1PanelContext() const;
 	bool isParticleSimLayer1PanelContext() const;
 	bool isParticleSimLayer2RunSelected() const;
+	
 	bool isVolumeBoundarySensorReady() const { return m_volumeBoundarySensorReady; }
 	bool isVolumeBoundarySafe() const { return m_volumeBoundarySensorReady && m_volumeBoundaryUnsafeCount == 0; }
 	
@@ -826,6 +851,11 @@ private:
 	void moveParticleConfigCursorUp();
 	void moveParticleConfigCursorDown();
 
+	// TEXTURE_MAP_2D Layer 1 configuration.
+	void moveTextureMapLayer1Cursor(int dir);
+	void handleTextureMapLayer1Adjust(int dir, ArbiterResult& result);
+	void activateTextureMapLayer1Item(ArbiterResult& result);
+
 	// SINGLE_PARTICLE Layer 1 configuration.
 	void moveSingleParticleLayer1Cursor(int dir);
 	void cycleSingleParticleObjectType(int dir);
@@ -963,6 +993,10 @@ private:
 
 	// --- NAVIGATION ---
 	NavigationState m_navigation;
+
+	//TEXTURE_MAP_2D Layer 1 menu cursor
+	TextureMapLayer1Item m_textureMapLayer1Selection =
+		TextureMapLayer1Item::Workspace;
 
 	TextEntrySession m_textEntry;
 	TextEntryTarget m_textEntryTarget = TextEntryTarget::None;

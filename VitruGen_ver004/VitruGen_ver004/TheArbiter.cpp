@@ -21,7 +21,7 @@ namespace {
 		{
 			TheArbiter::WorkspaceId::TEXTURE_MAP_2D,
 			TheArbiter::WorkspaceDomain::GRID_2D,
-			TheArbiter::WorkspaceAvailability::RESERVED,
+			TheArbiter::WorkspaceAvailability::AVAILABLE,
 			"TEXTURE_MAP_2D"
 		},
 		{
@@ -540,6 +540,19 @@ void TheArbiter::decreaseParticleRadius() {
 	}
 }
 
+bool TheArbiter::isTextureMapLayer1PanelContext() const {
+
+	return
+		m_navigation.layer ==
+		ApplicationLayer::DOMAIN_SELECTION &&
+
+		m_navigation.selectedDomain ==
+		WorkspaceDomain::GRID_2D &&
+
+		getSelectedWorkspace() ==
+		WorkspaceId::TEXTURE_MAP_2D;
+}
+
 bool TheArbiter::isSingleParticleLayer1PanelContext() const {
 
 	return
@@ -597,7 +610,98 @@ void TheArbiter::cycleParticleSimPanelWorkspace(int dir) {
 	);
 }
 
+void TheArbiter::moveTextureMapLayer1Cursor(int dir) {
+	if (dir == 0) return;
 
+	const int count =
+		static_cast<int>(TextureMapLayer1Item::Count);
+
+	const int current =
+		static_cast<int>(m_textureMapLayer1Selection);
+
+	m_textureMapLayer1Selection =
+		static_cast<TextureMapLayer1Item>(wrapIndex(current, count, dir));
+}
+
+void TheArbiter::handleTextureMapLayer1Adjust(
+	int dir,
+	ArbiterResult& result) {
+
+	if (dir == 0) return;
+
+	switch (m_textureMapLayer1Selection) {
+
+	case TextureMapLayer1Item::Workspace:
+
+		// Cycle through the GRID_2D workspace list:
+		//
+		// GRAPH_2D
+		// TEXTURE_MAP_2D
+		// SPRITE_PROJECTION_2D
+		cycleWorkspaceSelection(dir);
+		break;
+
+	case TextureMapLayer1Item::TargetStaticParticle:
+
+		// EuclidEngine will apply this step to the
+		// TextureMapWorkspace OUTPUT catalog.
+		result.textureMapCatalogStep =
+			dir < 0 ? -1 : +1;
+		break;
+
+	case TextureMapLayer1Item::OpenConfiguration:
+	case TextureMapLayer1Item::RefreshCatalog:
+	case TextureMapLayer1Item::Configure:
+	case TextureMapLayer1Item::Count:
+
+		// Action rows have no A/D value.
+		break;
+	}
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+}
+
+
+void TheArbiter::activateTextureMapLayer1Item(ArbiterResult& result) {
+
+	switch (m_textureMapLayer1Selection) {
+
+	case TextureMapLayer1Item::OpenConfiguration:
+
+		// Future Layer 1 catalog/load sprint:
+		// load the selected OUTPUT Static Particle target.
+		result.loadTextureMapTargetRequested = true;
+		break;
+
+	case TextureMapLayer1Item::RefreshCatalog:
+
+		// Future Layer 1 catalog sprint:
+		// rescan OUTPUT/STATIC_PARTICLES.
+		result.refreshTextureMapCatalogRequested = true;
+		break;
+
+	case TextureMapLayer1Item::Configure:
+		
+		// Enter TEXTURE_MAP_2D Layer 2.
+		//
+		// Layer2 gets its dedicated target-configuration
+		setApplicationLayer(ApplicationLayer::WORKSPACE_CONFIGURATION);
+		break;
+
+	case TextureMapLayer1Item::Workspace:
+	case TextureMapLayer1Item::TargetStaticParticle:
+	case TextureMapLayer1Item::Count:
+
+		// Rows [1] and [2] do not activate with E.
+		break;
+	}
+
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+}
 
 void TheArbiter::moveSingleParticleLayer1Cursor(int dir) {
 	if (dir == 0) return;
@@ -2202,6 +2306,59 @@ void TheArbiter::handleGlobalShellKeyboard(
 void TheArbiter::handleDomainSelectionKeyboard(
 	const KeyboardInput::KeyEvent& event,
 	ArbiterResult& result) {
+
+	// =========================================================
+	// GRID_2D -> TEXTURE_MAP_2D Layer 1 panel
+	// =========================================================
+	if (isTextureMapLayer1PanelContext()) {
+
+		switch (event.signal) {
+
+		case KeyboardInput::KEY_W:
+
+			moveTextureMapLayer1Cursor(-1);
+
+			result.command = CMD_REDRAW;
+			result.requestRedraw = true;
+
+			break;
+
+		case KeyboardInput::KEY_S:
+
+			moveTextureMapLayer1Cursor(+1);
+
+			result.command = CMD_REDRAW;
+			result.requestRedraw = true;
+
+			break;
+
+		case KeyboardInput::KEY_A:
+
+			handleTextureMapLayer1Adjust(-1, result);
+
+			break;
+
+		case KeyboardInput::KEY_D:
+
+			handleTextureMapLayer1Adjust(+1, result);
+
+			break;
+
+		case KeyboardInput::KEY_E:
+		case KeyboardInput::KEY_ENTER:
+
+			activateTextureMapLayer1Item(result);
+
+			break;
+
+		default:
+			break;
+		}
+
+		// Prevent the generic workspace selector from processing
+		// the same key a second time.
+		return;
+	}
 
 	// =========================================================
 	// GRID_3D -> SINGLE_PARTICLE Layer 1 panel
@@ -4396,15 +4553,15 @@ void TheArbiter::activateSubLayerPanelItem(ArbiterResult& result) {
 	}
 
 	// ---------------------------------------------------------
-// Sub-Layer 0 panel actions.
-// ---------------------------------------------------------
+	// Sub-Layer 0 panel actions.
+	// ---------------------------------------------------------
 	if (isSingleParticleReferenceSubLayer()) {
 		switch (m_activeSubLayerPanelItem) {
 		case SP0_LIST_LOAD_STATIC_PARTICLE:
 			result.loadStaticParticleRequested = true;
 			break;
 		case SP0_LIST_SAVE_ACTIVE_PARTICLE:
-			result.saveStaticParticleRequested = true;
+			result.saveStaticParticleAsRequested = true;
 			break;
 		case SP0_LIST_RENDERING_SETUP:
 
@@ -4523,7 +4680,7 @@ void TheArbiter::activateSubLayerPanelItem(ArbiterResult& result) {
 	if (isMarchingCubesSubLayer()) {
 		switch (m_activeSubLayerPanelItem) {
 		case MC_LIST_SAVE_STATIC_PARTICLE:
-			result.saveStaticParticleRequested = true;
+			result.saveStaticParticleAsRequested = true;
 			break;
 
 		case MC_LIST_SAVE_STATIC_PARTICLE_AS:
