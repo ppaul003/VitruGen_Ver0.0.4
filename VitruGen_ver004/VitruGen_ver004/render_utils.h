@@ -135,6 +135,10 @@ static const char* modelFragmentShader = STRINGIFY(
 	uniform int uUseBaseColorTexture;
 	uniform int uAlphaMask;
 	uniform float uAlphaCutoff;
+	uniform sampler2D uEmissiveTexture;
+	uniform int uUseEmissiveTexture;
+	uniform vec3 uEmissiveFactor;
+	uniform float uEmissiveIntensity;
 
 	void main() {
 		vec3 N = normalize(vNormalEye);
@@ -148,7 +152,11 @@ static const char* modelFragmentShader = STRINGIFY(
 		vec4 surfaceColor = sampledBaseColor * uColor;
 		if (uAlphaMask != 0 && surfaceColor.a < uAlphaCutoff) discard;
 
-		gl_FragColor = vec4(surfaceColor.rgb * lighting, surfaceColor.a);
+		vec3 emissiveSample = uUseEmissiveTexture != 0
+			? texture2D(uEmissiveTexture, vTexcoord).rgb
+			: vec3(1.0);
+		vec3 emissive = emissiveSample * uEmissiveFactor * uEmissiveIntensity;
+		gl_FragColor = vec4(surfaceColor.rgb * lighting + emissive, surfaceColor.a);
 
 	}
 

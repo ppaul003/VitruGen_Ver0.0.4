@@ -96,6 +96,16 @@ public:
 		Count
 	};
 
+	enum class TextureMapRuntimeIntent {
+		None = 0,
+		AdjustPrevious,
+		AdjustNext,
+		Activate,
+		TogglePanelOrView,
+		ToggleMeshSelection,
+		RequestStructuralExit
+	};
+
 	enum class TextEntryTarget {
 		None = 0,
 
@@ -104,7 +114,9 @@ public:
 		ParticleGreenCount,
 		ParticleBlueCount,
 
-		SingleParticleAssetName
+		SingleParticleAssetName,
+		TextureMapSurfaceTargetName,
+		TextureMapSaveAsAssetName
 	};
 
 	struct WorkspaceDescriptor {
@@ -579,6 +591,16 @@ public:
 
 		// Row [3]: request validated Layer 3 runtime entry.
 		bool runTextureMapWorkspaceRequested = false;
+		bool textureMapSurfaceTargetNameEntered = false;
+		bool textureMapSaveAsNameEntered = false;
+		bool textureMapTextEntryCancelled = false;
+		std::string textureMapEnteredName;
+
+		// Layer 3 authoring intent. The workspace interprets the selected
+		// row; TheArbiter never edits pixels or canonical resources.
+		TextureMapRuntimeIntent textureMapRuntimeIntent =
+			TextureMapRuntimeIntent::None;
+		int textureMapRuntimeRow = 0;
 
 		// Volume CAD action.
 		bool commitVolumeFuse = false;
@@ -654,6 +676,16 @@ public:
 	// --- TM_2D / MENU ENTRYPOINTS ---
 	ArbiterResult enterTextureMapLayer2FromMenu();
 	ArbiterResult enterTextureMapLayer3Runtime();
+	ArbiterResult returnTextureMapLayer2Runtime();
+	ArbiterResult activateTextureMapRuntimeRowFromMenu(int row);
+	ArbiterResult toggleTextureMapRuntimeViewFromMenu();
+	ArbiterResult beginTextureMapSurfaceTargetNameEntry();
+	ArbiterResult beginTextureMapSaveAsNameEntry(
+		const std::string& initialName);
+	void syncTextureMapRuntimeNavigation(
+		int subLayer,
+		int rowCount,
+		bool nestedFocus);
 
 	// --- SINGLE_PARTICLE AUTHORING SOURCE ---
 	void activateLoadedStaticParticleBase(bool hasEditableVolume);
@@ -667,6 +699,11 @@ public:
 
 	TextureMapLayer1Item getTextureMapLayer1Selection() const { return m_textureMapLayer1Selection; }
 	TextureMapLayer2Item getTextureMapLayer2Selection() const { return m_textureMapLayer2Selection; }
+	int getTextureMapRuntimeSubLayer() const { return m_textureMapRuntimeSubLayer; }
+	int getTextureMapRuntimeRow() const { return m_textureMapRuntimeRow; }
+	bool isTextureMapRuntimePanelVisible() const { return m_textureMapRuntimePanelVisible; }
+	bool isTextureMapRuntimeMeshSelected() const { return m_textureMapRuntimeMeshSelected; }
+	bool isTextureMapRuntimeNestedFocus() const { return m_textureMapRuntimeNestedFocus; }
 
 	SingleParticleLayer1Item getSingleParticleLayer1Selection() const { return m_singleParticleLayer1Selection; }
 	SingleParticleObjectType getSingleParticleObjectType() const { return m_singleParticleObjectType; }
@@ -1035,6 +1072,12 @@ private:
 	//TEXTURE_MAP_2D Layer 2 menu cursor
 	TextureMapLayer2Item m_textureMapLayer2Selection =
 		TextureMapLayer2Item::PreviewParticleRadius;
+	int m_textureMapRuntimeSubLayer = 0;
+	int m_textureMapRuntimeRow = 0;
+	int m_textureMapRuntimeRowCount = 3;
+	bool m_textureMapRuntimePanelVisible = true;
+	bool m_textureMapRuntimeMeshSelected = false;
+	bool m_textureMapRuntimeNestedFocus = false;
 
 	TextEntrySession m_textEntry;
 	TextEntryTarget m_textEntryTarget = TextEntryTarget::None;

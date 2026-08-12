@@ -84,6 +84,7 @@ private:
 	static void sMotion(int x, int y);
 	static void sPassiveMotion(int x, int y);
 	static void sMainMenu(int value);
+	static void sMenuStatus(int status, int x, int y);
 	static void sKeyboard(unsigned char key, int x, int y);
 	static void sIdle();
 	static void sClose();
@@ -156,9 +157,14 @@ private:
 
 	// --- TEXTURE_MAP_2D ---
 	void initTextureMapResources();
+	void refreshTextureMapBaseMaterialCatalog();
 	bool loadSelectedTextureMapTarget();
 	bool enterTextureMapLayer2Preview();
 	bool enterTextureMapLayer3Runtime();
+	void handleTextureMapRuntimeResult(
+		const TheArbiter::ArbiterResult& result);
+	bool saveTextureMapCurrent();
+	bool saveTextureMapAs(const std::string& assetName);
 
 	// --- NAMED STATIC PARTICLE ASSET JOBS ---
 	void openStaticParticleLoadPanel();
@@ -255,6 +261,17 @@ private:
 	static constexpr int MENU_SP_RENDER_CAGE_OFF = 2109;
 	static constexpr int MENU_SP_VOLUME_PREVIEW = 2110;
 	static constexpr int MENU_SP_COLLISION_SETUP = 2111;
+	// TEXTURE_MAP_2D Layer 3 context-menu parity. Row commands are
+	// interpreted by the same Arbiter/workspace path as keyboard E.
+	static constexpr int MENU_TM_RUNTIME_ROW_0 = 3000;
+	static constexpr int MENU_TM_RUNTIME_ROW_1 = 3001;
+	static constexpr int MENU_TM_RUNTIME_ROW_2 = 3002;
+	static constexpr int MENU_TM_RUNTIME_ROW_3 = 3003;
+	static constexpr int MENU_TM_RUNTIME_ROW_4 = 3004;
+	static constexpr int MENU_TM_RUNTIME_ROW_5 = 3005;
+	static constexpr int MENU_TM_RUNTIME_ROW_6 = 3006;
+	static constexpr int MENU_TM_RUNTIME_TOGGLE_VIEW = 3010;
+	static constexpr int MENU_TM_RUNTIME_TOGGLE_MESH = 3011;
 
 	static constexpr float kMarchingCubesIsoValue = 0.0f;
 
@@ -319,6 +336,8 @@ private:
 	int m_staticAssetLastSpinnerMs = 0;
 	std::string m_pendingStaticAssetName;
 	std::vector<vitru::StaticAssetCatalogEntry> m_staticAssetCatalog;
+	bool m_textureMapSaveAsAwaitingSurfaceName = false;
+	std::string m_textureMapSaveAsSurfaceTargetName;
 
 	vitru::ProjectAssetRepository m_assetRepository;
 

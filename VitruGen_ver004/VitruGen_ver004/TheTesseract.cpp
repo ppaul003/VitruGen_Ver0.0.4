@@ -3273,6 +3273,36 @@ void Tesseract::renderTextureMapWorkspace(
 
 	m_renderer->setParticleHighlighted(false);
 
+	vitru::TextureMapWorkspace& runtime =
+		m_textureMapWorkspace.runtime;
+
+	if (layer3Active &&
+		runtime.runtimeSubLayer() == vitru::TextureMapSubLayer::PixelEditor &&
+		runtime.viewMode() == vitru::TextureMapViewMode::Edit &&
+		runtime.session().workingImage.valid()) {
+
+		std::vector<vitru::Vec2> contourPoints;
+		const float divisions = static_cast<float>(target.pixelGridDivisions);
+		for (const vitru::TextureMapGridCell& cell :
+			runtime.session().contourCells) {
+			contourPoints.push_back({
+				(static_cast<float>(cell.x) + 0.5f) / divisions,
+				(static_cast<float>(cell.y) + 0.5f) / divisions
+			});
+		}
+
+		m_renderer->displayTextureMapPixelEditor(
+			runtime.session().workingImage,
+			runtime.selectedFace(),
+			target.pixelGridDivisions,
+			runtime.session().cursorCell.x,
+			runtime.session().cursorCell.y,
+			contourPoints,
+			runtime.contourClosed(),
+			runtime.editorZoom());
+		return;
+	}
+
 	const bool showCollisionRadius =
 		layer2Active &&
 		ctx.arbiter->getTextureMapLayer2Selection() ==
@@ -3285,6 +3315,7 @@ void Tesseract::renderTextureMapWorkspace(
 		ctx.particleWorkspaceZs,
 		target.previewParticleRadius,
 		showCollisionRadius,
-		layer2Active
+		layer2Active,
+		layer3Active && ctx.arbiter->isTextureMapRuntimeMeshSelected()
 	);
 }

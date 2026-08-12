@@ -14,16 +14,44 @@
 
 namespace vitru {
 
-    enum class TextureMapFocus {
-        TextureCanvas = 0,
-        MeshInspection
+    enum class TextureMapFocus { TextureCanvas = 0, MeshInspection };
+    enum class TextureMapSubLayer { CycleSetup = 0, BranchSetup, PixelEditor, CommitSave };
+    enum class TextureMapAuthoringMode { Coloring = 0, Contour, PanelLines };
+    enum class TextureMapPreviewSource { Working = 0, Committed };
+    enum class TextureMapViewMode { Edit = 0, Preview };
+    enum class TextureMapContourAction { New = 0, EditExisting };
+    enum class TextureMapChannel {
+        BaseColor = 0,
+        EmissiveColor,
+        AlphaMask,
+        Height,
+        Normal,
+        MetallicRoughness,
+        Occlusion,
+        Count
     };
 
-    enum class TextureMapSubLayer {
-        BaseMaterial = 0,
-        MaterialTint,
-        PanelLines,
-        ApplySave
+    enum class TextureMapWorkspaceAction {
+        None = 0,
+        RequestSurfaceTargetName,
+        RequestSaveCurrent,
+        RequestSaveAs,
+        StateChanged,
+        Rejected
+    };
+
+    struct TextureMapGridCell {
+        int x = -1;
+        int y = -1;
+        bool valid() const { return x >= 0 && y >= 0; }
+        bool operator==(const TextureMapGridCell& other) const {
+            return x == other.x && y == other.y;
+        }
+    };
+
+    struct TextureMapLineColorPreset {
+        const char* name = "BLACK";
+        std::array<std::uint8_t, 4> rgba{ 0u, 0u, 0u, 255u };
     };
 
     enum class TextureTargetReadiness {
@@ -92,6 +120,33 @@ namespace vitru {
 
         std::string textureId;
 
+        TextureMapAuthoringMode authoringMode =
+            TextureMapAuthoringMode::Coloring;
+
+        TextureMapViewMode viewMode = TextureMapViewMode::Edit;
+        TextureMapChannel channel = TextureMapChannel::BaseColor;
+        TextureMapContourAction contourAction = TextureMapContourAction::New;
+
+        int selectedSurfaceTarget = -1;
+        int selectedContourTarget = -1;
+        std::uint32_t selectedFace = 0u;
+
+        std::array<std::uint8_t, 4> paintColor{
+            255u, 255u, 255u, 255u
+        };
+
+        int lineThickness = 1;
+        std::size_t lineColorPreset = 0;
+        float emissiveIntensity = 1.0f;
+
+        std::vector<TextureMapGridCell> contourCells;
+        bool contourClosed = false;
+
+        TextureMapGridCell cursorCell;
+        TextureMapGridCell previousStrokeCell;
+        bool strokeActive = false;
+		float editorZoom = 1.0f;
+
         // Snapshot used by Discard Changes.
         ImageRGBA8 originalImage;
 
@@ -103,6 +158,10 @@ namespace vitru {
 
         // Base material + tint + panel-line overlay.
         ImageRGBA8 compositeImage;
+
+        // The active Base Color or Emissive texture edited by the
+        // shared logical pixel-grid runtime.
+        ImageRGBA8 workingImage;
 
         std::array<float, 4> tint{
             1.0f,
@@ -128,7 +187,8 @@ namespace vitru {
         void reset();
 
         bool refreshOutputCatalog();
-        bool refreshBaseMaterialCatalog();
+        void replaceBaseMaterialCatalog(
+            std::vector<BaseMaterialCatalogEntry> catalog);
 
         bool selectOutputAsset(int direction);
         bool selectBaseMaterial(int direction);
@@ -156,6 +216,77 @@ namespace vitru {
         bool adjustPreviewParticleRadius(int direction);
         bool adjustPixelGridDivisions(int direction);
 
+        // Layer 3 authoring runtime. Keyboard/menu input is reduced to
+        // row selection plus these common commands; authoring data stays
+        // entirely inside this workspace until an explicit commit.
+        bool beginAuthoringRuntime();
+        int runtimeRowCount() const;
+        bool adjustRuntimeValue(int row, int direction);
+        TextureMapWorkspaceAction activateRuntimeRow(
+            int row,
+            std::string* diagnostic = nullptr);
+
+        bool toggleRuntimeView();
+		bool adjustEditorZoom(int direction);
+        bool canExitLayer3(std::string* diagnostic = nullptr) const;
+        bool completeSurfaceTargetName(
+            const std::string& name,
+            std::string* diagnostic = nullptr);
+        bool validateNewSurfaceTargetName(
+            const std::string& name,
+            std::string* diagnostic = nullptr) const;
+
+        bool commitWorkingEdit(
+            const std::string& newSurfaceTargetName = std::string{},
+            std::string* diagnostic = nullptr);
+
+        bool buildSaveAsSnapshot(
+            const std::string& assetName,
+            StaticParticleAsset& output,
+            std::string* diagnostic = nullptr,
+            const std::string& uncommittedSurfaceTargetName = std::string{}) const;
+
+        bool adoptSavedTarget(AssetId assetId);
+
+        bool setCursorCell(int x, int y);
+        bool beginAuthoringStroke(int x, int y);
+        bool continueAuthoringStroke(int x, int y);
+        bool endAuthoringStroke();
+        bool addContourPoint(int x, int y);
+        bool closeContour(std::string* diagnostic = nullptr);
+        bool undoContourPoint();
+
+        StaticParticleAsset buildPreviewAsset() const;
+        bool previewUsesWorkingState() const {
+            return m_previewSource == TextureMapPreviewSource::Working;
+        }
+
+        TextureMapAuthoringMode authoringMode() const { return m_authoringMode; }
+        TextureMapPreviewSource previewSource() const { return m_previewSource; }
+        TextureMapSubLayer runtimeSubLayer() const { return m_subLayer; }
+        TextureMapViewMode viewMode() const { return m_session.viewMode; }
+        TextureMapChannel selectedChannel() const { return m_selectedChannel; }
+        TextureMapContourAction contourAction() const { return m_contourAction; }
+        int selectedSurfaceTarget() const { return m_selectedSurfaceTarget; }
+        int selectedContourTarget() const { return m_selectedContourTarget; }
+        std::uint32_t selectedFace() const { return m_session.selectedFace; }
+        const std::array<std::uint8_t, 4>& paintColor() const { return m_session.paintColor; }
+        int lineThickness() const { return m_session.lineThickness; }
+        std::size_t lineColorPresetIndex() const { return m_session.lineColorPreset; }
+        float emissiveIntensity() const {
+            return m_session.active ? m_session.emissiveIntensity : m_emissiveIntensity;
+        }
+		float editorZoom() const { return m_session.editorZoom; }
+        bool contourClosed() const { return m_session.contourClosed; }
+        std::size_t contourPointCount() const { return m_session.contourCells.size(); }
+        bool nestedFocus() const { return m_nestedFocus; }
+        const std::string& runtimeStatusMessage() const { return m_runtimeStatusMessage; }
+        void clearRuntimeStatusMessage() { m_runtimeStatusMessage.clear(); }
+
+        static const std::array<TextureMapLineColorPreset, 4>& lineColorPresets();
+        static const char* boxAtlasFaceAxisName(std::uint32_t faceIndex);
+        static bool channelActive(TextureMapChannel channel);
+
         ProjectAssetRepository* repository() { return m_repository; }
         const TextureMapTargetContext& target() const { return m_target; }
 
@@ -172,6 +303,20 @@ namespace vitru {
         bool initialized() const { return m_initialized; }
 
     private:
+        bool prepareWorkingPass(std::string* diagnostic = nullptr);
+        bool abandonWorkingPass();
+        bool applyCell(const TextureMapGridCell& cell, bool panelLine);
+        bool rasterizeStroke(
+            const TextureMapGridCell& from,
+            const TextureMapGridCell& to,
+            bool panelLine);
+        bool cellInsideSelectedSurfaceTarget(const TextureMapGridCell& cell) const;
+        bool contourHasSelfIntersection() const;
+        ImageRGBA8 textureImage(const TextureResource* texture) const;
+        TextureResource* ensureEditableTexture(
+            StaticParticleAsset& asset,
+            TextureMapChannel channel,
+            const ImageRGBA8& image) const;
         ProjectAssetRepository* m_repository = nullptr;
 
         std::filesystem::path m_outputStaticParticlesRoot;
@@ -193,8 +338,17 @@ namespace vitru {
         TextureMapFocus m_focus =
             TextureMapFocus::TextureCanvas;
 
-        TextureMapSubLayer m_subLayer =
-            TextureMapSubLayer::BaseMaterial;
+        TextureMapSubLayer m_subLayer = TextureMapSubLayer::CycleSetup;
+        TextureMapAuthoringMode m_authoringMode = TextureMapAuthoringMode::Coloring;
+        TextureMapPreviewSource m_previewSource = TextureMapPreviewSource::Working;
+        TextureMapChannel m_selectedChannel = TextureMapChannel::BaseColor;
+        TextureMapContourAction m_contourAction = TextureMapContourAction::New;
+        int m_selectedSurfaceTarget = -1;
+        int m_selectedContourTarget = -1;
+        bool m_nestedFocus = false;
+        bool m_baseMaterialSourceSelected = false;
+        float m_emissiveIntensity = 1.0f;
+        std::string m_runtimeStatusMessage;
 
         bool m_initialized = false;
     };

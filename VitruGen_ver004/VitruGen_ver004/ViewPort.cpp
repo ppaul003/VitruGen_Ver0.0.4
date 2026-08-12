@@ -558,9 +558,13 @@ void ViewPort::drawOverlay(
 	bool paused,
 	bool meshAvailable,
 	const TextureMapLayer1PanelData* textureMapData,
-	const TextureMapLayer2PanelData* textureMapLayer2Data) {
+	const TextureMapLayer2PanelData* textureMapLayer2Data,
+	const TextureMapLayer3PanelData* textureMapLayer3Data) {
 
-	updatePanelAnimation(!arbiter.isSimulationRunLayer());
+	updatePanelAnimation(
+		!arbiter.isSimulationRunLayer() ||
+		(arbiter.isTextureMapLayer3RuntimeContext() &&
+			textureMapLayer3Data && textureMapLayer3Data->panelVisible));
 	updateSubLayerPanelAnimation(
 		arbiter.isSubLayerPanelOpen() &&
 		arbiter.isSubLayerPanelEligible()
@@ -595,7 +599,9 @@ void ViewPort::drawOverlay(
 
 		if (arbiter.isTextureMapLayer3RuntimeContext()) {
 
-			drawTextureMapLayer3Runtime();
+			drawTextureMapLayer3Runtime(
+				arbiter,
+				textureMapLayer3Data);
 		}
 		else {
 
@@ -2579,7 +2585,9 @@ void ViewPort::drawTextureMapLayer2Config(
 	);
 }
 
-void ViewPort::drawTextureMapLayer3Runtime() {
+void ViewPort::drawTextureMapLayer3Runtime(
+	const TheArbiter& arbiter,
+	const TextureMapLayer3PanelData* data) {
 
 	drawWorkspaceFrame(
 		0.22f,
@@ -2593,19 +2601,48 @@ void ViewPort::drawTextureMapLayer3Runtime() {
 		1.0f
 	);
 
-	drawText2D(
-		42.0f,
-		48.0f,
-		"LAYER 3 -> TEXTURE_MAP_2D WORKSPACE RUNTIME",
-		GLUT_BITMAP_HELVETICA_18
-	);
+	if (!data || !data->panelVisible) {
+		drawText2D(42.0f, 48.0f,
+			"LAYER 3 -> TEXTURE_MAP_2D WORKSPACE RUNTIME",
+			GLUT_BITMAP_HELVETICA_18);
+		drawText2D(42.0f, 78.0f,
+			"TARGET MESH INSPECTION | TAB: RESTORE PANEL",
+			GLUT_BITMAP_HELVETICA_12);
+		drawText2D(42.0f, 100.0f,
+			"E: SELECT / DESELECT TARGET MESH | MOUSE: ORBIT / ZOOM",
+			GLUT_BITMAP_HELVETICA_12);
+		return;
+	}
 
-	drawText2D(
-		42.0f,
-		78.0f,
-		"TEXTURED STATIC PARTICLE PREVIEW",
-		GLUT_BITMAP_HELVETICA_18
-	);
+	drawPanelBackground();
+	const float x = panelX(95.0f);
+	float y = 150.0f;
+	drawText2D(x, y,
+		"TEXTURE_MAP_2D MODE", GLUT_BITMAP_HELVETICA_18);
+	y += 28.0f;
+	drawText2D(x, y, data->subLayerLabel.c_str(), GLUT_BITMAP_HELVETICA_18);
+	y += 34.0f;
+	drawText2D(x, y,
+		("TARGET { " + data->targetName + " }").c_str(),
+		GLUT_BITMAP_HELVETICA_12);
+	y += 22.0f;
+	drawText2D(x, y,
+		("AUTHORING { " + data->authoringMode + " } | STATUS { " +
+			data->status + " }").c_str(), GLUT_BITMAP_HELVETICA_12);
+	y += 28.0f;
+
+	for (const std::string& line : data->informationLines) {
+		drawText2D(x, y, line.c_str(), GLUT_BITMAP_HELVETICA_12);
+		y += 20.0f;
+	}
+	y += 8.0f;
+	for (std::size_t i = 0; i < data->rows.size(); i++) {
+		drawSelectableLine(
+			x, y,
+			static_cast<int>(i) == arbiter.getTextureMapRuntimeRow(),
+			data->rows[i].c_str());
+		y += 27.0f;
+	}
 
 	glColor4f(
 		0.76f,
@@ -2614,19 +2651,8 @@ void ViewPort::drawTextureMapLayer3Runtime() {
 		1.0f
 	);
 
-	drawText2D(
-		42.0f,
-		118.0f,
-		"Q: RETURN TO TARGET CONFIGURATION",
-		GLUT_BITMAP_HELVETICA_12
-	);
-
-	drawText2D(
-		42.0f,
-		140.0f,
-		"MOUSE: ORBIT / ZOOM PREVIEW",
-		GLUT_BITMAP_HELVETICA_12
-	);
+	drawHelpFooter(data->footerLine1.c_str(),
+		data->footerLine2.empty() ? nullptr : data->footerLine2.c_str());
 }
 
 void ViewPort::drawSingleParticleLayer1Config(const TheArbiter& arbiter) {

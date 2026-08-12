@@ -5,6 +5,7 @@
 #include "PngImage.h"
 #include "ProjectAssetRepository.h"
 #include "StaticParticleAssetIO.h"
+#include "TextureMapWorkspace.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -92,13 +93,106 @@ void verifyObjMtl(const fs::path& root) {
 
 void verifyBundleRoundTrip(const fs::path& root) {
 	vitru::StaticParticleAsset asset = cubeAsset("Anaheim SP Test 01");
+	vitru::TextureResource emissive;
+	emissive.id = "tm_emissive";
+	emissive.relativePath = "textures/Anaheim_SP_Test_01_emissive.png";
+	emissive.usage = vitru::TextureUsage::Emissive;
+	emissive.colorSpace = vitru::TextureColorSpace::SRGB;
+	emissive.width = 8u; emissive.height = 8u; emissive.channels = 4u;
+	emissive.pixels = vitru::makeSolidImage(8u, 8u, 20u, 40u, 80u, 255u).pixels;
+	emissive.loaded = true; emissive.valid = true;
+	asset.textures.push_back(emissive);
+	asset.materials[0].emissiveTextureId = emissive.id;
+	asset.materials[0].emissiveFactor[0] = 1.0f;
+	asset.materials[0].emissiveFactor[1] = 1.0f;
+	asset.materials[0].emissiveFactor[2] = 1.0f;
+	asset.materials[0].emissiveIntensity = 2.25f;
+	vitru::SurfaceTarget target;
+	target.name = "eye_outer"; target.faceIndex = 4u;
+	target.normalizedPolygon = { {0.2f,0.2f}, {0.8f,0.2f}, {0.5f,0.8f} };
+	asset.surfaceTargets.push_back(target);
 	const fs::path output = root / "OUTPUT"; const fs::path p0 = root / "SINGLE_PARTICLE_DATA" / "p0.obj";
 	vitru::StaticAssetOperationReport save; require(vitru::saveStaticParticleBundle(asset, output, asset.name, p0, save), "named asset save"); require(fs::exists(save.manifestPath), "VSPA manifest created"); require(fs::exists(save.assetRoot / "geometry" / "Anaheim_SP_Test_01.obj"), "named OBJ created"); require(fs::exists(save.assetRoot / "materials" / "Anaheim_SP_Test_01.mtl"), "named MTL created"); require(fs::exists(save.assetRoot / "textures" / "Anaheim_SP_Test_01_basecolor.png"), "default base color created"); require(fs::exists(save.assetRoot / "textures" / "Anaheim_SP_Test_01_uv_guide.png"), "UV guide created"); require(fs::exists(p0), "p0 workspace register refreshed");
 	vitru::ProjectAssetRepository repository; vitru::StaticParticleAsset loaded; vitru::StaticAssetOperationReport load; require(vitru::loadStaticParticleBundle(save.manifestPath, loaded, load, &repository, p0), "named bundle load"); require(loaded.mesh.triangleCount() == asset.mesh.triangleCount(), "bundle triangle round-trip"); require(loaded.mesh.uvs.size() == loaded.mesh.positions.size(), "bundle UV round-trip"); require(repository.activeStaticParticle() != nullptr, "loaded asset active in repository");
+	require(!loaded.materials.empty() && loaded.materials[0].emissiveTextureId == "tm_emissive", "emissive texture reference round-trip");
+	require(std::fabs(loaded.materials[0].emissiveIntensity - 2.25f) <= 1.0e-6f, "emissive intensity round-trip");
+	require(loaded.surfaceTargets.size() == 1u && loaded.surfaceTargets[0].name == "eye_outer", "surface target name round-trip");
+	require(loaded.surfaceTargets[0].faceIndex == 4u && loaded.surfaceTargets[0].normalizedPolygon.size() == 3u, "surface target polygon round-trip");
 	const std::string manifestBefore = save.manifestPath.string(); vitru::StaticAssetOperationReport replace; require(vitru::saveStaticParticleBundle(loaded, output, asset.name, p0, replace), "atomic destination replacement"); require(replace.manifestPath.string() == manifestBefore, "replacement destination stable");
 	vitru::StaticParticleAsset invalid = loaded; invalid.mesh.clear(); vitru::StaticAssetOperationReport rollback; require(!vitru::saveStaticParticleBundle(invalid, output, asset.name, p0, rollback), "invalid save rejected"); require(fs::exists(replace.manifestPath), "failed save leaves previous asset intact");
 	const fs::path invalidManifest = root / "invalid.vspa.json"; writeText(invalidManifest, "{\"schema\":\"wrong.schema\",\"schema_version\":1}"); vitru::StaticParticleAsset rejected; vitru::VspaLoadReport rejectedReport; require(!vitru::loadVspaManifest(invalidManifest, rejected, rejectedReport), "invalid manifest schema rejected");
 	std::ifstream obj(save.assetRoot / "geometry" / "Anaheim_SP_Test_01.obj"); std::string objText((std::istreambuf_iterator<char>(obj)), {}); require(objText.find("vt ") != std::string::npos && objText.find("mtllib ") != std::string::npos && objText.find("usemtl ") != std::string::npos && objText.find("/1/1") != std::string::npos, "OBJ vt/material/index contract");
+}
+
+void verifyTextureMapAuthoringRuntime(const fs::path& root) {
+	const fs::path output = root / "TM_OUTPUT";
+	const fs::path materials = root / "TM_BASE_MATERIALS";
+	fs::create_directories(output);
+	fs::create_directories(materials);
+
+	vitru::StaticParticleAsset asset = cubeAsset("TextureMapRuntime");
+	require(vitru::generateBoxAtlasUVs(asset.mesh).success, "texture-map fixture UV atlas");
+	vitru::TextureResource base;
+	base.id = "tm_base"; base.relativePath = "textures/tm_base.png";
+	base.usage = vitru::TextureUsage::BaseColor;
+	base.colorSpace = vitru::TextureColorSpace::SRGB;
+	base.width = 96u; base.height = 64u; base.channels = 4u;
+	base.pixels = vitru::makeSolidImage(96u, 64u, 0u, 0u, 0u, 255u).pixels;
+	base.loaded = true; base.valid = true;
+	asset.textures.push_back(base);
+	asset.materials[0].baseColorTextureId = base.id;
+
+	vitru::ProjectAssetRepository repository;
+	const vitru::AssetId id = repository.addStaticParticle(asset);
+	vitru::TextureMapWorkspace workspace;
+	require(workspace.initialize(&repository, output, materials), "texture-map workspace initialize");
+	require(workspace.activateLoadedTarget(id), "texture-map target activate");
+	require(workspace.target().readiness == vitru::TextureTargetReadiness::Ready, "texture-map target ready");
+	require(workspace.beginAuthoringRuntime(), "texture-map Layer 3 runtime begin");
+	require(workspace.adjustRuntimeValue(1, 1), "committed preview source select");
+	std::string diagnostic;
+
+	require(workspace.activateRuntimeRow(2) == vitru::TextureMapWorkspaceAction::StateChanged, "coloring setup enter");
+	require(workspace.activateRuntimeRow(2) == vitru::TextureMapWorkspaceAction::StateChanged, "coloring grid enter");
+	require(workspace.beginAuthoringStroke(0, 0), "coloring stroke begin");
+	require(workspace.continueAuthoringStroke(31, 31), "coloring interpolated stroke");
+	workspace.endAuthoringStroke();
+	require(workspace.session().dirty, "coloring stroke dirty");
+	vitru::StaticParticleAsset saveAsSnapshot;
+	require(workspace.buildSaveAsSnapshot("TextureMapCopy", saveAsSnapshot, &diagnostic), "dirty coloring save-as snapshot");
+	require(saveAsSnapshot.findTexture("tm_base")->pixels != base.pixels, "save-as includes dirty edit with committed preview selected");
+	require(workspace.buildPreviewAsset().findTexture("tm_base")->pixels == base.pixels, "committed preview remains presentation-only");
+	require(!workspace.canExitLayer3(&diagnostic) && !diagnostic.empty(), "dirty structural exit blocked");
+	const std::uint64_t revision = workspace.session().revision;
+	require(workspace.toggleRuntimeView() && workspace.toggleRuntimeView(), "edit preview round-trip");
+	require(workspace.session().revision == revision, "edit preview preserves working state");
+	require(workspace.activateRuntimeRow(5) == vitru::TextureMapWorkspaceAction::StateChanged, "coloring review enter");
+	require(workspace.activateRuntimeRow(0) == vitru::TextureMapWorkspaceAction::StateChanged, "coloring commit");
+	require(!workspace.session().dirty, "coloring commit clean");
+	require(repository.findStaticParticle(id)->findTexture("tm_base")->pixels != base.pixels, "coloring commit changed canonical texture");
+
+	require(workspace.activateRuntimeRow(4) == vitru::TextureMapWorkspaceAction::StateChanged, "return cycle setup");
+	require(workspace.adjustRuntimeValue(0, 1), "select contour mode");
+	require(workspace.activateRuntimeRow(2) == vitru::TextureMapWorkspaceAction::StateChanged, "contour setup enter");
+	require(workspace.activateRuntimeRow(2) == vitru::TextureMapWorkspaceAction::StateChanged, "contour grid enter");
+	require(workspace.addContourPoint(4, 4), "contour point one");
+	require(workspace.addContourPoint(24, 4), "contour point two");
+	require(workspace.addContourPoint(14, 24), "contour point three");
+	require(workspace.closeContour(&diagnostic), "contour close");
+	require(workspace.activateRuntimeRow(3) == vitru::TextureMapWorkspaceAction::StateChanged, "contour review enter");
+	require(workspace.activateRuntimeRow(0) == vitru::TextureMapWorkspaceAction::RequestSurfaceTargetName, "new contour requests name");
+	require(workspace.completeSurfaceTargetName("eye_outer", &diagnostic), "named contour commit");
+	require(repository.findStaticParticle(id)->surfaceTargets.size() == 1u, "named contour canonical commit");
+
+	require(workspace.activateRuntimeRow(4) == vitru::TextureMapWorkspaceAction::StateChanged, "contour return cycle");
+	require(workspace.adjustRuntimeValue(0, 1), "select panel-lines mode");
+	require(workspace.activateRuntimeRow(2) == vitru::TextureMapWorkspaceAction::StateChanged, "panel setup enter");
+	require(workspace.activateRuntimeRow(2) == vitru::TextureMapWorkspaceAction::StateChanged, "panel grid enter");
+	require(workspace.adjustRuntimeValue(1, 1), "panel thickness adjust");
+	require(workspace.beginAuthoringStroke(1, 1), "panel stroke begin");
+	require(workspace.continueAuthoringStroke(30, 20), "panel interpolated stroke");
+	workspace.endAuthoringStroke();
+	require(workspace.session().dirty, "panel stroke dirty");
 }
 
 int runMasterChief(const fs::path& manifest, const fs::path& outputRoot, const fs::path& p0) {
@@ -118,8 +212,8 @@ int runMasterChief(const fs::path& manifest, const fs::path& outputRoot, const f
 int main(int argc, char** argv) {
 	if (argc == 5 && std::string(argv[1]) == "--master-chief") return runMasterChief(argv[2], argv[3], argv[4]);
 	const fs::path root = fs::temp_directory_path() / "vitrugen_static_asset_tests_a0"; std::error_code error; fs::remove_all(root, error); fs::create_directories(root, error); require(!error, "temporary test directory");
-	verifyModelAndRepository(); verifyJson(); verifyUvAndPng(root); verifyObjMtl(root); verifyBundleRoundTrip(root);
+	verifyModelAndRepository(); verifyJson(); verifyUvAndPng(root); verifyObjMtl(root); verifyBundleRoundTrip(root); verifyTextureMapAuthoringRuntime(root);
 	fs::remove_all(root, error);
-	std::cout << "STATIC_PARTICLE_ASSET_TESTS PASS validation=YES repository=YES json=YES objMtl=YES legacyPaths=YES uv=YES png=YES atomicSave=YES bundleRoundTrip=YES p0=YES" << std::endl;
+	std::cout << "STATIC_PARTICLE_ASSET_TESTS PASS validation=YES repository=YES json=YES objMtl=YES legacyPaths=YES uv=YES png=YES atomicSave=YES bundleRoundTrip=YES textureMapRuntime=YES p0=YES" << std::endl;
 	return EXIT_SUCCESS;
 }

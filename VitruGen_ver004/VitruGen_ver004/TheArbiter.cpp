@@ -2030,6 +2030,13 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 	// Q is structural backward navigation only.
 	// Particle deselection belongs to E in Sub-Layer 0.
 	if (event.signal == KeyboardInput::KEY_Q) {
+		if (isTextureMapLayer3RuntimeContext()) {
+			result.textureMapRuntimeIntent =
+				TextureMapRuntimeIntent::RequestStructuralExit;
+			result.textureMapRuntimeRow = m_textureMapRuntimeRow;
+			result.requestRedraw = true;
+			return result;
+		}
 		goBackOneLayer(result);
 		return result;
 	}
@@ -2049,10 +2056,87 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 		break;
 
 	case ApplicationLayer::ACTIVE_WORKSPACE:
-		// TEXTURE_MAP_2D Layer 3 is intentionally preview-only in
-		// this sprint. Q was handled structurally above; E, TAB,
-		// W/S, and A/D have no runtime action.
 		if (isTextureMapLayer3RuntimeContext()) {
+			result.textureMapRuntimeRow = m_textureMapRuntimeRow;
+			if (event.signal == KeyboardInput::KEY_TAB) {
+				if (m_textureMapRuntimeSubLayer == 0) {
+					m_textureMapRuntimePanelVisible =
+						!m_textureMapRuntimePanelVisible;
+					result.textureMapRuntimeIntent =
+						TextureMapRuntimeIntent::TogglePanelOrView;
+				}
+				else if (m_textureMapRuntimeSubLayer == 2) {
+					result.textureMapRuntimeIntent =
+						TextureMapRuntimeIntent::TogglePanelOrView;
+				}
+				result.requestRedraw = true;
+				result.rebuildMenu = true;
+				break;
+			}
+
+			if (m_textureMapRuntimeSubLayer == 0 &&
+				!m_textureMapRuntimePanelVisible) {
+				if (event.signal == KeyboardInput::KEY_E) {
+					m_textureMapRuntimeMeshSelected =
+						!m_textureMapRuntimeMeshSelected;
+					result.textureMapRuntimeIntent =
+						TextureMapRuntimeIntent::ToggleMeshSelection;
+					result.requestRedraw = true;
+					result.rebuildMenu = true;
+				}
+				break;
+			}
+
+			if (m_textureMapRuntimeNestedFocus) {
+				if (event.signal == KeyboardInput::KEY_A)
+					result.textureMapRuntimeIntent =
+						TextureMapRuntimeIntent::AdjustPrevious;
+				else if (event.signal == KeyboardInput::KEY_D)
+					result.textureMapRuntimeIntent =
+						TextureMapRuntimeIntent::AdjustNext;
+				else if (event.signal == KeyboardInput::KEY_E)
+					result.textureMapRuntimeIntent =
+						TextureMapRuntimeIntent::Activate;
+				result.requestRedraw = true;
+				result.rebuildMenu = true;
+				break;
+			}
+
+			switch (event.signal) {
+			case KeyboardInput::KEY_W:
+				m_textureMapRuntimeRow =
+					(m_textureMapRuntimeRow - 1 + m_textureMapRuntimeRowCount) %
+					m_textureMapRuntimeRowCount;
+				result.textureMapRuntimeRow = m_textureMapRuntimeRow;
+				result.requestRedraw = true;
+				result.rebuildMenu = true;
+				break;
+			case KeyboardInput::KEY_S:
+				m_textureMapRuntimeRow =
+					(m_textureMapRuntimeRow + 1) % m_textureMapRuntimeRowCount;
+				result.textureMapRuntimeRow = m_textureMapRuntimeRow;
+				result.requestRedraw = true;
+				result.rebuildMenu = true;
+				break;
+			case KeyboardInput::KEY_A:
+				result.textureMapRuntimeIntent =
+					TextureMapRuntimeIntent::AdjustPrevious;
+				result.requestRedraw = true;
+				break;
+			case KeyboardInput::KEY_D:
+				result.textureMapRuntimeIntent =
+					TextureMapRuntimeIntent::AdjustNext;
+				result.requestRedraw = true;
+				break;
+			case KeyboardInput::KEY_E:
+				result.textureMapRuntimeIntent =
+					TextureMapRuntimeIntent::Activate;
+				result.requestRedraw = true;
+				result.rebuildMenu = true;
+				break;
+			default:
+				break;
+			}
 			break;
 		}
 
@@ -3926,11 +4010,98 @@ TheArbiter::enterTextureMapLayer3Runtime() {
 	setApplicationLayer(
 		ApplicationLayer::ACTIVE_WORKSPACE
 	);
+	m_textureMapRuntimeSubLayer = 0;
+	m_textureMapRuntimeRow = 0;
+	m_textureMapRuntimeRowCount = 3;
+	m_textureMapRuntimePanelVisible = true;
+	m_textureMapRuntimeMeshSelected = false;
+	m_textureMapRuntimeNestedFocus = false;
 
 	result.command = CMD_REDRAW;
 	result.requestRedraw = true;
 	result.rebuildMenu = true;
 
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::returnTextureMapLayer2Runtime() {
+	ArbiterResult result;
+	if (!isTextureMapLayer3RuntimeContext()) return result;
+	setApplicationLayer(ApplicationLayer::WORKSPACE_CONFIGURATION);
+	m_textureMapLayer2Selection = TextureMapLayer2Item::PreviewParticleRadius;
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+	return result;
+}
+
+void TheArbiter::syncTextureMapRuntimeNavigation(
+	int subLayer,
+	int rowCount,
+	bool nestedFocus) {
+
+	m_textureMapRuntimeSubLayer = (std::max)(0, (std::min)(3, subLayer));
+	m_textureMapRuntimeRowCount = (std::max)(1, rowCount);
+	m_textureMapRuntimeRow = (std::max)(
+		0,
+		(std::min)(m_textureMapRuntimeRowCount - 1, m_textureMapRuntimeRow));
+	m_textureMapRuntimeNestedFocus = nestedFocus;
+	if (m_textureMapRuntimeSubLayer != 0)
+		m_textureMapRuntimePanelVisible = true;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::activateTextureMapRuntimeRowFromMenu(int row) {
+	ArbiterResult result;
+	if (!isTextureMapLayer3RuntimeContext()) return result;
+	m_textureMapRuntimeRow = (std::max)(
+		0,
+		(std::min)(m_textureMapRuntimeRowCount - 1, row));
+	result.textureMapRuntimeRow = m_textureMapRuntimeRow;
+	result.textureMapRuntimeIntent = TextureMapRuntimeIntent::Activate;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::toggleTextureMapRuntimeViewFromMenu() {
+	ArbiterResult result;
+	if (!isTextureMapLayer3RuntimeContext()) return result;
+	result.textureMapRuntimeRow = m_textureMapRuntimeRow;
+	result.textureMapRuntimeIntent = TextureMapRuntimeIntent::TogglePanelOrView;
+	if (m_textureMapRuntimeSubLayer == 0)
+		m_textureMapRuntimePanelVisible = !m_textureMapRuntimePanelVisible;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::beginTextureMapSurfaceTargetNameEntry() {
+	ArbiterResult result;
+	if (!isTextureMapLayer3RuntimeContext()) return result;
+	m_textEntryTarget = TextEntryTarget::TextureMapSurfaceTargetName;
+	if (!m_textEntry.beginAssetName("SURFACE TARGET NAME", "", 96u))
+		m_textEntryTarget = TextEntryTarget::None;
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::beginTextureMapSaveAsNameEntry(
+	const std::string& initialName) {
+
+	ArbiterResult result;
+	if (!isTextureMapLayer3RuntimeContext()) return result;
+	m_textEntryTarget = TextEntryTarget::TextureMapSaveAsAssetName;
+	if (!m_textEntry.beginAssetName(
+		"ENTER STATIC PARTICLE ASSET NAME", initialName, 96u))
+		m_textEntryTarget = TextEntryTarget::None;
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
 	return result;
 }
 
@@ -5349,6 +5520,20 @@ void TheArbiter::beginSingleParticleAssetNameEntry(
 
 void TheArbiter::applyCommittedTextEntry(
 	ArbiterResult& result) {
+	if (m_textEntryTarget == TextEntryTarget::TextureMapSurfaceTargetName ||
+		m_textEntryTarget == TextEntryTarget::TextureMapSaveAsAssetName) {
+		result.textureMapEnteredName = m_textEntry.getNormalizedText();
+		result.textureMapSurfaceTargetNameEntered =
+			m_textEntryTarget == TextEntryTarget::TextureMapSurfaceTargetName &&
+			!result.textureMapEnteredName.empty();
+		result.textureMapSaveAsNameEntered =
+			m_textEntryTarget == TextEntryTarget::TextureMapSaveAsAssetName &&
+			!result.textureMapEnteredName.empty();
+		result.command = CMD_REDRAW;
+		result.requestRedraw = true;
+		result.rebuildMenu = true;
+		return;
+	}
 	if (m_textEntryTarget == TextEntryTarget::SingleParticleAssetName) {
 		result.staticParticleAssetName = m_textEntry.getNormalizedText();
 		result.saveStaticParticleAsRequested =
@@ -5395,6 +5580,8 @@ void TheArbiter::applyCommittedTextEntry(
 		break;
 
 	case TextEntryTarget::SingleParticleAssetName:
+	case TextEntryTarget::TextureMapSurfaceTargetName:
+	case TextEntryTarget::TextureMapSaveAsAssetName:
 		break;
 
 	default:
@@ -5431,7 +5618,9 @@ TheArbiter::handleTextEntryKeyboard(
 		break;
 
 	case TextEntryAction::Cancelled:
-
+		result.textureMapTextEntryCancelled =
+			m_textEntryTarget == TextEntryTarget::TextureMapSurfaceTargetName ||
+			m_textEntryTarget == TextEntryTarget::TextureMapSaveAsAssetName;
 		m_textEntryTarget =
 			TextEntryTarget::None;
 		break;

@@ -59,6 +59,9 @@ struct MaterialSlot {
 	float metallicFactor = 0.0f;
 	float roughnessFactor = 1.0f;
 	float emissiveFactor[3]{ 0.0f, 0.0f, 0.0f };
+	// TEXTURE_MAP_2D authored multiplier. Ke remains the color factor;
+	// this scalar preserves the editor's independent 0.0 - 4.0 control.
+	float emissiveIntensity = 1.0f;
 	float ambientFactor[3]{ 0.0f, 0.0f, 0.0f };
 	float specularFactor[3]{ 0.0f, 0.0f, 0.0f };
 	float shininess = 0.0f;
@@ -79,6 +82,15 @@ struct MaterialSlot {
 	bool receiveShadows = true;
 	bool rayTracingVisible = true;
 	std::vector<std::string> sourceMetadata;
+};
+
+// A named selection mask authored against one cell of the canonical
+// BOX_ATLAS UV layout. Points are normalized to the selected face so
+// the target is independent of the saved texture resolution.
+struct SurfaceTarget {
+	std::string name;
+	std::uint32_t faceIndex = 4u;
+	std::vector<Vec2> normalizedPolygon;
 };
 
 struct SubMesh {
@@ -168,6 +180,7 @@ struct StaticParticleAsset {
 	std::vector<SubMesh> submeshes;
 	std::vector<MaterialSlot> materials;
 	std::vector<TextureResource> textures;
+	std::vector<SurfaceTarget> surfaceTargets;
 	SourceProvenance source;
 	std::string schema = "anaheim.vitrugen.static-particle";
 	std::uint32_t schemaVersion = 1;

@@ -71,6 +71,18 @@ public:
 		unsigned int pixelGridDivisions = 64;
 	};
 
+	struct TextureMapLayer3PanelData {
+		bool panelVisible = true;
+		std::string subLayerLabel;
+		std::string targetName;
+		std::string authoringMode;
+		std::string status;
+		std::vector<std::string> informationLines;
+		std::vector<std::string> rows;
+		std::string footerLine1;
+		std::string footerLine2;
+	};
+
 	struct MarchingCubesPanelData {
 		bool available = false;
 		bool meshReady = false;
@@ -110,7 +122,8 @@ public:
 		bool paused = false,
 		bool meshAvailable = false,
 		const TextureMapLayer1PanelData* textureMapData = nullptr,
-		const TextureMapLayer2PanelData* textureMapLayer2Data = nullptr
+		const TextureMapLayer2PanelData* textureMapLayer2Data = nullptr,
+		const TextureMapLayer3PanelData* textureMapLayer3Data = nullptr
 	);
 
 	int getWidth() const { return m_window_w; }
@@ -148,7 +161,9 @@ private:
 		const TextureMapLayer2PanelData* data
 	);
 
-	void drawTextureMapLayer3Runtime();
+	void drawTextureMapLayer3Runtime(
+		const TheArbiter& arbiter,
+		const TextureMapLayer3PanelData* data);
 
 	void drawSingleParticleLayer1Config(const TheArbiter& arbiter);
 	void drawParticleSimLayer1Config(const TheArbiter& arbiter);

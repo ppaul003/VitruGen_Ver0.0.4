@@ -86,6 +86,27 @@ bool StaticParticleAsset::validate(std::vector<std::string>* errors) const {
 	for (const MaterialSlot& material : materials) {
 		if (!material.baseColorTextureId.empty() && !findTexture(material.baseColorTextureId))
 			reject("Material references a missing base-color texture: " + material.baseColorTextureId);
+		if (!material.emissiveTextureId.empty() && !findTexture(material.emissiveTextureId))
+			reject("Material references a missing emissive texture: " + material.emissiveTextureId);
+		if (!std::isfinite(material.emissiveIntensity) ||
+			material.emissiveIntensity < 0.0f || material.emissiveIntensity > 4.0f)
+			reject("Material emissive intensity must be between 0.0 and 4.0.");
+	}
+	std::unordered_set<std::string> surfaceTargetNames;
+	for (const SurfaceTarget& target : surfaceTargets) {
+		if (target.name.empty()) reject("Surface target requires a name.");
+		else if (!surfaceTargetNames.insert(upper(target.name)).second)
+			reject("Duplicate surface target name: " + target.name);
+		if (target.faceIndex >= 6u) reject("Surface target face index is outside BOX_ATLAS.");
+		if (target.normalizedPolygon.size() < 3u)
+			reject("Surface target requires at least three contour points: " + target.name);
+		for (const Vec2& point : target.normalizedPolygon) {
+			if (!std::isfinite(point.x) || !std::isfinite(point.y) ||
+				point.x < 0.0f || point.x > 1.0f || point.y < 0.0f || point.y > 1.0f) {
+				reject("Surface target contains an invalid normalized point: " + target.name);
+				break;
+			}
+		}
 	}
 	const MeshBounds actualBounds = bounds.valid ? bounds : mesh.bounds;
 	if (!actualBounds.valid || !finite(actualBounds.min) || !finite(actualBounds.max) ||

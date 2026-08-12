@@ -234,6 +234,7 @@ void mergeManifestMetadata(const StaticParticleAsset& manifest, StaticParticleAs
 	imported.anchor = manifest.anchor;
 	imported.collision = manifest.collision;
 	imported.volumetricSource = manifest.volumetricSource;
+	imported.surfaceTargets = manifest.surfaceTargets;
 	SourceProvenance source = imported.source;
 	source.manifestFile = manifest.source.manifestFile;
 	source.assetRoot = manifest.source.assetRoot;

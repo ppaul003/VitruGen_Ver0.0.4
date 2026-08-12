@@ -24,6 +24,7 @@
 #include <vector_types.h>
 #include "particleSystem.h"
 #include "StaticParticleAsset.h"
+#include "PngImage.h"
 
 #ifndef M_PI
 #define M_PI 3.1415926535897932384626433832795
@@ -153,8 +154,18 @@ public:
 		float zs,
 		float previewRadius,
 		bool showCollisionRadius,
-		bool showConfigurationGuides
+		bool showConfigurationGuides,
+		bool selectedTarget = false
 	);
+	void displayTextureMapPixelEditor(
+		const vitru::ImageRGBA8& atlasImage,
+		std::uint32_t faceIndex,
+		std::uint32_t gridDivisions,
+		int cursorX,
+		int cursorY,
+		const std::vector<vitru::Vec2>& contourPoints,
+		bool contourClosed,
+		float editorZoom);
 
 	// Displays the currently loaded StaticParticleAsset inside the
 	// SINGLE_PARTICLE volumetric-editor coordinate frame.
@@ -444,6 +455,10 @@ private:
 	GLint m_meshUseTextureLocation = -1;
 	GLint m_meshAlphaMaskLocation = -1;
 	GLint m_meshAlphaCutoffLocation = -1;
+	GLint m_meshEmissiveSamplerLocation = -1;
+	GLint m_meshUseEmissiveLocation = -1;
+	GLint m_meshEmissiveFactorLocation = -1;
+	GLint m_meshEmissiveIntensityLocation = -1;
 
 	GLuint m_vbo;
 	GLuint m_radVBO;

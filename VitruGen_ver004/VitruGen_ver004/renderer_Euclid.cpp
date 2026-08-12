@@ -2140,7 +2140,8 @@ void EuclidRenderer::displayTextureMapStaticParticlePreview(
     float zs,
     float previewRadius,
     bool showCollisionRadius,
-    bool showConfigurationGuides) {
+    bool showConfigurationGuides,
+    bool selectedTarget) {
 
     if (!hasParticleMeshOBJ() ||
         previewRadius <= 0.0f) {
@@ -2251,7 +2252,7 @@ void EuclidRenderer::displayTextureMapStaticParticlePreview(
     drawParticleMeshOBJ(
         previewParticle,
         previewColor,
-        false,
+        selectedTarget,
         true,
         false
     );
@@ -2279,6 +2280,136 @@ void EuclidRenderer::displayTextureMapStaticParticlePreview(
     glPopMatrix();
 
     glMatrixMode(GL_MODELVIEW);
+}
+
+void EuclidRenderer::displayTextureMapPixelEditor(
+    const vitru::ImageRGBA8& atlasImage,
+    std::uint32_t faceIndex,
+    std::uint32_t gridDivisions,
+    int cursorX,
+    int cursorY,
+    const std::vector<vitru::Vec2>& contourPoints,
+    bool contourClosed,
+    float editorZoom) {
+
+    if (!atlasImage.valid() || faceIndex >= 6u || gridDivisions == 0u)
+        return;
+
+    const float canvas = std::min(
+        static_cast<float>(m_window_h) * 0.72f,
+        static_cast<float>(m_window_w) * 0.55f) *
+		std::max(0.65f, std::min(1.65f, editorZoom));
+    const float left = static_cast<float>(m_window_w) * 0.62f - canvas * 0.5f;
+    const float bottom = (static_cast<float>(m_window_h) - canvas) * 0.5f;
+    const float right = left + canvas;
+    const float top = bottom + canvas;
+    const float u0 = static_cast<float>(faceIndex % 3u) / 3.0f;
+    const float u1 = static_cast<float>(faceIndex % 3u + 1u) / 3.0f;
+    const float v0 = static_cast<float>(faceIndex / 3u) / 2.0f;
+    const float v1 = static_cast<float>(faceIndex / 3u + 1u) / 2.0f;
+
+    GLint oldProgram = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &oldProgram);
+    glUseProgram(0);
+    glPushAttrib(GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT |
+        GL_POINT_BIT | GL_TEXTURE_BIT | GL_DEPTH_BUFFER_BIT);
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0.0, static_cast<double>(m_window_w), 0.0,
+        static_cast<double>(m_window_h), -1.0, 1.0);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    GLuint texture = 0;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+        static_cast<GLsizei>(atlasImage.width),
+        static_cast<GLsizei>(atlasImage.height), 0,
+        GL_RGBA, GL_UNSIGNED_BYTE, atlasImage.pixels.data());
+    glEnable(GL_TEXTURE_2D);
+    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+    glBegin(GL_QUADS);
+    glTexCoord2f(u0, v0); glVertex2f(left, bottom);
+    glTexCoord2f(u1, v0); glVertex2f(right, bottom);
+    glTexCoord2f(u1, v1); glVertex2f(right, top);
+    glTexCoord2f(u0, v1); glVertex2f(left, top);
+    glEnd();
+    glDisable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glDeleteTextures(1, &texture);
+
+    glLineWidth(1.0f);
+    glBegin(GL_LINES);
+    for (std::uint32_t i = 0u; i <= gridDivisions; i++) {
+        const float t = static_cast<float>(i) /
+            static_cast<float>(gridDivisions);
+        if ((i % 8u) == 0u) glColor4f(0.2f, 1.0f, 0.9f, 0.55f);
+        else glColor4f(0.0f, 0.0f, 0.0f, 0.28f);
+        glVertex2f(left + canvas * t, bottom);
+        glVertex2f(left + canvas * t, top);
+        glVertex2f(left, bottom + canvas * t);
+        glVertex2f(right, bottom + canvas * t);
+    }
+    glEnd();
+
+    if (cursorX >= 0 && cursorY >= 0 &&
+        cursorX < static_cast<int>(gridDivisions) &&
+        cursorY < static_cast<int>(gridDivisions)) {
+        const float cell = canvas / static_cast<float>(gridDivisions);
+        const float x0 = left + static_cast<float>(cursorX) * cell;
+        const float y0 = bottom + static_cast<float>(cursorY) * cell;
+        glLineWidth(2.5f);
+        glColor4f(1.0f, 0.85f, 0.05f, 1.0f);
+        glBegin(GL_LINE_LOOP);
+        glVertex2f(x0, y0); glVertex2f(x0 + cell, y0);
+        glVertex2f(x0 + cell, y0 + cell); glVertex2f(x0, y0 + cell);
+        glEnd();
+    }
+
+    if (contourPoints.size() >= 2u) {
+        auto drawContour = [&](float width, float r, float g, float b) {
+            glLineWidth(width);
+            glColor4f(r, g, b, 1.0f);
+            glBegin(contourClosed ? GL_LINE_LOOP : GL_LINE_STRIP);
+            for (const vitru::Vec2& point : contourPoints)
+                glVertex2f(left + point.x * canvas, bottom + point.y * canvas);
+            glEnd();
+        };
+        drawContour(5.0f, 0.0f, 0.0f, 0.0f);
+        drawContour(2.5f, 0.0f, 0.95f, 1.0f);
+
+        glPointSize(10.0f);
+        glBegin(GL_POINTS);
+        for (std::size_t i = 0; i < contourPoints.size(); i++) {
+            if (i == 0u) glColor4f(0.1f, 1.0f, 0.25f, 1.0f);
+            else if (i + 1u == contourPoints.size())
+                glColor4f(1.0f, 0.45f, 0.05f, 1.0f);
+            else glColor4f(0.0f, 0.95f, 1.0f, 1.0f);
+            glVertex2f(left + contourPoints[i].x * canvas,
+                bottom + contourPoints[i].y * canvas);
+        }
+        glEnd();
+    }
+
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopAttrib();
+    glUseProgram(static_cast<GLuint>(oldProgram));
 }
 
 void EuclidRenderer::displayParticleMeshVolumeWorkspace(
@@ -4284,6 +4415,10 @@ void EuclidRenderer::_initGL() {
 	m_meshUseTextureLocation = -1;
 	m_meshAlphaMaskLocation = -1;
 	m_meshAlphaCutoffLocation = -1;
+	m_meshEmissiveSamplerLocation = -1;
+	m_meshUseEmissiveLocation = -1;
+	m_meshEmissiveFactorLocation = -1;
+	m_meshEmissiveIntensityLocation = -1;
 
     if (m_meshProgram) {
 
@@ -4315,6 +4450,14 @@ void EuclidRenderer::_initGL() {
 			glGetUniformLocation(m_meshProgram, "uAlphaMask");
 		m_meshAlphaCutoffLocation =
 			glGetUniformLocation(m_meshProgram, "uAlphaCutoff");
+		m_meshEmissiveSamplerLocation =
+			glGetUniformLocation(m_meshProgram, "uEmissiveTexture");
+		m_meshUseEmissiveLocation =
+			glGetUniformLocation(m_meshProgram, "uUseEmissiveTexture");
+		m_meshEmissiveFactorLocation =
+			glGetUniformLocation(m_meshProgram, "uEmissiveFactor");
+		m_meshEmissiveIntensityLocation =
+			glGetUniformLocation(m_meshProgram, "uEmissiveIntensity");
 
         if (m_meshColorLocation < 0) {
             printf(
@@ -5249,8 +5392,13 @@ void EuclidRenderer::drawParticleMeshOBJ(
             GLuint textureHandle = material
                 ? findTextureHandle(material->baseColorTextureId)
                 : 0;
+			GLuint emissiveHandle = material
+				? findTextureHandle(material->emissiveTextureId)
+				: 0;
             const bool useTexture = textureHandle != 0 &&
                 m_meshTexcoordAttributeLocation >= 0 && !selectionOverride;
+			const bool useEmissive = emissiveHandle != 0 &&
+				m_meshTexcoordAttributeLocation >= 0 && !selectionOverride;
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D,
                 useTexture ? textureHandle : m_particleMeshWhiteTexture);
@@ -5265,6 +5413,25 @@ void EuclidRenderer::drawParticleMeshOBJ(
             if (m_meshAlphaCutoffLocation >= 0)
                 glUniform1f(m_meshAlphaCutoffLocation,
                     material ? material->alphaCutoff : 0.5f);
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_2D,
+				useEmissive ? emissiveHandle : m_particleMeshWhiteTexture);
+			if (m_meshEmissiveSamplerLocation >= 0)
+				glUniform1i(m_meshEmissiveSamplerLocation, 1);
+			if (m_meshUseEmissiveLocation >= 0)
+				glUniform1i(m_meshUseEmissiveLocation, useEmissive ? 1 : 0);
+			if (m_meshEmissiveFactorLocation >= 0) {
+				if (material && !selectionOverride)
+					glUniform3f(m_meshEmissiveFactorLocation,
+						material->emissiveFactor[0],
+						material->emissiveFactor[1],
+						material->emissiveFactor[2]);
+				else glUniform3f(m_meshEmissiveFactorLocation, 0.0f, 0.0f, 0.0f);
+			}
+			if (m_meshEmissiveIntensityLocation >= 0)
+				glUniform1f(m_meshEmissiveIntensityLocation,
+					material && !selectionOverride ? material->emissiveIntensity : 0.0f);
+			glActiveTexture(GL_TEXTURE0);
             if (m_meshColorLocation >= 0) {
                 if (selectionOverride) {
                     glUniform4f(m_meshColorLocation,
@@ -5343,6 +5510,9 @@ void EuclidRenderer::drawParticleMeshOBJ(
     }
 
     glBindTexture(GL_TEXTURE_2D, 0);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glActiveTexture(GL_TEXTURE0);
     if (m_meshTexcoordAttributeLocation >= 0)
         glDisableVertexAttribArray(static_cast<GLuint>(m_meshTexcoordAttributeLocation));
     glDisableVertexAttribArray(1);
