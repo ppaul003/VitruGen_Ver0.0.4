@@ -72,7 +72,7 @@ namespace vitru {
         TextureUsage channel = TextureUsage::BaseColor;
         std::string textureId;
 
-        float previewParticleRadius = 0.125f;
+        float previewParticleRadius = 0.0098f;
         std::uint32_t pixelGridDivisions = 64;
 
         TextureTargetReadiness readiness =
@@ -153,7 +153,8 @@ namespace vitru {
         bool beginEditSession();
         bool cancelEditSession();
         bool applyEditSessionToAsset();
-        bool adjustPreviewParticleRadius(int direction, float step);
+        bool adjustPreviewParticleRadius(int direction);
+        bool adjustPixelGridDivisions(int direction);
 
         ProjectAssetRepository* repository() { return m_repository; }
         const TextureMapTargetContext& target() const { return m_target; }

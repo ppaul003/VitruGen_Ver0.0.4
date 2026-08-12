@@ -916,6 +916,131 @@ bool EuclidEngine::enterTextureMapLayer2Preview() {
 	return true;
 }
 
+bool EuclidEngine::enterTextureMapLayer3Runtime() {
+
+	if (!m_arbiter.isTextureMapLayer2PanelContext()) {
+
+		printf(
+			"[TEXTURE_MAP_2D] RUN WORKSPACE EDIT rejected: "
+			"Layer 2 configuration is not active.\n"
+		);
+
+		return false;
+	}
+
+	vitru::TextureMapWorkspace* textureWorkspace =
+		m_tesseract.getTextureMapWorkspaceRuntime();
+
+	if (!textureWorkspace) {
+
+		printf(
+			"[TEXTURE_MAP_2D] RUN WORKSPACE EDIT rejected: "
+			"workspace runtime unavailable.\n"
+		);
+
+		return false;
+	}
+
+	const vitru::TextureMapTargetContext& target =
+		textureWorkspace->target();
+
+	if (!target.loaded ||
+		target.assetId ==
+		vitru::INVALID_ASSET_ID ||
+		target.readiness !=
+		vitru::TextureTargetReadiness::Ready) {
+
+		printf(
+			"[TEXTURE_MAP_2D] RUN WORKSPACE EDIT rejected: "
+			"target is not LOADED | READY.\n"
+		);
+
+		return false;
+	}
+
+	vitru::StaticParticleAsset* active =
+		m_assetRepository.findStaticParticle(
+			target.assetId
+		);
+
+	if (!active) {
+
+		printf(
+			"[TEXTURE_MAP_2D] RUN WORKSPACE EDIT rejected: "
+			"canonical repository asset is unavailable.\n"
+		);
+
+		return false;
+	}
+
+	if (!m_renderer) {
+
+		printf(
+			"[TEXTURE_MAP_2D] RUN WORKSPACE EDIT rejected: "
+			"renderer unavailable.\n"
+		);
+
+		return false;
+	}
+
+	// Refresh the renderer from the shared canonical resource before
+	// committing the structural transition. No edit session begins here.
+	if (!m_renderer->loadParticleStaticAsset(
+		*active)) {
+
+		printf(
+			"[TEXTURE_MAP_2D] RUN WORKSPACE EDIT rejected: "
+			"renderer refresh failed.\n"
+		);
+
+		return false;
+	}
+
+	if (!m_assetRepository.setActiveStaticParticle(
+		target.assetId)) {
+
+		printf(
+			"[TEXTURE_MAP_2D] RUN WORKSPACE EDIT rejected: "
+			"canonical target activation failed.\n"
+		);
+
+		return false;
+	}
+
+	// Navigation changes only after every engine-owned validation and
+	// resource refresh has succeeded.
+	m_arbiter.enterTextureMapLayer3Runtime();
+
+	if (!m_arbiter.isTextureMapLayer3RuntimeContext()) {
+
+		printf(
+			"[TEXTURE_MAP_2D] RUN WORKSPACE EDIT rejected: "
+			"Layer 3 transition failed.\n"
+		);
+
+		return false;
+	}
+
+	// TEXTURE_MAP_2D remains the same Tesseract workspace across
+	// Layer 2 and Layer 3; enterWorkspace is a no-op when already active.
+	m_tesseract.enterWorkspace(
+		TheArbiter::WorkspaceId::TEXTURE_MAP_2D
+	);
+
+	m_renderer->setParticleHighlighted(false);
+
+	m_camera.setBehaviorMode(
+		CameraProcessor::CAM_SINGLE_PARTICLE_ORBIT_CLOSE
+	);
+
+	printf(
+		"[TEXTURE_MAP_2D] Entered Layer 3 preview runtime: %s\n",
+		active->name.c_str()
+	);
+
+	return true;
+}
+
 void EuclidEngine::initMenus() {
 	rebuildMenus();
 }
@@ -2673,8 +2798,9 @@ void EuclidEngine::syncTesseractWorkspaceFromArbiter() {
 		m_arbiter.isSimulationRunLayer() &&
 		m_arbiter.isSingleParticleSelected();
 
-	const bool textureMapLayer2Active =
-		m_arbiter.isTextureMapLayer2PanelContext();
+	const bool textureMapActive =
+		m_arbiter.isTextureMapLayer2PanelContext() ||
+		m_arbiter.isTextureMapLayer3RuntimeContext();
 
 	if (particleSimulationRunActive) {
 		targetWorkspace =
@@ -2684,7 +2810,7 @@ void EuclidEngine::syncTesseractWorkspaceFromArbiter() {
 		targetWorkspace =
 			TheArbiter::WorkspaceId::SINGLE_PARTICLE_MCAD;
 	}
-	else if (textureMapLayer2Active) {
+	else if (textureMapActive) {
 		targetWorkspace =
 			TheArbiter::WorkspaceId::TEXTURE_MAP_2D;
 	}
@@ -2709,7 +2835,8 @@ void EuclidEngine::syncCameraBehaviorFromArbiter() {
 		return;
 	}
 
-	if (m_arbiter.isTextureMapLayer2PanelContext()) {
+	if (m_arbiter.isTextureMapLayer2PanelContext() ||
+		m_arbiter.isTextureMapLayer3RuntimeContext()) {
 
 		m_camera.setBehaviorMode(
 			CameraProcessor::CAM_SINGLE_PARTICLE_ORBIT_CLOSE
@@ -3607,6 +3734,11 @@ void EuclidEngine::onDisplay() {
 			textureMapLayer2PanelData.previewParticleRadius =
 				target.previewParticleRadius;
 
+			textureMapLayer2PanelData.pixelGridDivisions =
+				static_cast<unsigned int>(
+					target.pixelGridDivisions
+				);
+
 			const vitru::StaticParticleAsset* active =
 				m_assetRepository.findStaticParticle(
 					target.assetId
@@ -3643,8 +3775,9 @@ void EuclidEngine::onMouse(int button, int state, int x, int y) {
 
 	const bool isWheel = (button == 3 || button == 4);
 
-	const bool textureMapConfigPreviewActive =
-		m_arbiter.isTextureMapLayer2PanelContext();
+	const bool textureMapPreviewActive =
+		m_arbiter.isTextureMapLayer2PanelContext() ||
+		m_arbiter.isTextureMapLayer3RuntimeContext();
 
 	const bool singleParticleConfigPreviewActive =
 		m_arbiter.isParticleConfigLayer() &&
@@ -3653,7 +3786,7 @@ void EuclidEngine::onMouse(int button, int state, int x, int y) {
 
 	const bool singleParticleOpenGLCameraActive =
 		singleParticleConfigPreviewActive ||
-		textureMapConfigPreviewActive ||
+		textureMapPreviewActive ||
 		(m_arbiter.isSimulationRunLayer() &&
 			m_arbiter.isSingleParticleSelected() &&
 			(m_arbiter.isSingleParticleReferenceSubLayer() ||
@@ -3877,8 +4010,7 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 
 	// ---------------------------------------------------------
 	// TEXTURE_MAP_2D Layer 2 Row [1].
-	//
-	// Use the same A/D increment as SINGLE_PARTICLE_MCAD.
+	// Apply the previous / next discrete preview-radius preset.
 	// ---------------------------------------------------------
 	if (result.textureMapPreviewRadiusStep != 0) {
 
@@ -3888,10 +4020,43 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 		if (textureWorkspace) {
 
 			textureWorkspace->adjustPreviewParticleRadius(
-				result.textureMapPreviewRadiusStep,
-				TheArbiter::kParticleRadiusStep
+				result.textureMapPreviewRadiusStep
 			);
 		}
+	}
+
+	// ---------------------------------------------------------
+	// TEXTURE_MAP_2D Layer 2 Row [2].
+	// Apply the previous / next logical pixel-grid preset.
+	// ---------------------------------------------------------
+	if (result.textureMapPixelGridStep != 0) {
+
+		vitru::TextureMapWorkspace* textureWorkspace =
+			m_tesseract.getTextureMapWorkspaceRuntime();
+
+		if (textureWorkspace) {
+
+			textureWorkspace->adjustPixelGridDivisions(
+				result.textureMapPixelGridStep
+			);
+		}
+	}
+
+	// ---------------------------------------------------------
+	// TEXTURE_MAP_2D Layer 2 Row [3].
+	// Validate and execute the Layer 2 -> Layer 3 transition.
+	// ---------------------------------------------------------
+	if (result.runTextureMapWorkspaceRequested) {
+
+		const bool entered =
+			enterTextureMapLayer3Runtime();
+
+		printf(
+			"[TEXTURE_MAP_2D] Row [3] RUN WORKSPACE EDIT: %s\n",
+			entered
+			? "SUCCESS"
+			: "LOCKED"
+		);
 	}
 
 	const bool committedToVoxelBase = result.commitVolumeFuse;

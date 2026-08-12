@@ -158,6 +158,7 @@ private:
 	void initTextureMapResources();
 	bool loadSelectedTextureMapTarget();
 	bool enterTextureMapLayer2Preview();
+	bool enterTextureMapLayer3Runtime();
 
 	// --- NAMED STATIC PARTICLE ASSET JOBS ---
 	void openStaticParticleLoadPanel();

@@ -592,8 +592,16 @@ void ViewPort::drawOverlay(
 		}
 	}
 	else if (arbiter.isSimulationRunLayer()) {
-		drawLayer3SimulationRun(arbiter, paused);
-		drawSubLayerPanel(arbiter, mcData);
+
+		if (arbiter.isTextureMapLayer3RuntimeContext()) {
+
+			drawTextureMapLayer3Runtime();
+		}
+		else {
+
+			drawLayer3SimulationRun(arbiter, paused);
+			drawSubLayerPanel(arbiter, mcData);
+		}
 	}
 	else {
 		drawWorkspaceFrame(0.20f, nullptr);
@@ -2449,7 +2457,10 @@ void ViewPort::drawTextureMapLayer2Config(
 		"UNAVAILABLE";
 
 	float previewRadius =
-		0.125f;
+		0.0098f;
+
+	unsigned int pixelGridDivisions =
+		64;
 
 	if (data) {
 
@@ -2468,6 +2479,9 @@ void ViewPort::drawTextureMapLayer2Config(
 
 		previewRadius =
 			data->previewParticleRadius;
+
+		pixelGridDivisions =
+			data->pixelGridDivisions;
 	}
 
 	drawText2D(
@@ -2513,7 +2527,7 @@ void ViewPort::drawTextureMapLayer2Config(
 	snprintf(
 		radiusLine,
 		sizeof(radiusLine),
-		"[1] PREVIEW PARTICLE RADIUS { %.3f }",
+		"[1] PREVIEW PARTICLE RADIUS { %.4f }",
 		previewRadius
 	);
 
@@ -2526,6 +2540,34 @@ void ViewPort::drawTextureMapLayer2Config(
 		radiusLine
 	);
 
+	char pixelGridLine[256];
+
+	snprintf(
+		pixelGridLine,
+		sizeof(pixelGridLine),
+		"[2] PIXEL GRID              { %u x %u }",
+		pixelGridDivisions,
+		pixelGridDivisions
+	);
+
+	drawSelectableLine(
+		95.0f,
+		485.0f,
+		arbiter.getTextureMapLayer2Selection() ==
+		TheArbiter::TextureMapLayer2Item::
+		PixelGrid,
+		pixelGridLine
+	);
+
+	drawSelectableLine(
+		95.0f,
+		525.0f,
+		arbiter.getTextureMapLayer2Selection() ==
+		TheArbiter::TextureMapLayer2Item::
+		RunWorkspaceEdit,
+		"[3] RUN WORKSPACE EDIT"
+	);
+
 	drawHelpFooter(
 		"Q: TARGET SELECTION     W/S: SELECT     A/D: CHANGE VALUE",
 		"E: ACTIVATE     MOUSE: ORBIT / ZOOM PREVIEW"
@@ -2534,6 +2576,56 @@ void ViewPort::drawTextureMapLayer2Config(
 	drawWorkspaceFrame(
 		0.20f,
 		nullptr
+	);
+}
+
+void ViewPort::drawTextureMapLayer3Runtime() {
+
+	drawWorkspaceFrame(
+		0.22f,
+		nullptr
+	);
+
+	glColor4f(
+		1.0f,
+		1.0f,
+		1.0f,
+		1.0f
+	);
+
+	drawText2D(
+		42.0f,
+		48.0f,
+		"LAYER 3 -> TEXTURE_MAP_2D WORKSPACE RUNTIME",
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	drawText2D(
+		42.0f,
+		78.0f,
+		"TEXTURED STATIC PARTICLE PREVIEW",
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	glColor4f(
+		0.76f,
+		0.84f,
+		0.88f,
+		1.0f
+	);
+
+	drawText2D(
+		42.0f,
+		118.0f,
+		"Q: RETURN TO TARGET CONFIGURATION",
+		GLUT_BITMAP_HELVETICA_12
+	);
+
+	drawText2D(
+		42.0f,
+		140.0f,
+		"MOUSE: ORBIT / ZOOM PREVIEW",
+		GLUT_BITMAP_HELVETICA_12
 	);
 }
 

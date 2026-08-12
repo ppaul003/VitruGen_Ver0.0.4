@@ -3247,7 +3247,14 @@ void Tesseract::renderTextureMapWorkspace(
 		return;
 	}
 
-	if (!ctx.arbiter->isTextureMapLayer2PanelContext()) {
+	const bool layer2Active =
+		ctx.arbiter->isTextureMapLayer2PanelContext();
+
+	const bool layer3Active =
+		ctx.arbiter->isTextureMapLayer3RuntimeContext();
+
+	if (!layer2Active &&
+		!layer3Active) {
 
 		return;
 	}
@@ -3266,10 +3273,18 @@ void Tesseract::renderTextureMapWorkspace(
 
 	m_renderer->setParticleHighlighted(false);
 
+	const bool showCollisionRadius =
+		layer2Active &&
+		ctx.arbiter->getTextureMapLayer2Selection() ==
+		TheArbiter::TextureMapLayer2Item::
+		PreviewParticleRadius;
+
 	m_renderer->displayTextureMapStaticParticlePreview(
 		ctx.thetaRad,
 		ctx.phiRad,
 		ctx.particleWorkspaceZs,
-		target.previewParticleRadius
+		target.previewParticleRadius,
+		showCollisionRadius,
+		layer2Active
 	);
 }

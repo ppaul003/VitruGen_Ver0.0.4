@@ -67,7 +67,8 @@ public:
 
 		std::string targetName;
 
-		float previewParticleRadius = 0.125f;
+		float previewParticleRadius = 0.0098f;
+		unsigned int pixelGridDivisions = 64;
 	};
 
 	struct MarchingCubesPanelData {
@@ -146,6 +147,8 @@ private:
 		const TheArbiter& arbiter,
 		const TextureMapLayer2PanelData* data
 	);
+
+	void drawTextureMapLayer3Runtime();
 
 	void drawSingleParticleLayer1Config(const TheArbiter& arbiter);
 	void drawParticleSimLayer1Config(const TheArbiter& arbiter);

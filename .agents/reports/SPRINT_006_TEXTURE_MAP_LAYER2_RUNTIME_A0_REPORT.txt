@@ -1,0 +1,444 @@
+VITRUGEN SIMCAD Ver 0.0.4
+SPRINT 006 - TEXTURE_MAP_2D LAYER 2 CONFIGURATION
+             AND LAYER 3 RUNTIME ENTRY A0
+
+Report date: August 12, 2026
+Branch: feature/texture-map-layer2-runtime-a0
+Result: IMPLEMENTATION COMPLETE
+
+======================================================================
+1. SPRINT RESULT
+======================================================================
+
+The TEXTURE_MAP_2D Layer 2 configuration screen and the validated
+Layer 2 to Layer 3 preview-runtime transition are implemented.
+
+The sprint was completed without committing, pushing, or staging files.
+
+The required Release x64 build succeeded:
+
+    0 errors
+    1 linker warning
+
+Release executable:
+
+    C:\Users\richa\Anaheim Systems Dynamics - Software Product Dev\
+    VitruGen_ver004\x64\Release\VitruGen_ver004.exe
+
+No Layer 3 sub-layer authoring features were implemented.
+
+======================================================================
+2. SPRINT FILES MODIFIED
+======================================================================
+
+This sprint modified exactly these implementation files:
+
+    VitruGen_ver004/EuclidEngine.h
+    VitruGen_ver004/EuclidEngine.cpp
+
+    VitruGen_ver004/TextureMapWorkspace.h
+    VitruGen_ver004/TextureMapWorkspace.cpp
+
+    VitruGen_ver004/TheArbiter.h
+    VitruGen_ver004/TheArbiter.cpp
+
+    VitruGen_ver004/TheTesseract.cpp
+
+    VitruGen_ver004/ViewPort.h
+    VitruGen_ver004/ViewPort.cpp
+
+    VitruGen_ver004/renderer_Euclid.h
+    VitruGen_ver004/renderer_Euclid.cpp
+
+The pre-existing uncommitted changes in TheTesseract.h,
+VitruGen_ver004.cpp, .gitignore, architecture audit files, earlier
+sprint reports, and other untracked files were preserved.
+
+======================================================================
+3. LAYER 2 CONFIGURATION IMPLEMENTED
+======================================================================
+
+TEXTURE_MAP_2D Layer 2 now contains exactly three selectable rows:
+
+    [1] PREVIEW PARTICLE RADIUS
+    [2] PIXEL GRID
+    [3] RUN WORKSPACE EDIT
+
+W and S wrap across all three rows.
+
+Row [1] - PREVIEW PARTICLE RADIUS
+---------------------------------
+
+Default:
+
+    0.0098
+
+The previous free-running radius adjustment was replaced by the
+required discrete preset family:
+
+    0.0039
+    0.0046
+    0.0054
+    0.0061
+    0.0068
+    0.0076
+    0.0083
+    0.0091
+    0.0098
+    0.0105
+    0.0113
+    0.0120
+    0.0127
+    0.0135
+    0.0142
+    0.0149
+    0.0156
+
+A selects the previous preset.
+D selects the next preset.
+The list clamps at the minimum and maximum and does not wrap.
+E and Enter perform no action on this row.
+
+While Row [1] is selected, the renderer displays the existing cyan
+wireframe collision-radius sphere around the textured particle.
+
+Row [2] - PIXEL GRID
+--------------------
+
+Default:
+
+    64 x 64
+
+The available logical editing resolutions are:
+
+    32 x 32
+    64 x 64
+    128 x 128
+
+A and D cycle this list with wrapping.
+
+The value is retained in TextureMapTargetContext::pixelGridDivisions.
+It does not resize the 1024 x 1024 source texture and does not create
+pixel cells, canvas geometry, UV guides, or painting behavior.
+
+E and Enter perform no action on this row.
+
+Row [3] - RUN WORKSPACE EDIT
+----------------------------
+
+A and D perform no action.
+
+E or Enter emits a lightweight Arbiter intent requesting the Layer 3
+transition. TheArbiter does not load, inspect, upload, or mutate assets.
+
+======================================================================
+4. LAYER 3 TRANSITION IMPLEMENTED
+======================================================================
+
+EuclidEngine validates the Layer 2 to Layer 3 transition.
+
+Entry is allowed only when:
+
+    target.loaded == true
+
+    target.assetId != INVALID_ASSET_ID
+
+    target.readiness == TextureTargetReadiness::Ready
+
+    the canonical StaticParticleAsset still exists in the shared
+    ProjectAssetRepository
+
+    EuclidRenderer is available and can refresh the canonical asset
+
+If validation fails, the application remains in Layer 2 and prints a
+specific diagnostic. Navigation changes only after validation and the
+renderer refresh have succeeded.
+
+The engine-confirmed Arbiter transition enters:
+
+    ApplicationLayer::ACTIVE_WORKSPACE
+    WorkspaceDomain::GRID_2D
+    WorkspaceId::TEXTURE_MAP_2D
+
+======================================================================
+5. LAYER 3 RUNTIME CONTRACT
+======================================================================
+
+The current Layer 3 runtime contains only:
+
+    textured canonical StaticParticle mesh preview
+    mouse orbit
+    mouse-wheel zoom
+    Q return to Layer 2
+    minimal TEXTURE_MAP_2D runtime overlay
+
+The following keys intentionally do nothing in Layer 3:
+
+    E
+    TAB
+    W
+    S
+    A
+    D
+
+Q returns to the same Layer 2 target configuration.
+
+The selected preview radius, pixel-grid value, and Layer 2 row are
+preserved across the Layer 2 to Layer 3 to Layer 2 cycle.
+
+Layer 3 does not display:
+
+    the collision-radius sphere
+    the configuration boundary/grid/axes guides
+    a workplane grid
+    a render cage
+    a SINGLE_PARTICLE sub-layer panel
+    simulation controls
+    a texture-editing menu
+
+======================================================================
+6. RENDERER AND CAMERA BEHAVIOR
+======================================================================
+
+The existing TEXTURE_MAP_2D StaticParticle preview renderer was
+extended rather than duplicated.
+
+The renderer receives explicit presentation flags for:
+
+    showCollisionRadius
+    showConfigurationGuides
+
+Layer 2:
+
+    textured canonical mesh visible
+    configuration guides visible
+    cyan collision sphere visible only on Row [1]
+
+Layer 3:
+
+    textured canonical mesh visible
+    configuration guides hidden
+    collision sphere hidden
+
+Both layers use the existing:
+
+    CameraProcessor::CAM_SINGLE_PARTICLE_ORBIT_CLOSE
+
+The mouse-wheel route for the close StaticParticle preview remains
+active in both Layer 2 and Layer 3.
+
+======================================================================
+7. ARCHITECTURE PRESERVED
+======================================================================
+
+The established ownership boundaries remain intact:
+
+    EuclidEngine
+        validates and performs the major runtime transition
+
+    TheTesseract
+        retains and dispatches the same TEXTURE_MAP_2D workspace
+        instance across Layer 2 and Layer 3
+
+    TextureMapWorkspace
+        owns previewParticleRadius and pixelGridDivisions
+
+    ProjectAssetRepository
+        remains the shared canonical asset source of truth
+
+    EuclidRenderer
+        owns mesh, material, texture, and collision-sphere rendering
+
+    TheArbiter
+        owns navigation, row selection, and lightweight intent only
+
+    ViewPort
+        remains presentation-only
+
+No second ProjectAssetRepository, mesh copy, asset ownership path, or
+collision-rendering subsystem was created.
+
+TEXTURE_MAP_2D remains the active Tesseract workspace during both
+Layer 2 preview and Layer 3 runtime. The transition does not
+unnecessarily exit or reinitialize the workspace.
+
+All implementation loops introduced by this sprint use i++.
+No new ++i loop increment was introduced.
+
+======================================================================
+8. SUB-LAYER FEATURES EXPLICITLY NOT ADDED
+======================================================================
+
+This sprint did not add or activate:
+
+    TextureMapSubLayer navigation
+    edit-session startup
+    beginEditSession()
+    applyEditSessionToAsset()
+    cancelEditSession()
+    toggleFocus()
+    setSubLayer()
+    TAB focus switching
+    E mesh selection
+    contour drawing or naming
+    surface-target creation
+    material-slot authoring
+    BASE_COLOR replacement
+    EMISSIVE_COLOR authoring
+    emissive shader or lighting changes
+    RGB or alpha painting
+    UV canvas or UV guides
+    pixel-cell selection
+    texture save/apply
+    Save As StaticParticle
+    MTL rewriting
+    VSPA persistence changes
+
+CUDA, Marching Cubes, SINGLE_PARTICLE volume logic, and unrelated
+renderer behavior were not modified.
+
+======================================================================
+9. VERIFICATION PERFORMED
+======================================================================
+
+Deterministic contract test result:
+
+    TEXTURE_MAP_2D Layer 2/3 contract tests passed.
+
+The temporary test harness verified:
+
+    startup navigation into TEXTURE_MAP_2D
+    engine-confirmed Layer 2 entry
+    exactly three wrapping Layer 2 rows
+    Row [1] A/D radius intents
+    Row [2] A/D pixel-grid intents
+    Row [3] A/D no action
+    E no action on Rows [1] and [2]
+    E run intent on Row [3]
+    engine-confirmed Layer 3 entry
+    E, TAB, W, S, A, and D inactive in Layer 3
+    Q return to Layer 2
+    Layer 2 row-selection preservation
+    preview-radius default and discrete stepping
+    preview-radius minimum and maximum clamping
+    pixel-grid default and wrapping
+
+The temporary test source, project, executable, and build products
+were removed after the test passed.
+
+A live visual smoke test was attempted with the Release executable.
+The Windows capture helper could not attach reliably to the OpenGL
+window and returned:
+
+    SetIsBorderRequired failed:
+    No such interface supported (0x80004002)
+
+The test instance closed before the single permitted recovery retry.
+Therefore, final visual inspection of the collision sphere, textured
+mesh, overlay, mouse orbit, and zoom remains a user-run manual check.
+
+======================================================================
+10. RELEASE X64 BUILD RESULT
+======================================================================
+
+Build command:
+
+    & 'C:\Program Files (x86)\Microsoft Visual Studio\2019\
+    Community\MSBuild\Current\Bin\MSBuild.exe'
+    'VitruGen_ver004.sln'
+    /t:Build
+    /p:Configuration=Release
+    /p:Platform=x64
+    /m
+    /nologo
+
+Final result:
+
+    Build succeeded.
+    1 Warning(s)
+    0 Error(s)
+
+Linker warning:
+
+    LNK4098:
+    defaultlib 'LIBCMT' conflicts with use of other libs;
+    use /NODEFAULTLIB:library
+
+The vcpkg app-local step first attempted unavailable pwsh.exe, then
+successfully fell back to Windows PowerShell. This did not fail the
+build.
+
+======================================================================
+11. GIT STATUS
+======================================================================
+
+Branch:
+
+    feature/texture-map-layer2-runtime-a0
+
+Nothing is staged.
+Nothing was committed.
+Nothing was pushed.
+
+git status --short at report completion:
+
+     M .gitignore
+     M VitruGen_ver004/VitruGen_ver004/EuclidEngine.cpp
+     M VitruGen_ver004/VitruGen_ver004/EuclidEngine.h
+     M VitruGen_ver004/VitruGen_ver004/TextureMapWorkspace.cpp
+     M VitruGen_ver004/VitruGen_ver004/TextureMapWorkspace.h
+     M VitruGen_ver004/VitruGen_ver004/TheArbiter.cpp
+     M VitruGen_ver004/VitruGen_ver004/TheArbiter.h
+     M VitruGen_ver004/VitruGen_ver004/TheTesseract.cpp
+     M VitruGen_ver004/VitruGen_ver004/TheTesseract.h
+     M VitruGen_ver004/VitruGen_ver004/ViewPort.cpp
+     M VitruGen_ver004/VitruGen_ver004/ViewPort.h
+     M VitruGen_ver004/VitruGen_ver004/VitruGen_ver004.cpp
+     M VitruGen_ver004/VitruGen_ver004/renderer_Euclid.cpp
+     M VitruGen_ver004/VitruGen_ver004/renderer_Euclid.h
+     M path/to/VitruGen_ver004/.agents/
+       VITRUGEN_ARCHITECTURE_AUDIT_PASS_1.md
+     M path/to/VitruGen_ver004/.agents/VITRUGEN_AUDIT_STATE.md
+    ?? .agents/identity/
+    ?? .agents/reports/SPRINT_004_PARTICLE_SIM_RUNTIME_RADIUS_A0_REPORT.md
+    ?? .agents/reports/SPRINT_005_PARTICLE_SIM_GRID_LAYOUT_A0_REPORT.md
+    ?? .agents/reports/SPRINT_006_TEXTURE_MAP_LAYER2_RUNTIME_A0_REPORT.txt
+    ?? VitruGen_ver004/VitruGen_ver004/
+       SP_MCAD_before_shared_overlap_preview.patch
+
+Only the eleven implementation files listed in Section 2 belong to
+this sprint. The other dirty and untracked entries were pre-existing,
+apart from this report file.
+
+======================================================================
+12. DIFF SUMMARY
+======================================================================
+
+Sprint implementation diff:
+
+    11 files changed
+    555 insertions
+    54 deletions
+
+Full tracked working-tree diff, including pre-existing changes:
+
+    16 files changed
+    818 insertions
+    83 deletions
+
+The untracked report files and other untracked paths are not included
+in git diff --stat.
+
+======================================================================
+13. FINAL CHECKPOINT
+======================================================================
+
+SPRINT 006 TEXTURE_MAP_2D LAYER 2 CONFIGURATION AND
+LAYER 3 RUNTIME ENTRY A0 IS COMPLETE.
+
+The configuration/runtime boundary is established without committing
+to or prematurely implementing the future cyclic sub-layer authoring
+workflow.
+
+No commit, push, merge, or continuation into the sub-layer sprint was
+performed.

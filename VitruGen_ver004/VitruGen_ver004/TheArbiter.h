@@ -91,6 +91,8 @@ public:
 
 	enum class TextureMapLayer2Item {
 		PreviewParticleRadius = 0,
+		PixelGrid,
+		RunWorkspaceEdit,
 		Count
 	};
 
@@ -565,9 +567,18 @@ public:
 		// previous / next OUTPUT Static Particle.
 		int textureMapCatalogStep = 0;
 
-		// Layer 2 Row [1]:
-		// decrease / increase preview radius.
+		// TEXTURE_MAP_2D Layer 2 intents.
+		// TheArbiter owns intent only; TextureMapWorkspace owns values,
+		// and EuclidEngine validates major transitions.
+
+		// Row [1]: previous / next preview-radius preset.
 		int textureMapPreviewRadiusStep = 0;
+
+		// Row [2]: previous / next logical pixel-grid preset.
+		int textureMapPixelGridStep = 0;
+
+		// Row [3]: request validated Layer 3 runtime entry.
+		bool runTextureMapWorkspaceRequested = false;
 
 		// Volume CAD action.
 		bool commitVolumeFuse = false;
@@ -642,6 +653,7 @@ public:
 
 	// --- TM_2D / MENU ENTRYPOINTS ---
 	ArbiterResult enterTextureMapLayer2FromMenu();
+	ArbiterResult enterTextureMapLayer3Runtime();
 
 	// --- SINGLE_PARTICLE AUTHORING SOURCE ---
 	void activateLoadedStaticParticleBase(bool hasEditableVolume);
@@ -712,6 +724,7 @@ public:
 
 	bool isTextureMapLayer1PanelContext() const;
 	bool isTextureMapLayer2PanelContext() const;
+	bool isTextureMapLayer3RuntimeContext() const;
 
 	bool isSingleParticleLayer1PanelContext() const;
 
@@ -876,6 +889,7 @@ private:
 	// TEXTURE_MAP_2D Layer 2 configuration.
 	void moveTextureMapLayer2Cursor(int dir);
 	void handleTextureMapLayer2Adjust(int dir, ArbiterResult& result);
+	void activateTextureMapLayer2Item(ArbiterResult& result);
 
 	// SINGLE_PARTICLE Layer 1 configuration.
 	void moveSingleParticleLayer1Cursor(int dir);

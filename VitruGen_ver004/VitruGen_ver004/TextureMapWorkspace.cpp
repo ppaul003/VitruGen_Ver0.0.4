@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <system_error>
 #include <utility>
@@ -9,6 +10,34 @@
 namespace vitru {
 
     namespace {
+
+        constexpr std::array<float, 17>
+            kPreviewParticleRadiusPresets{
+                0.0039f,
+                0.0046f,
+                0.0054f,
+                0.0061f,
+                0.0068f,
+                0.0076f,
+                0.0083f,
+                0.0091f,
+                0.0098f,
+                0.0105f,
+                0.0113f,
+                0.0120f,
+                0.0127f,
+                0.0135f,
+                0.0142f,
+                0.0149f,
+                0.0156f
+            };
+
+        constexpr std::array<std::uint32_t, 3>
+            kPixelGridDivisionPresets{
+                32,
+                64,
+                128
+            };
 
         std::string lowerAscii(std::string value) {
 
@@ -660,40 +689,129 @@ namespace vitru {
         return true;
     }
 
-    bool TextureMapWorkspace::adjustPreviewParticleRadius(int direction, float step) {
+    bool TextureMapWorkspace::adjustPreviewParticleRadius(int direction) {
 
         if (!m_target.loaded ||
-            direction == 0 ||
-            step <= 0.0f) {
+            direction == 0) {
 
             return false;
         }
 
-        const float current =
+        const float currentRadius =
             m_target.previewParticleRadius;
 
-        float next =
-            current +
-            (direction < 0
-                ? -step
-                : +step);
+        std::size_t currentIndex = 0;
 
-        // Prevent a zero/negative preview radius.
-        //
-        // We intentionally do not reuse the SINGLE_PARTICLE maximum
-        // clamp here because TEXTURE_MAP_2D defaults to 0.125.
-        next =
-            std::max(
-                step,
-                next
+        float nearestDistance =
+            std::fabs(
+                currentRadius -
+                kPreviewParticleRadiusPresets[0]
             );
 
-        if (next == current) {
+        for (std::size_t i = 1;
+            i < kPreviewParticleRadiusPresets.size();
+            i++) {
+
+            const float distance =
+                std::fabs(
+                    currentRadius -
+                    kPreviewParticleRadiusPresets[i]
+                );
+
+            if (distance < nearestDistance) {
+
+                nearestDistance = distance;
+                currentIndex = i;
+            }
+        }
+
+        std::size_t nextIndex = currentIndex;
+
+        if (direction < 0) {
+
+            if (currentIndex == 0) {
+                return false;
+            }
+
+            nextIndex = currentIndex - 1;
+        }
+        else {
+
+            if (currentIndex + 1 >=
+                kPreviewParticleRadiusPresets.size()) {
+
+                return false;
+            }
+
+            nextIndex = currentIndex + 1;
+        }
+
+        const float nextRadius =
+            kPreviewParticleRadiusPresets[nextIndex];
+
+        if (nextRadius == currentRadius) {
 
             return false;
         }
 
-        m_target.previewParticleRadius = next;
+        m_target.previewParticleRadius = nextRadius;
+
+        return true;
+    }
+
+    bool TextureMapWorkspace::adjustPixelGridDivisions(
+        int direction) {
+
+        if (!m_target.loaded ||
+            direction == 0) {
+
+            return false;
+        }
+
+        std::size_t currentIndex = 0;
+
+        for (std::size_t i = 0;
+            i < kPixelGridDivisionPresets.size();
+            i++) {
+
+            if (kPixelGridDivisionPresets[i] ==
+                m_target.pixelGridDivisions) {
+
+                currentIndex = i;
+                break;
+            }
+        }
+
+        const int count =
+            static_cast<int>(
+                kPixelGridDivisionPresets.size()
+            );
+
+        const int step =
+            direction < 0
+            ? -1
+            : +1;
+
+        const std::size_t nextIndex =
+            static_cast<std::size_t>(
+                (
+                    static_cast<int>(currentIndex) +
+                    step +
+                    count
+                ) % count
+            );
+
+        const std::uint32_t nextDivisions =
+            kPixelGridDivisionPresets[nextIndex];
+
+        if (nextDivisions ==
+            m_target.pixelGridDivisions) {
+
+            return false;
+        }
+
+        m_target.pixelGridDivisions =
+            nextDivisions;
 
         return true;
     }

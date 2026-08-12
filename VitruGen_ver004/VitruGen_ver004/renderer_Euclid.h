@@ -151,7 +151,9 @@ public:
 		float thetaRad,
 		float phiRad,
 		float zs,
-		float previewRadius
+		float previewRadius,
+		bool showCollisionRadius,
+		bool showConfigurationGuides
 	);
 
 	// Displays the currently loaded StaticParticleAsset inside the

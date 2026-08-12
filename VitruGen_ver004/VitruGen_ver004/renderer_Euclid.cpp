@@ -2138,7 +2138,9 @@ void EuclidRenderer::displayTextureMapStaticParticlePreview(
     float thetaRad,
     float phiRad,
     float zs,
-    float previewRadius) {
+    float previewRadius,
+    bool showCollisionRadius,
+    bool showConfigurationGuides) {
 
     if (!hasParticleMeshOBJ() ||
         previewRadius <= 0.0f) {
@@ -2218,15 +2220,17 @@ void EuclidRenderer::displayTextureMapStaticParticlePreview(
 
     glEnable(GL_DEPTH_TEST);
 
-    // ---------------------------------------------------------
-    // Use the same visual framing language as SINGLE_PARTICLE.
-    // ---------------------------------------------------------
+    // Layer 2 retains the existing configuration framing.
+    // Layer 3 is intentionally a clean textured-mesh preview.
     glUseProgram(0);
     glDisable(GL_TEXTURE_2D);
 
-    drawWorkspaceBoundary();
-    drawWorkspaceMajorGrid();
-    drawAxes();
+    if (showConfigurationGuides) {
+
+        drawWorkspaceBoundary();
+        drawWorkspaceMajorGrid();
+        drawAxes();
+    }
 
     // ---------------------------------------------------------
     // Render the canonical StaticParticleAsset at the requested
@@ -2253,6 +2257,17 @@ void EuclidRenderer::displayTextureMapStaticParticlePreview(
     );
 
     glUseProgram(0);
+
+    if (showCollisionRadius) {
+
+        drawParticleWireSphere(
+            previewParticle,
+            make_float4(0.15f, 0.95f, 1.0f, 1.0f),
+            2.25f,
+            0.92f,
+            true
+        );
+    }
 
     // ---------------------------------------------------------
     // Restore matrices.

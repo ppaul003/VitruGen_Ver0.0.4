@@ -566,6 +566,19 @@ bool TheArbiter::isTextureMapLayer2PanelContext() const {
 		WorkspaceId::TEXTURE_MAP_2D;
 }
 
+bool TheArbiter::isTextureMapLayer3RuntimeContext() const {
+
+	return
+		m_navigation.layer ==
+		ApplicationLayer::ACTIVE_WORKSPACE &&
+
+		m_navigation.selectedDomain ==
+		WorkspaceDomain::GRID_2D &&
+
+		getSelectedWorkspace() ==
+		WorkspaceId::TEXTURE_MAP_2D;
+}
+
 bool TheArbiter::isSingleParticleLayer1PanelContext() const {
 
 	return
@@ -2036,6 +2049,13 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 		break;
 
 	case ApplicationLayer::ACTIVE_WORKSPACE:
+		// TEXTURE_MAP_2D Layer 3 is intentionally preview-only in
+		// this sprint. Q was handled structurally above; E, TAB,
+		// W/S, and A/D have no runtime action.
+		if (isTextureMapLayer3RuntimeContext()) {
+			break;
+		}
+
 		if (isSingleParticleSelected()) {
 			if (event.signal == KeyboardInput::KEY_TAB) {
 				toggleSubLayerPanel(result);
@@ -2538,9 +2558,7 @@ void TheArbiter::handleWorkspaceConfigurationKeyboard(
 		case KeyboardInput::KEY_E:
 		case KeyboardInput::KEY_ENTER:
 
-			// Row [1] has no E action.
-			result.command = CMD_REDRAW;
-			result.requestRedraw = true;
+			activateTextureMapLayer2Item(result);
 
 			break;
 
@@ -3887,6 +3905,29 @@ TheArbiter::enterTextureMapLayer2FromMenu() {
 
 	result.command = CMD_REDRAW;
 
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::enterTextureMapLayer3Runtime() {
+
+	ArbiterResult result;
+
+	// EuclidEngine may confirm this transition only while the
+	// TEXTURE_MAP_2D Layer 2 configuration context is active.
+	if (!isTextureMapLayer2PanelContext()) {
+
+		return result;
+	}
+
+	setApplicationLayer(
+		ApplicationLayer::ACTIVE_WORKSPACE
+	);
+
+	result.command = CMD_REDRAW;
 	result.requestRedraw = true;
 	result.rebuildMenu = true;
 
@@ -5578,6 +5619,17 @@ void TheArbiter::handleTextureMapLayer2Adjust(int dir, ArbiterResult& result) {
 
 		break;
 
+	case TextureMapLayer2Item::PixelGrid:
+
+		result.textureMapPixelGridStep =
+			dir < 0
+			? -1
+			: +1;
+
+		break;
+
+	case TextureMapLayer2Item::RunWorkspaceEdit:
+
 	case TextureMapLayer2Item::Count:
 
 		break;
@@ -5585,6 +5637,29 @@ void TheArbiter::handleTextureMapLayer2Adjust(int dir, ArbiterResult& result) {
 
 	result.command = CMD_REDRAW;
 
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+}
+
+void TheArbiter::activateTextureMapLayer2Item(
+	ArbiterResult& result) {
+
+	switch (m_textureMapLayer2Selection) {
+
+	case TextureMapLayer2Item::RunWorkspaceEdit:
+
+		result.runTextureMapWorkspaceRequested = true;
+		break;
+
+	case TextureMapLayer2Item::PreviewParticleRadius:
+	case TextureMapLayer2Item::PixelGrid:
+	case TextureMapLayer2Item::Count:
+
+		// Value rows have no E / Enter action.
+		break;
+	}
+
+	result.command = CMD_REDRAW;
 	result.requestRedraw = true;
 	result.rebuildMenu = true;
 }
