@@ -153,8 +153,8 @@ void ViewPort::drawHelpFooter(const char* line1, const char* line2) {
 	const float yBase = static_cast<float>(m_window_h) - 135.0f;
 
 	glColor4f(0.75f, 0.75f, 0.75f, m_panelSlide);
-	if (line1) drawText2D(95.0f, yBase, line1, GLUT_BITMAP_HELVETICA_18);
-	if (line2) drawText2D(95.0f, yBase + 34.0f, line2, GLUT_BITMAP_HELVETICA_18);
+	if (line1) drawText2D(95.0f, yBase, line1, GLUT_BITMAP_HELVETICA_12);
+	if (line2) drawText2D(95.0f, yBase + 34.0f, line2, GLUT_BITMAP_HELVETICA_12);
 }
 
 void ViewPort::drawWorkspaceFrame(float alpha, const char* label) {
@@ -557,7 +557,8 @@ void ViewPort::drawOverlay(
 	const ObjExportPanelData* exportData,
 	bool paused,
 	bool meshAvailable,
-	const TextureMapLayer1PanelData* textureMapData) {
+	const TextureMapLayer1PanelData* textureMapData,
+	const TextureMapLayer2PanelData* textureMapLayer2Data) {
 
 	updatePanelAnimation(!arbiter.isSimulationRunLayer());
 	updateSubLayerPanelAnimation(
@@ -574,7 +575,21 @@ void ViewPort::drawOverlay(
 		drawLayer1EnvironmentConfig(arbiter, textureMapData);
 	}
 	else if (arbiter.isParticleConfigLayer()) {
-		drawLayer2ParticleConfig(arbiter, meshAvailable);
+
+		if (arbiter.isTextureMapLayer2PanelContext()) {
+
+			drawTextureMapLayer2Config(
+				arbiter,
+				textureMapLayer2Data
+			);
+		}
+		else {
+
+			drawLayer2ParticleConfig(
+				arbiter,
+				meshAvailable
+			);
+		}
 	}
 	else if (arbiter.isSimulationRunLayer()) {
 		drawLayer3SimulationRun(arbiter, paused);
@@ -639,6 +654,7 @@ void ViewPort::drawSubLayerPanelLine(
 
 	drawText2D(x, y, text, GLUT_BITMAP_HELVETICA_18);
 }
+
 void ViewPort::drawSubLayerPanel(const TheArbiter& arbiter, const MarchingCubesPanelData* mcData) {
 	if (m_subLayerPanelSlide <= 0.0f) return;
 
@@ -2164,7 +2180,7 @@ void ViewPort::drawTextureMapLayer1Config(
 	drawText2D(
 		panelX(95.0f),
 		180.0f,
-		"LAYER 1 -> GRID_2D WORKSPACE SELECTION",
+		"LAYER 1 -> GRID_2D WORKSPACE CONFIGURATION",
 		GLUT_BITMAP_HELVETICA_18
 	);
 
@@ -2219,20 +2235,28 @@ void ViewPort::drawTextureMapLayer1Config(
 		}
 
 		if (!textureMapData->catalogReady) {
+
 			targetBadge =
 				"CATALOG PENDING";
 		}
 		else if (!textureMapData->hasOutputAssets) {
+
 			targetBadge =
 				"NO OUTPUT ASSETS";
 		}
+		else if (textureMapData->targetLoaded && textureMapData->selectedAssetValid) {
+
+			targetBadge = "LOADED | READY";
+		}
 		else if (textureMapData->selectedAssetValid) {
+
 			targetBadge =
-				"READY";
+				"SELECTED | READY";
 		}
 		else {
+
 			targetBadge =
-				"INVALID";
+				"SELECTED | INVALID";
 		}
 	}
 
@@ -2264,8 +2288,8 @@ void ViewPort::drawTextureMapLayer1Config(
 		95.0f,
 		390.0f,
 		selected ==
-		TheArbiter::TextureMapLayer1Item::OpenConfiguration,
-		"[3] LOAD TARGET / OPEN CONFIGURATION"
+		TheArbiter::TextureMapLayer1Item::LoadTargetAsset,
+		"[3] LOAD TARGET ASSET"
 	);
 
 	// ---------------------------------------------------------
@@ -2275,20 +2299,10 @@ void ViewPort::drawTextureMapLayer1Config(
 		95.0f,
 		445.0f,
 		selected ==
-		TheArbiter::TextureMapLayer1Item::RefreshCatalog,
-		"[4] REFRESH OUTPUT CATALOG"
+		TheArbiter::TextureMapLayer1Item::Configure,
+		"[4] PRESS E TO CONFIGURE SIM"
 	);
 
-	// ---------------------------------------------------------
-	// Row [5] — enter TEXTURE_MAP_2D Layer 2 configuration.
-	// ---------------------------------------------------------
-	drawSelectableLine(
-		95.0f,
-		500.0f,
-		selected ==
-		TheArbiter::TextureMapLayer1Item::Configure,
-		"[5] PRESS E TO CONFIGURE SIM."
-	);
 
 	// ---------------------------------------------------------
 	// Status message.
@@ -2332,6 +2346,12 @@ void ViewPort::drawTextureMapLayer1Config(
 		}
 	}
 
+	// ---------------------------------------------------------
+	// Status message.
+	//
+	// Split long TEXTURE_MAP_2D status messages across two
+	// presentation lines at the existing " | " separator.
+	// ---------------------------------------------------------
 	glColor4f(
 		statusR,
 		statusG,
@@ -2339,12 +2359,47 @@ void ViewPort::drawTextureMapLayer1Config(
 		m_panelSlide
 	);
 
+	std::string statusLine1 =
+		statusText;
+
+	std::string statusLine2;
+
+	const std::string separator =
+		" | ";
+
+	const std::size_t separatorPos =
+		statusLine1.find(separator);
+
+	if (separatorPos != std::string::npos) {
+
+		statusLine2 =
+			statusLine1.substr(
+				separatorPos + separator.size()
+			);
+
+		statusLine1 =
+			statusLine1.substr(
+				0,
+				separatorPos
+			);
+	}
+
 	drawText2D(
 		panelX(95.0f),
-		570.0f,
-		statusText,
+		515.0f,
+		statusLine1.c_str(),
 		GLUT_BITMAP_HELVETICA_18
 	);
+
+	if (!statusLine2.empty()) {
+
+		drawText2D(
+			panelX(95.0f),
+			545.0f,
+			statusLine2.c_str(),
+			GLUT_BITMAP_HELVETICA_18
+		);
+	}
 
 	// ---------------------------------------------------------
 	// Footer.
@@ -2352,6 +2407,128 @@ void ViewPort::drawTextureMapLayer1Config(
 	drawHelpFooter(
 		"W / S: Select list     A / D: Change value",
 		"E: Activate selected row     Q: Back one layer"
+	);
+
+	drawWorkspaceFrame(
+		0.20f,
+		nullptr
+	);
+}
+
+void ViewPort::drawTextureMapLayer2Config(
+	const TheArbiter& arbiter,
+	const TextureMapLayer2PanelData* data) {
+
+	drawPanelBackground();
+
+	glColor4f(
+		1.0f,
+		1.0f,
+		1.0f,
+		m_panelSlide
+	);
+
+	drawText2D(
+		panelX(95.0f),
+		180.0f,
+		"LAYER 2 -> TEXTURE_MAP_2D TARGET CONFIGURATION",
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	drawText2D(
+		panelX(95.0f),
+		215.0f,
+		"MODE: TEXTURE_MAP_2D",
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	const char* targetName =
+		"NO TARGET";
+
+	const char* targetBadge =
+		"UNAVAILABLE";
+
+	float previewRadius =
+		0.125f;
+
+	if (data) {
+
+		if (!data->targetName.empty()) {
+
+			targetName =
+				data->targetName.c_str();
+		}
+
+		if (data->targetLoaded &&
+			data->targetReady) {
+
+			targetBadge =
+				"LOADED | READY";
+		}
+
+		previewRadius =
+			data->previewParticleRadius;
+	}
+
+	drawText2D(
+		panelX(95.0f),
+		270.0f,
+		"TARGET SP:",
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	char targetLine[320];
+
+	snprintf(
+		targetLine,
+		sizeof(targetLine),
+		"{ %.36s } [ %s ]",
+		targetName,
+		targetBadge
+	);
+
+	drawText2D(
+		panelX(95.0f),
+		300.0f,
+		targetLine,
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	drawText2D(
+		panelX(95.0f),
+		350.0f,
+		"3D PREVIEW:",
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	drawText2D(
+		panelX(95.0f),
+		380.0f,
+		"{ TEXTURED STATIC PARTICLE }",
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	char radiusLine[256];
+
+	snprintf(
+		radiusLine,
+		sizeof(radiusLine),
+		"[1] PREVIEW PARTICLE RADIUS { %.3f }",
+		previewRadius
+	);
+
+	drawSelectableLine(
+		95.0f,
+		445.0f,
+		arbiter.getTextureMapLayer2Selection() ==
+		TheArbiter::TextureMapLayer2Item::
+		PreviewParticleRadius,
+		radiusLine
+	);
+
+	drawHelpFooter(
+		"Q: TARGET SELECTION     W/S: SELECT     A/D: CHANGE VALUE",
+		"E: ACTIVATE     MOUSE: ORBIT / ZOOM PREVIEW"
 	);
 
 	drawWorkspaceFrame(

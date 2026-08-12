@@ -84,9 +84,13 @@ public:
 	enum class TextureMapLayer1Item {
 		Workspace = 0,
 		TargetStaticParticle,
-		OpenConfiguration,
-		RefreshCatalog,
+		LoadTargetAsset,
 		Configure,
+		Count
+	};
+
+	enum class TextureMapLayer2Item {
+		PreviewParticleRadius = 0,
 		Count
 	};
 
@@ -550,11 +554,20 @@ public:
 		std::string staticParticleAssetName;
 
 		// TEXTURE_MAP_2D Layer 1 intents.
-		// These are commands for EuclidEngine to handle later.
-		// TheArbiter performs no catalog or filesystem work.
-		bool refreshTextureMapCatalogRequested = false;
+		//
+		// TheArbiter owns user intent only.
+		// Asset loading, validation, catalog handling, and
+		// Layer transitions belong to EuclidEngine / workspace logic.
 		bool loadTextureMapTargetRequested = false;
+		bool configureTextureMapTargetRequested = false;
+
+		// Layer 1 Row [2]:
+		// previous / next OUTPUT Static Particle.
 		int textureMapCatalogStep = 0;
+
+		// Layer 2 Row [1]:
+		// decrease / increase preview radius.
+		int textureMapPreviewRadiusStep = 0;
 
 		// Volume CAD action.
 		bool commitVolumeFuse = false;
@@ -602,28 +615,33 @@ public:
 
 	// --- COMMAND / MENU ENTRY POINTS ---
 	ArbiterResult processKeyboard(const KeyboardInput::KeyEvent& event);
-	ArbiterResult setVolumeAssemblyNode(VolumeAssemblyNode node);
-	ArbiterResult setOffsetVectorSelection(OffsetVector vector);
-	ArbiterResult clearObjectOffsetFromMenu();
-	ArbiterResult setVolumePrimitiveFromMenu(VolumePrimitive primitive);
-	ArbiterResult toggleVolumeInjectionModeFromMenu();
-	ArbiterResult setSPMirrorModeFromMenu(SPMirrorMode mode);
-	ArbiterResult commitBrushBaseFromMenu();
-	ArbiterResult commitObjectBasisAndReturnToPreview();
-	ArbiterResult enterMarchingCubesFromPreview();
-	ArbiterResult activateMarchingCubesPanelItemFromMenu(MarchingCubesPanelItem item);
-	ArbiterResult activateSPPrimaryActionFromMenu();
-	ArbiterResult setSPCollisionShapeFromMenu(SPCollisionShape shape);
+	ArbiterResult handleTextEntryKeyboard(const KeyboardInput::KeyEvent& event);
+
+	// --- SP_MCAD / MENU ENTRY POINTS ---
 	ArbiterResult enterSPRenderingSetupFromMenu();
+	ArbiterResult activateSPPrimaryActionFromMenu();
+	ArbiterResult returnSPToLayer2FromMenu();
+	ArbiterResult setSPCollisionShapeFromMenu(SPCollisionShape shape);
+	ArbiterResult trySelectParticleAtCurrentSlice();
+	ArbiterResult returnSPCollisionSetupFromMenu();
 	ArbiterResult setSPRenderSourceFromMenu(ParticleRenderMode mode);
 	ArbiterResult setSPMeshBoundModeFromMenu(SPMeshBoundMode mode);
 	ArbiterResult setSPDisplayModeFromMenu(SPDisplayMode mode);
 	ArbiterResult setSPRenderCageVisibleFromMenu(bool visible);
-
 	ArbiterResult enterSPVolumePreviewFromMenu();
-	ArbiterResult returnSPCollisionSetupFromMenu();
-	ArbiterResult returnSPToLayer2FromMenu();
-	ArbiterResult trySelectParticleAtCurrentSlice();
+	ArbiterResult setVolumeAssemblyNode(VolumeAssemblyNode node);
+	ArbiterResult setOffsetVectorSelection(OffsetVector vector);
+	ArbiterResult clearObjectOffsetFromMenu();
+	ArbiterResult setVolumePrimitiveFromMenu(VolumePrimitive primitive);
+	ArbiterResult commitObjectBasisAndReturnToPreview();
+	ArbiterResult toggleVolumeInjectionModeFromMenu();
+	ArbiterResult setSPMirrorModeFromMenu(SPMirrorMode mode);
+	ArbiterResult commitBrushBaseFromMenu();
+	ArbiterResult enterMarchingCubesFromPreview();
+	ArbiterResult activateMarchingCubesPanelItemFromMenu(MarchingCubesPanelItem item);
+
+	// --- TM_2D / MENU ENTRYPOINTS ---
+	ArbiterResult enterTextureMapLayer2FromMenu();
 
 	// --- SINGLE_PARTICLE AUTHORING SOURCE ---
 	void activateLoadedStaticParticleBase(bool hasEditableVolume);
@@ -636,6 +654,7 @@ public:
 	WorkspaceId getWorkspaceSelection(WorkspaceDomain domain) const;
 
 	TextureMapLayer1Item getTextureMapLayer1Selection() const { return m_textureMapLayer1Selection; }
+	TextureMapLayer2Item getTextureMapLayer2Selection() const { return m_textureMapLayer2Selection; }
 
 	SingleParticleLayer1Item getSingleParticleLayer1Selection() const { return m_singleParticleLayer1Selection; }
 	SingleParticleObjectType getSingleParticleObjectType() const { return m_singleParticleObjectType; }
@@ -692,7 +711,10 @@ public:
 	bool isParticleSimulationSelected() const { return getSelectedWorkspace() == WorkspaceId::PARTICLE_SIMULATION; }
 
 	bool isTextureMapLayer1PanelContext() const;
+	bool isTextureMapLayer2PanelContext() const;
+
 	bool isSingleParticleLayer1PanelContext() const;
+
 	bool isParticleSimLayer1PanelContext() const;
 	bool isParticleSimLayer2RunSelected() const;
 	
@@ -834,10 +856,6 @@ private:
 		ArbiterResult& result
 	);
 
-	ArbiterResult handleTextEntryKeyboard(
-		const KeyboardInput::KeyEvent& event
-	);
-
 	void applyCommittedTextEntry(ArbiterResult& result);
 	void beginDefaultParticleCountEntry(ArbiterResult& result);
 
@@ -855,6 +873,9 @@ private:
 	void moveTextureMapLayer1Cursor(int dir);
 	void handleTextureMapLayer1Adjust(int dir, ArbiterResult& result);
 	void activateTextureMapLayer1Item(ArbiterResult& result);
+	// TEXTURE_MAP_2D Layer 2 configuration.
+	void moveTextureMapLayer2Cursor(int dir);
+	void handleTextureMapLayer2Adjust(int dir, ArbiterResult& result);
 
 	// SINGLE_PARTICLE Layer 1 configuration.
 	void moveSingleParticleLayer1Cursor(int dir);
@@ -997,6 +1018,9 @@ private:
 	//TEXTURE_MAP_2D Layer 1 menu cursor
 	TextureMapLayer1Item m_textureMapLayer1Selection =
 		TextureMapLayer1Item::Workspace;
+	//TEXTURE_MAP_2D Layer 2 menu cursor
+	TextureMapLayer2Item m_textureMapLayer2Selection =
+		TextureMapLayer2Item::PreviewParticleRadius;
 
 	TextEntrySession m_textEntry;
 	TextEntryTarget m_textEntryTarget = TextEntryTarget::None;

@@ -553,6 +553,19 @@ bool TheArbiter::isTextureMapLayer1PanelContext() const {
 		WorkspaceId::TEXTURE_MAP_2D;
 }
 
+bool TheArbiter::isTextureMapLayer2PanelContext() const {
+
+	return
+		m_navigation.layer ==
+		ApplicationLayer::WORKSPACE_CONFIGURATION &&
+
+		m_navigation.selectedDomain ==
+		WorkspaceDomain::GRID_2D &&
+
+		getSelectedWorkspace() ==
+		WorkspaceId::TEXTURE_MAP_2D;
+}
+
 bool TheArbiter::isSingleParticleLayer1PanelContext() const {
 
 	return
@@ -623,38 +636,29 @@ void TheArbiter::moveTextureMapLayer1Cursor(int dir) {
 		static_cast<TextureMapLayer1Item>(wrapIndex(current, count, dir));
 }
 
-void TheArbiter::handleTextureMapLayer1Adjust(
-	int dir,
-	ArbiterResult& result) {
-
+void TheArbiter::handleTextureMapLayer1Adjust(int dir, ArbiterResult& result) {
 	if (dir == 0) return;
 
 	switch (m_textureMapLayer1Selection) {
 
 	case TextureMapLayer1Item::Workspace:
 
-		// Cycle through the GRID_2D workspace list:
-		//
-		// GRAPH_2D
-		// TEXTURE_MAP_2D
-		// SPRITE_PROJECTION_2D
 		cycleWorkspaceSelection(dir);
 		break;
 
 	case TextureMapLayer1Item::TargetStaticParticle:
 
-		// EuclidEngine will apply this step to the
+		// EuclidEngine applies this step to the
 		// TextureMapWorkspace OUTPUT catalog.
 		result.textureMapCatalogStep =
 			dir < 0 ? -1 : +1;
 		break;
 
-	case TextureMapLayer1Item::OpenConfiguration:
-	case TextureMapLayer1Item::RefreshCatalog:
+	case TextureMapLayer1Item::LoadTargetAsset:
 	case TextureMapLayer1Item::Configure:
 	case TextureMapLayer1Item::Count:
 
-		// Action rows have no A/D value.
+		// Action rows have no A/D adjustment.
 		break;
 	}
 
@@ -664,37 +668,38 @@ void TheArbiter::handleTextureMapLayer1Adjust(
 }
 
 
-void TheArbiter::activateTextureMapLayer1Item(ArbiterResult& result) {
+void TheArbiter::activateTextureMapLayer1Item(
+	ArbiterResult& result) {
 
 	switch (m_textureMapLayer1Selection) {
 
-	case TextureMapLayer1Item::OpenConfiguration:
+	case TextureMapLayer1Item::LoadTargetAsset:
 
-		// Future Layer 1 catalog/load sprint:
-		// load the selected OUTPUT Static Particle target.
+		// Row [3]:
+		// request loading the currently selected OUTPUT
+		// Static Particle into the shared project repository.
 		result.loadTextureMapTargetRequested = true;
 		break;
 
-	case TextureMapLayer1Item::RefreshCatalog:
-
-		// Future Layer 1 catalog sprint:
-		// rescan OUTPUT/STATIC_PARTICLES.
-		result.refreshTextureMapCatalogRequested = true;
-		break;
-
 	case TextureMapLayer1Item::Configure:
-		
-		// Enter TEXTURE_MAP_2D Layer 2.
+
+		// Row [4]:
 		//
-		// Layer2 gets its dedicated target-configuration
-		setApplicationLayer(ApplicationLayer::WORKSPACE_CONFIGURATION);
+		// Emit intent only.
+		//
+		// EuclidEngine will later validate that the selected
+		// target has successfully loaded before allowing the
+		// Layer 1 -> Layer 2 transition.
+		//
+		// NO transition is implemented in this checkpoint.
+		result.configureTextureMapTargetRequested = true;
 		break;
 
 	case TextureMapLayer1Item::Workspace:
 	case TextureMapLayer1Item::TargetStaticParticle:
 	case TextureMapLayer1Item::Count:
 
-		// Rows [1] and [2] do not activate with E.
+		// Rows [1] and [2] are selection/value rows.
 		break;
 	}
 
@@ -2487,6 +2492,65 @@ void TheArbiter::handleWorkspaceConfigurationKeyboard(
 	const KeyboardInput::KeyEvent& event,
 	ArbiterResult& result) {
 
+	// =========================================================
+	// GRID_2D -> TEXTURE_MAP_2D Layer 2
+	// =========================================================
+	if (isTextureMapLayer2PanelContext()) {
+
+		switch (event.signal) {
+
+		case KeyboardInput::KEY_W:
+
+			moveTextureMapLayer2Cursor(-1);
+
+			result.command = CMD_REDRAW;
+			result.requestRedraw = true;
+
+			break;
+
+		case KeyboardInput::KEY_S:
+
+			moveTextureMapLayer2Cursor(+1);
+
+			result.command = CMD_REDRAW;
+			result.requestRedraw = true;
+
+			break;
+
+		case KeyboardInput::KEY_A:
+
+			handleTextureMapLayer2Adjust(
+				-1,
+				result
+			);
+
+			break;
+
+		case KeyboardInput::KEY_D:
+
+			handleTextureMapLayer2Adjust(
+				+1,
+				result
+			);
+
+			break;
+
+		case KeyboardInput::KEY_E:
+		case KeyboardInput::KEY_ENTER:
+
+			// Row [1] has no E action.
+			result.command = CMD_REDRAW;
+			result.requestRedraw = true;
+
+			break;
+
+		default:
+			break;
+		}
+
+		return;
+	}
+
 	if (isParticleSimulationSelected()) {
 		switch (event.signal) {
 		case KeyboardInput::KEY_W:
@@ -3799,6 +3863,33 @@ TheArbiter::returnSPToLayer2FromMenu() {
 	}
 
 	retreatSingleParticleSubLayer(result);
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::enterTextureMapLayer2FromMenu() {
+
+	ArbiterResult result;
+
+	// The engine may confirm this transition only while
+	// TEXTURE_MAP_2D Layer 1 is actually active.
+	if (!isTextureMapLayer1PanelContext()) {
+
+		return result;
+	}
+
+	m_textureMapLayer2Selection =
+		TextureMapLayer2Item::PreviewParticleRadius;
+
+	setApplicationLayer(
+		ApplicationLayer::WORKSPACE_CONFIGURATION
+	);
+
+	result.command = CMD_REDRAW;
+
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+
 	return result;
 }
 
@@ -5457,4 +5548,43 @@ float TheArbiter::getEffectiveVolumeScaleY() const {
 float TheArbiter::getEffectiveVolumeScaleZ() const {
 	const VolumeObjectState& s = getActiveVolumeState();
 	return s.scaleWhole * s.scaleZ;
+}
+
+void TheArbiter::moveTextureMapLayer2Cursor(int dir) {
+	if (dir == 0) return;
+
+	const int count =
+		static_cast<int>(TextureMapLayer2Item::Count);
+
+	const int current =
+		static_cast<int>(m_textureMapLayer2Selection);
+
+	m_textureMapLayer2Selection =
+		static_cast<TextureMapLayer2Item>(
+			wrapIndex(current, count, dir));
+}
+
+void TheArbiter::handleTextureMapLayer2Adjust(int dir, ArbiterResult& result) {
+	if (dir == 0) return;
+
+	switch (m_textureMapLayer2Selection) {
+
+	case TextureMapLayer2Item::PreviewParticleRadius:
+
+		result.textureMapPreviewRadiusStep =
+			dir < 0
+			? -1
+			: +1;
+
+		break;
+
+	case TextureMapLayer2Item::Count:
+
+		break;
+	}
+
+	result.command = CMD_REDRAW;
+
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
 }

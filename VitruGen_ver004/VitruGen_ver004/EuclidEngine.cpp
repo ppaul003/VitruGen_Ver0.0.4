@@ -542,6 +542,380 @@ void EuclidEngine::initTextureMapResources() {
 	);
 }
 
+bool EuclidEngine::loadSelectedTextureMapTarget() {
+
+	vitru::TextureMapWorkspace* textureWorkspace =
+		m_tesseract.getTextureMapWorkspaceRuntime();
+
+	if (!textureWorkspace) {
+
+		printf(
+			"[TEXTURE_MAP_2D] LOAD TARGET failed: "
+			"workspace runtime unavailable.\n"
+		);
+
+		return false;
+	}
+
+	const vitru::StaticAssetCatalogEntry* selected =
+		textureWorkspace->selectedOutputAsset();
+
+	if (!selected) {
+
+		printf(
+			"[TEXTURE_MAP_2D] LOAD TARGET failed: "
+			"no OUTPUT Static Particle is selected.\n"
+		);
+
+		textureWorkspace->target() =
+			vitru::TextureMapTargetContext{};
+
+		textureWorkspace->target().readiness =
+			vitru::TextureTargetReadiness::Invalid;
+
+		return false;
+	}
+
+	if (!selected->valid) {
+
+		printf(
+			"[TEXTURE_MAP_2D] LOAD TARGET rejected: "
+			"%s is not a valid VSPA target.\n",
+			selected->displayName.c_str()
+		);
+
+		textureWorkspace->target() =
+			vitru::TextureMapTargetContext{};
+
+		textureWorkspace->target().readiness =
+			vitru::TextureTargetReadiness::Invalid;
+
+		return false;
+	}
+
+	// ---------------------------------------------------------
+	// CPU-side VSPA load.
+	//
+	// Do NOT pass the shared repository here.
+	// Do NOT refresh SINGLE_PARTICLE_DATA/p0.obj here.
+	//
+	// TEXTURE_MAP_2D first loads into a temporary canonical
+	// StaticParticleAsset. EuclidEngine commits it afterward.
+	// ---------------------------------------------------------
+	vitru::StaticParticleAsset loadedAsset;
+
+	vitru::StaticAssetOperationReport report;
+
+	const bool loadSucceeded =
+		vitru::loadStaticParticleBundle(
+			selected->manifestPath,
+			loadedAsset,
+			report,
+			nullptr,
+			{}
+	);
+
+	if (!loadSucceeded) {
+
+		printf(
+			"[TEXTURE_MAP_2D] LOAD TARGET failed during phase: %s\n",
+			report.phase.c_str()
+		);
+
+		for (const string& warning :
+			report.warnings) {
+
+			printf(
+				"  [WARN] %s\n",
+				warning.c_str()
+			);
+		}
+
+		for (const string& error :
+			report.errors) {
+
+			printf(
+				"  [ERROR] %s\n",
+				error.c_str()
+			);
+		}
+
+		textureWorkspace->target() =
+			vitru::TextureMapTargetContext{};
+
+		textureWorkspace->target().readiness =
+			vitru::TextureTargetReadiness::Invalid;
+
+		return false;
+	}
+
+	// ---------------------------------------------------------
+	// Commit into the shared canonical repository.
+	//
+	// Repeated E presses on the same loaded target replace the
+	// existing repository asset rather than accumulating copies.
+	// ---------------------------------------------------------
+	vitru::AssetId assetId =
+		vitru::INVALID_ASSET_ID;
+
+	const vitru::TextureMapTargetContext previousTarget =
+		textureWorkspace->target();
+
+	if (previousTarget.loaded &&
+		previousTarget.assetId !=
+		vitru::INVALID_ASSET_ID &&
+		m_assetRepository.findStaticParticle(
+			previousTarget.assetId)) {
+
+		assetId =
+			previousTarget.assetId;
+
+		if (!m_assetRepository.replaceStaticParticle(
+			assetId,
+			move(loadedAsset))) {
+
+			printf(
+				"[TEXTURE_MAP_2D] LOAD TARGET failed: "
+				"repository replacement failed.\n"
+			);
+
+			return false;
+		}
+	}
+	else {
+
+		assetId =
+			m_assetRepository.addStaticParticle(
+				move(loadedAsset)
+			);
+	}
+
+	if (assetId == vitru::INVALID_ASSET_ID) {
+
+		printf(
+			"[TEXTURE_MAP_2D] LOAD TARGET failed: "
+			"repository returned an invalid AssetId.\n"
+		);
+
+		return false;
+	}
+
+	if (!m_assetRepository.setActiveStaticParticle(assetId)) {
+
+		printf(
+			"[TEXTURE_MAP_2D] LOAD TARGET failed: "
+			"could not activate repository asset.\n"
+		);
+
+		return false;
+	}
+
+	vitru::StaticParticleAsset* active =
+		m_assetRepository.findStaticParticle(
+			assetId
+		);
+
+	if (!active) {
+
+		printf(
+			"[TEXTURE_MAP_2D] LOAD TARGET failed: "
+			"active repository asset could not be resolved.\n"
+		);
+
+		return false;
+	}
+
+	// ---------------------------------------------------------
+	// Upload mesh/material/texture resources to EuclidRenderer.
+	//
+	// Unlike SINGLE_PARTICLE loading, this does NOT restore the
+	// native CUDA SDF. TEXTURE_MAP_2D needs the textured mesh,
+	// not the volumetric editing field.
+	// ---------------------------------------------------------
+	if (!m_renderer || !m_renderer->loadParticleStaticAsset(*active)) {
+
+		printf(
+			"[TEXTURE_MAP_2D] LOAD TARGET failed: "
+			"renderer asset upload failed.\n"
+		);
+
+		textureWorkspace->target() =
+			vitru::TextureMapTargetContext{};
+
+		textureWorkspace->target().readiness =
+			vitru::TextureTargetReadiness::Invalid;
+
+		return false;
+	}
+
+	// ---------------------------------------------------------
+	// Bind the canonical repository asset as the active
+	// TEXTURE_MAP_2D editing target.
+	// ---------------------------------------------------------
+	if (!textureWorkspace->activateLoadedTarget(assetId)) {
+
+		printf(
+			"[TEXTURE_MAP_2D] LOAD TARGET failed: "
+			"target context activation failed.\n"
+		);
+
+		return false;
+	}
+
+	printf(
+		"[TEXTURE_MAP_2D] TARGET LOADED: %s\n",
+		active->name.c_str()
+	);
+
+	printf(
+		"  AssetId: %llu\n",
+		static_cast<unsigned long long>(
+			assetId
+			)
+	);
+
+	printf(
+		"  Materials: %zu\n",
+		active->materials.size()
+	);
+
+	printf(
+		"  Textures: %zu\n",
+		active->textures.size()
+	);
+
+	printf(
+		"  TEXCOORD_0: %s\n",
+		active->mesh.uvs.size() ==
+		active->mesh.positions.size()
+		? "READY"
+		: "MISSING"
+	);
+
+	return true;
+}
+
+bool EuclidEngine::enterTextureMapLayer2Preview() {
+
+	vitru::TextureMapWorkspace* textureWorkspace =
+		m_tesseract.getTextureMapWorkspaceRuntime();
+
+	if (!textureWorkspace) {
+
+		printf(
+			"[TEXTURE_MAP_2D] CONFIGURE rejected: "
+			"workspace runtime unavailable.\n"
+		);
+
+		return false;
+	}
+
+	const vitru::TextureMapTargetContext& target =
+		textureWorkspace->target();
+
+	if (!target.loaded ||
+		target.assetId ==
+		vitru::INVALID_ASSET_ID) {
+
+		printf(
+			"[TEXTURE_MAP_2D] CONFIGURE rejected: "
+			"load Row [3] target first.\n"
+		);
+
+		return false;
+	}
+
+	if (target.readiness !=
+		vitru::TextureTargetReadiness::Ready) {
+
+		printf(
+			"[TEXTURE_MAP_2D] CONFIGURE rejected: "
+			"target is not READY.\n"
+		);
+
+		return false;
+	}
+
+	vitru::StaticParticleAsset* active =
+		m_assetRepository.findStaticParticle(
+			target.assetId
+		);
+
+	if (!active) {
+
+		printf(
+			"[TEXTURE_MAP_2D] CONFIGURE rejected: "
+			"canonical repository asset is unavailable.\n"
+		);
+
+		return false;
+	}
+
+	if (!m_renderer) {
+
+		printf(
+			"[TEXTURE_MAP_2D] CONFIGURE rejected: "
+			"renderer unavailable.\n"
+		);
+
+		return false;
+	}
+
+	// ---------------------------------------------------------
+	// Refresh the displayed GPU asset on every Layer 2 entry.
+	//
+	// Therefore:
+	//
+	// Layer 2 -> Q -> Layer 1 -> E Row [4]
+	//
+	// always refreshes the rendered canonical asset.
+	// ---------------------------------------------------------
+	if (!m_renderer->loadParticleStaticAsset(
+		*active)) {
+
+		printf(
+			"[TEXTURE_MAP_2D] CONFIGURE rejected: "
+			"renderer refresh failed.\n"
+		);
+
+		return false;
+	}
+
+	m_assetRepository.setActiveStaticParticle(
+		target.assetId
+	);
+
+	// Navigation changes only after all validation succeeds.
+	m_arbiter.enterTextureMapLayer2FromMenu();
+
+	if (!m_arbiter.isTextureMapLayer2PanelContext()) {
+
+		printf(
+			"[TEXTURE_MAP_2D] CONFIGURE rejected: "
+			"Layer 2 transition failed.\n"
+		);
+
+		return false;
+	}
+
+	m_tesseract.enterWorkspace(
+		TheArbiter::WorkspaceId::TEXTURE_MAP_2D
+	);
+
+	m_renderer->setParticleHighlighted(false);
+
+	m_camera.setBehaviorMode(
+		CameraProcessor::CAM_SINGLE_PARTICLE_ORBIT_CLOSE
+	);
+
+	printf(
+		"[TEXTURE_MAP_2D] Entered Layer 2: %s\n",
+		active->name.c_str()
+	);
+
+	return true;
+}
+
 void EuclidEngine::initMenus() {
 	rebuildMenus();
 }
@@ -2286,6 +2660,10 @@ void EuclidEngine::syncTesseractWorkspaceFromArbiter() {
 	TheArbiter::WorkspaceId targetWorkspace =
 		TheArbiter::WorkspaceId::NONE;
 
+	const bool particleSimulationRunActive =
+		m_arbiter.isSimulationRunLayer() &&
+		m_arbiter.isParticleSimulationSelected();
+
 	const bool singleParticleConfigPreviewActive =
 		m_arbiter.isParticleConfigLayer() &&
 		m_arbiter.isSingleParticleSelected() &&
@@ -2295,9 +2673,8 @@ void EuclidEngine::syncTesseractWorkspaceFromArbiter() {
 		m_arbiter.isSimulationRunLayer() &&
 		m_arbiter.isSingleParticleSelected();
 
-	const bool particleSimulationRunActive =
-		m_arbiter.isSimulationRunLayer() &&
-		m_arbiter.isParticleSimulationSelected();
+	const bool textureMapLayer2Active =
+		m_arbiter.isTextureMapLayer2PanelContext();
 
 	if (particleSimulationRunActive) {
 		targetWorkspace =
@@ -2306,6 +2683,10 @@ void EuclidEngine::syncTesseractWorkspaceFromArbiter() {
 	else if (singleParticleConfigPreviewActive || singleParticleRunActive) {
 		targetWorkspace =
 			TheArbiter::WorkspaceId::SINGLE_PARTICLE_MCAD;
+	}
+	else if (textureMapLayer2Active) {
+		targetWorkspace =
+			TheArbiter::WorkspaceId::TEXTURE_MAP_2D;
 	}
 
 	if (m_tesseract.getActiveWorkspace() == targetWorkspace) {
@@ -2319,11 +2700,21 @@ void EuclidEngine::syncTesseractWorkspaceFromArbiter() {
 		m_tesseract.enterWorkspace(targetWorkspace);
 	}
 }
+
 void EuclidEngine::syncCameraBehaviorFromArbiter() {
 	if (m_arbiter.isMenuLayer()) {
 		m_camera.setBehaviorMode(
 			CameraProcessor::CAM_MENU_PREVIEW
 		);
+		return;
+	}
+
+	if (m_arbiter.isTextureMapLayer2PanelContext()) {
+
+		m_camera.setBehaviorMode(
+			CameraProcessor::CAM_SINGLE_PARTICLE_ORBIT_CLOSE
+		);
+
 		return;
 	}
 
@@ -2834,7 +3225,7 @@ void EuclidEngine::handleStaticParticleRequests(
 	if (result.loadStaticParticleRequested) openStaticParticleLoadPanel();
 	if (result.saveStaticParticleAsRequested)
 		openStaticParticleSaveConfirm(result.staticParticleAssetName);
-	else if (result.saveStaticParticleRequested)
+	else if (result.saveStaticParticleAsRequested)
 		openStaticParticleSaveConfirm("");
 }
 
@@ -2981,6 +3372,10 @@ void EuclidEngine::onDisplay() {
 	m_volumeFramePhi = rot[0] * degreesToRadians;
 	m_volumeFrameTheta = rot[1] * degreesToRadians;
 
+	const bool textureMapWorkspaceActive =
+		m_tesseract.getActiveWorkspace() ==
+		TheArbiter::WorkspaceId::TEXTURE_MAP_2D;
+
 	const bool singleParticleWorkspaceActive =
 		m_tesseract.getActiveWorkspace() ==
 		TheArbiter::WorkspaceId::SINGLE_PARTICLE_MCAD;
@@ -2997,7 +3392,8 @@ void EuclidEngine::onDisplay() {
 	// The global diagnostic grid is used by the menu and configuration
 	// layers. Active particle workspaces own their local render context.
 	if (!singleParticleWorkspaceActive &&
-		!particleSimulationWorkspaceActive) {
+		!particleSimulationWorkspaceActive &&
+		!textureMapWorkspaceActive) {
 
 		if (particleSimulationPreviewActive)
 			applyPSGridLayoutToWorkspace();
@@ -3008,7 +3404,8 @@ void EuclidEngine::onDisplay() {
 	}
 
 	if (particleSimulationWorkspaceActive ||
-		singleParticleWorkspaceActive) {
+		singleParticleWorkspaceActive ||
+		textureMapWorkspaceActive) {
 		Tesseract::WorkspaceRenderContext renderCtx;
 
 		renderCtx.arbiter = &m_arbiter;
@@ -3032,7 +3429,10 @@ void EuclidEngine::onDisplay() {
 		renderCtx.sliceDistance = m_volumeSliceDistance;
 
 		m_tesseract.renderActiveWorkspace(renderCtx);
-		syncVolumeBoundaryStatusFromTesseract();
+
+		if (singleParticleWorkspaceActive) {
+			syncVolumeBoundaryStatusFromTesseract();
+		}
 	}
 
 	// 7. Draw particles only when a mode explicitly requests particle rendering.
@@ -3086,25 +3486,165 @@ void EuclidEngine::onDisplay() {
 		exportPanelDataPtr = &m_objExportPanel;
 	}
 
+	// ---------------------------------------------------------
+	// TEXTURE_MAP_2D Layer 1 presentation bridge.
+	//
+	// TextureMapWorkspace owns the catalog.
+	// EuclidEngine converts catalog state into display-only data.
+	// ViewPort only renders the supplied presentation state.
+	// ---------------------------------------------------------
+	ViewPort::TextureMapLayer1PanelData textureMapPanelData;
+
+	const ViewPort::TextureMapLayer1PanelData*
+		textureMapPanelDataPtr = nullptr;
+
+	if (m_arbiter.isTextureMapLayer1PanelContext()) {
+
+		textureMapPanelDataPtr =
+			&textureMapPanelData;
+
+		const vitru::TextureMapWorkspace* textureWorkspace =
+			m_tesseract.getTextureMapWorkspaceRuntime();
+
+		if (!textureWorkspace) {
+			textureMapPanelData.catalogReady = false;
+
+			textureMapPanelData.statusMessage =
+				"TEXTURE MAP WORKSPACE RUNTIME UNAVAILABLE.";
+		}
+		else {
+
+			textureMapPanelData.catalogReady =
+				textureWorkspace->outputCatalogReady();
+
+			textureMapPanelData.hasOutputAssets =
+				textureWorkspace->hasOutputAssets();
+
+			textureMapPanelData.targetLoaded =
+				textureWorkspace->target().loaded;
+
+			const vitru::StaticAssetCatalogEntry* selected =
+				textureWorkspace->selectedOutputAsset();
+
+			if (selected) {
+
+				textureMapPanelData.targetName =
+					selected->displayName;
+
+				textureMapPanelData.selectedAssetValid =
+					selected->valid;
+
+				if (textureWorkspace->target().loaded) {
+
+					textureMapPanelData.statusMessage =
+						"TARGET LOADED: " +
+						selected->displayName +
+						" | TEXTURE_MAP_2D CONFIGURATION READY.";
+				}
+				else if (
+					textureWorkspace->target().readiness ==
+					vitru::TextureTargetReadiness::Invalid) {
+
+					textureMapPanelData.statusMessage =
+						"TARGET LOAD FAILED: " +
+						selected->displayName +
+						" | CONFIGURATION LOCKED.";
+				}
+				else if (selected->valid) {
+
+					textureMapPanelData.statusMessage =
+						"SELECTED TARGET: " +
+						selected->displayName +
+						" | LOAD TARGET ASSET WITH ROW [3].";
+				}
+				else {
+
+					textureMapPanelData.statusMessage =
+						"SELECTED TARGET INVALID: " +
+						selected->displayName +
+						" | CONFIGURATION LOCKED.";
+				}
+			}
+			else if (textureWorkspace->outputCatalogReady()) {
+
+				textureMapPanelData.statusMessage =
+					"NO OUTPUT STATIC PARTICLE ASSETS FOUND.";
+			}
+			else {
+
+				textureMapPanelData.statusMessage =
+					"OUTPUT STATIC PARTICLE CATALOG UNAVAILABLE.";
+			}
+		}
+	}
+
+	ViewPort::TextureMapLayer2PanelData
+		textureMapLayer2PanelData;
+
+	const ViewPort::TextureMapLayer2PanelData*
+		textureMapLayer2PanelDataPtr = nullptr;
+
+	if (m_arbiter.isTextureMapLayer2PanelContext()) {
+
+		textureMapLayer2PanelDataPtr =
+			&textureMapLayer2PanelData;
+
+		const vitru::TextureMapWorkspace* textureWorkspace =
+			m_tesseract.getTextureMapWorkspaceRuntime();
+
+		if (textureWorkspace) {
+
+			const vitru::TextureMapTargetContext& target =
+				textureWorkspace->target();
+
+			textureMapLayer2PanelData.targetLoaded =
+				target.loaded;
+
+			textureMapLayer2PanelData.targetReady =
+				target.readiness ==
+				vitru::TextureTargetReadiness::Ready;
+
+			textureMapLayer2PanelData.previewParticleRadius =
+				target.previewParticleRadius;
+
+			const vitru::StaticParticleAsset* active =
+				m_assetRepository.findStaticParticle(
+					target.assetId
+				);
+
+			if (active) {
+
+				textureMapLayer2PanelData.targetName =
+					active->name;
+			}
+		}
+	}
+
 	// 8. Draw screen-space overlay.
 	m_viewport.drawOverlay(
 		m_arbiter,
 		mcPanelDataPtr,
 		exportPanelDataPtr,
 		m_tesseract.isActiveWorkspacePaused(),
-		meshAvailable);
+		meshAvailable,
+		textureMapPanelDataPtr,
+		textureMapLayer2PanelDataPtr);
 
 	// 9. End frame.
 	sdkStopTimer(&m_timer);
 	computeFPS();
 	glutSwapBuffers();
 }
+
 void EuclidEngine::onMouse(int button, int state, int x, int y) {
 	if (isObjExportModalActive() || 
 		isStaticParticleAssetModalActive() ||
 		m_arbiter.isTextEntryActive()) return;
 
 	const bool isWheel = (button == 3 || button == 4);
+
+	const bool textureMapConfigPreviewActive =
+		m_arbiter.isTextureMapLayer2PanelContext();
 
 	const bool singleParticleConfigPreviewActive =
 		m_arbiter.isParticleConfigLayer() &&
@@ -3113,6 +3653,7 @@ void EuclidEngine::onMouse(int button, int state, int x, int y) {
 
 	const bool singleParticleOpenGLCameraActive =
 		singleParticleConfigPreviewActive ||
+		textureMapConfigPreviewActive ||
 		(m_arbiter.isSimulationRunLayer() &&
 			m_arbiter.isSingleParticleSelected() &&
 			(m_arbiter.isSingleParticleReferenceSubLayer() ||
@@ -3254,7 +3795,104 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 	float previousYawDeg = m_arbiter.getRotationYawDeg();
 	float previousRollDeg = m_arbiter.getRotationRollDeg();
 
-	TheArbiter::ArbiterResult result = m_arbiter.processKeyboard(event);
+	TheArbiter::ArbiterResult result =
+		m_arbiter.processKeyboard(event);
+
+	if (result.textureMapCatalogStep != 0) {
+
+		vitru::TextureMapWorkspace* textureWorkspace =
+			m_tesseract.getTextureMapWorkspaceRuntime();
+
+		if (!textureWorkspace) {
+
+			std::printf(
+				"[TEXTURE_MAP_2D] TARGET SP selection skipped: "
+				"workspace runtime unavailable.\n"
+			);
+		}
+		else {
+
+			textureWorkspace->selectOutputAsset(
+				result.textureMapCatalogStep
+			);
+
+			if (const vitru::StaticAssetCatalogEntry* selected =
+				textureWorkspace->selectedOutputAsset()) {
+
+				std::printf(
+					"[TEXTURE_MAP_2D] TARGET SP: %s [%s]\n",
+					selected->displayName.c_str(),
+					selected->valid
+					? "READY"
+					: "INVALID"
+				);
+			}
+			else {
+
+				std::printf(
+					"[TEXTURE_MAP_2D] TARGET SP: "
+					"no OUTPUT assets available.\n"
+				);
+			}
+		}
+	}
+
+	// ---------------------------------------------------------
+	// TEXTURE_MAP_2D Layer 1 Row [3].
+	//
+	// Load the currently selected OUTPUT Static Particle into
+	// the shared canonical repository and renderer.
+	// ---------------------------------------------------------
+	if (result.loadTextureMapTargetRequested) {
+
+		const bool loaded =
+			loadSelectedTextureMapTarget();
+
+		std::printf(
+			"[TEXTURE_MAP_2D] Row [3] LOAD TARGET: %s\n",
+			loaded
+			? "SUCCESS"
+			: "FAILED"
+		);
+	}
+
+	// ---------------------------------------------------------
+	// TEXTURE_MAP_2D Layer 1 Row [4].
+	//
+	// Enter Layer 2 only after Row [3] has produced a
+	// loaded and READY canonical target.
+	// ---------------------------------------------------------
+	if (result.configureTextureMapTargetRequested) {
+
+		const bool entered =
+			enterTextureMapLayer2Preview();
+
+		printf(
+			"[TEXTURE_MAP_2D] Row [4] CONFIGURE: %s\n",
+			entered
+			? "SUCCESS"
+			: "LOCKED"
+		);
+	}
+
+	// ---------------------------------------------------------
+	// TEXTURE_MAP_2D Layer 2 Row [1].
+	//
+	// Use the same A/D increment as SINGLE_PARTICLE_MCAD.
+	// ---------------------------------------------------------
+	if (result.textureMapPreviewRadiusStep != 0) {
+
+		vitru::TextureMapWorkspace* textureWorkspace =
+			m_tesseract.getTextureMapWorkspaceRuntime();
+
+		if (textureWorkspace) {
+
+			textureWorkspace->adjustPreviewParticleRadius(
+				result.textureMapPreviewRadiusStep,
+				TheArbiter::kParticleRadiusStep
+			);
+		}
+	}
 
 	const bool committedToVoxelBase = result.commitVolumeFuse;
 	if (committedToVoxelBase) {

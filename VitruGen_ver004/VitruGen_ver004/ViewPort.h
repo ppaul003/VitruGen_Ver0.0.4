@@ -51,8 +51,23 @@ public:
 		bool hasOutputAssets = false;
 		bool selectedAssetValid = false;
 
+		// True only after Row [3] successfully loaded the
+		// currently selected OUTPUT asset as the active
+		// TEXTURE_MAP_2D target.
+		bool targetLoaded = false;
+
 		std::string targetName;
 		std::string statusMessage;
+	};
+
+	struct TextureMapLayer2PanelData {
+
+		bool targetLoaded = false;
+		bool targetReady = false;
+
+		std::string targetName;
+
+		float previewParticleRadius = 0.125f;
 	};
 
 	struct MarchingCubesPanelData {
@@ -93,7 +108,8 @@ public:
 		const ObjExportPanelData* exportData,
 		bool paused = false,
 		bool meshAvailable = false,
-		const TextureMapLayer1PanelData* textureMapData = nullptr
+		const TextureMapLayer1PanelData* textureMapData = nullptr,
+		const TextureMapLayer2PanelData* textureMapLayer2Data = nullptr
 	);
 
 	int getWidth() const { return m_window_w; }
@@ -124,6 +140,11 @@ private:
 	void drawTextureMapLayer1Config(
 		const TheArbiter& arbiter,
 		const TextureMapLayer1PanelData* textureMapData
+	);
+
+	void drawTextureMapLayer2Config(
+		const TheArbiter& arbiter,
+		const TextureMapLayer2PanelData* data
 	);
 
 	void drawSingleParticleLayer1Config(const TheArbiter& arbiter);

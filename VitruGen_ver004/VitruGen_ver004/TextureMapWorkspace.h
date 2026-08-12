@@ -136,50 +136,39 @@ namespace vitru {
         const StaticAssetCatalogEntry* selectedOutputAsset() const;
         const BaseMaterialCatalogEntry* selectedBaseMaterial() const;
 
+        // ---------------------------------------------------------
+        // OUTPUT Static Particle catalog presentation state.
+        //
+        // TextureMapWorkspace retains ownership of the catalog.
+        // External systems receive read-only state only.
+        // ---------------------------------------------------------
+        std::size_t outputCatalogCount() const { return m_outputCatalog.size(); }
+        std::size_t selectedOutputIndex() const { return m_selectedOutputIndex; }
+
+        bool hasOutputAssets() const {return !m_outputCatalog.empty(); }
+        bool outputCatalogReady() const { return m_outputCatalogReady; }
         bool activateLoadedTarget(AssetId assetId);
         bool refreshTargetContext();
 
         bool beginEditSession();
         bool cancelEditSession();
         bool applyEditSessionToAsset();
+        bool adjustPreviewParticleRadius(int direction, float step);
 
-        ProjectAssetRepository* repository() {
-            return m_repository;
-        }
+        ProjectAssetRepository* repository() { return m_repository; }
+        const TextureMapTargetContext& target() const { return m_target; }
 
-        const TextureMapTargetContext& target() const {
-            return m_target;
-        }
+        TextureMapTargetContext& target() {return m_target;}
+        const TextureMapEditSession& session() const { return m_session;}
 
-        TextureMapTargetContext& target() {
-            return m_target;
-        }
-
-        const TextureMapEditSession& session() const {
-            return m_session;
-        }
-
-        TextureMapEditSession& session() {
-            return m_session;
-        }
-
-        TextureMapFocus focus() const {
-            return m_focus;
-        }
+        TextureMapEditSession& session() {return m_session; }
+        TextureMapFocus focus() const { return m_focus; }
 
         void toggleFocus();
+        TextureMapSubLayer subLayer() const { return m_subLayer; }
 
-        TextureMapSubLayer subLayer() const {
-            return m_subLayer;
-        }
-
-        void setSubLayer(TextureMapSubLayer value) {
-            m_subLayer = value;
-        }
-
-        bool initialized() const {
-            return m_initialized;
-        }
+        void setSubLayer(TextureMapSubLayer value) { m_subLayer = value; }
+        bool initialized() const { return m_initialized; }
 
     private:
         ProjectAssetRepository* m_repository = nullptr;
@@ -189,6 +178,10 @@ namespace vitru {
 
         std::vector<StaticAssetCatalogEntry> m_outputCatalog;
         std::size_t m_selectedOutputIndex = 0;
+
+        // True after OUTPUT/STATIC_PARTICLES has been scanned
+        // successfully, even when the resulting catalog is empty.
+        bool m_outputCatalogReady = false;
 
         std::vector<BaseMaterialCatalogEntry> m_baseMaterialCatalog;
         std::size_t m_selectedBaseMaterialIndex = 0;

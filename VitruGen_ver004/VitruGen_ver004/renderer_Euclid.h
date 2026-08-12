@@ -98,12 +98,14 @@ public:
 	void setWindowSize(int w, int h) { m_window_w = w; m_window_h = h; }
 	void setFOV(float fov) { m_fov = fov; }
 	void setGridStyle(int majorEvery, bool drawMinor);
+
 	void setWorkspaceGridVisibility(
 		bool drawBoundary,
 		bool drawMajor,
 		bool drawMinor,
 		bool drawAxes
 	);
+
 	void setGridMode3D();
 	void setGridMode2D(WorkPlane plane, int sliceOffset);
 	void setRadius(float* r, int numParticles);
@@ -116,6 +118,7 @@ public:
 	void setVertexBuffer(unsigned int vbo, int numParticles);
 	void setColorBuffer(unsigned int vbo) { m_colorVBO = vbo; }
 	void setRadiusBuffer(unsigned int vbo) { m_radVBO = vbo; }
+
 	void setGrid(
 		const glm::ivec3& gridDim,
 		const glm::vec3& worldOrigin,
@@ -126,6 +129,7 @@ public:
 
 	void display(DisplayMode mode = PARTICLE_POINTS);
 	void displayGrid();
+
 	void displayParticleWorkspace(
 		float thetaRad,
 		float phiRad,
@@ -142,6 +146,14 @@ public:
 		bool showCollisionProxy = false,
 		bool showRenderCage = false
 	);
+
+	void displayTextureMapStaticParticlePreview(
+		float thetaRad,
+		float phiRad,
+		float zs,
+		float previewRadius
+	);
+
 	// Displays the currently loaded StaticParticleAsset inside the
 	// SINGLE_PARTICLE volumetric-editor coordinate frame.
 	//

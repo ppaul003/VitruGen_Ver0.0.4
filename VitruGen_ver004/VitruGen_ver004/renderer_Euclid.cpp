@@ -2133,6 +2133,139 @@ void EuclidRenderer::displayParticleWorkspace(
     }
     glUseProgram(0);
 }
+
+void EuclidRenderer::displayTextureMapStaticParticlePreview(
+    float thetaRad,
+    float phiRad,
+    float zs,
+    float previewRadius) {
+
+    if (!hasParticleMeshOBJ() ||
+        previewRadius <= 0.0f) {
+
+        return;
+    }
+
+    glViewport(
+        0,
+        0,
+        m_window_w,
+        m_window_h
+    );
+
+    // ---------------------------------------------------------
+    // Match SINGLE_PARTICLE Layer 2 projection.
+    // ---------------------------------------------------------
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+
+    const float aspect =
+        m_window_h > 0
+        ? static_cast<float>(m_window_w) /
+        static_cast<float>(m_window_h)
+        : 1.0f;
+
+    gluPerspective(
+        m_fov,
+        aspect,
+        0.1f,
+        100.0f
+    );
+
+    // ---------------------------------------------------------
+    // Match SINGLE_PARTICLE pocket-camera behavior.
+    // ---------------------------------------------------------
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    const float safeZs =
+        std::max(
+            zs,
+            1.0f
+        );
+
+    const float zoomScale =
+        safeZs / 256.0f;
+
+    const float spCadBaseDistance =
+        1.25f;
+
+    glTranslatef(
+        0.0f,
+        0.0f,
+        -spCadBaseDistance * zoomScale
+    );
+
+    glRotatef(
+        phiRad *
+        180.0f /
+        static_cast<float>(M_PI),
+        1.0f,
+        0.0f,
+        0.0f
+    );
+
+    glRotatef(
+        thetaRad *
+        180.0f /
+        static_cast<float>(M_PI),
+        0.0f,
+        1.0f,
+        0.0f
+    );
+
+    glEnable(GL_DEPTH_TEST);
+
+    // ---------------------------------------------------------
+    // Use the same visual framing language as SINGLE_PARTICLE.
+    // ---------------------------------------------------------
+    glUseProgram(0);
+    glDisable(GL_TEXTURE_2D);
+
+    drawWorkspaceBoundary();
+    drawWorkspaceMajorGrid();
+    drawAxes();
+
+    // ---------------------------------------------------------
+    // Render the canonical StaticParticleAsset at the requested
+    // texture-map preview radius.
+    // ---------------------------------------------------------
+    ParticleProxy3D previewParticle;
+
+    previewParticle.position =
+        make_float4(0.0f, 0.0f, 0.0f, 1.0f);
+
+    previewParticle.radius = previewRadius;
+
+    const float4 previewColor =
+        make_float4(1.0f, 1.0f, 1.0f, 1.0f);
+
+    // FILL keeps the loaded asset uniformly inside the
+    // diameter defined by previewRadius.
+    drawParticleMeshOBJ(
+        previewParticle,
+        previewColor,
+        false,
+        true,
+        false
+    );
+
+    glUseProgram(0);
+
+    // ---------------------------------------------------------
+    // Restore matrices.
+    // ---------------------------------------------------------
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+
+    glMatrixMode(GL_MODELVIEW);
+}
+
 void EuclidRenderer::displayParticleMeshVolumeWorkspace(
     float thetaRad,
     float phiRad,

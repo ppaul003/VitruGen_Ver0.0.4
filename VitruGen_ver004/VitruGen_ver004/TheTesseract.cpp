@@ -3235,14 +3235,41 @@ void Tesseract::updateTextureMapWorkspace(
 void Tesseract::renderTextureMapWorkspace(
 	const WorkspaceRenderContext& ctx) {
 
-	(void)ctx;
-
 	if (!m_textureMapWorkspace.initialized &&
 		!initializeTextureMapWorkspace()) {
 
 		return;
 	}
 
-	// Checkpoint placeholder:
-	// Layer 1/2/3 rendering will be connected later.
+	if (!ctx.arbiter ||
+		!m_renderer) {
+
+		return;
+	}
+
+	if (!ctx.arbiter->isTextureMapLayer2PanelContext()) {
+
+		return;
+	}
+
+	const vitru::TextureMapTargetContext& target =
+		m_textureMapWorkspace.runtime.target();
+
+	if (!target.loaded ||
+		target.assetId ==
+		vitru::INVALID_ASSET_ID ||
+		target.readiness !=
+		vitru::TextureTargetReadiness::Ready) {
+
+		return;
+	}
+
+	m_renderer->setParticleHighlighted(false);
+
+	m_renderer->displayTextureMapStaticParticlePreview(
+		ctx.thetaRad,
+		ctx.phiRad,
+		ctx.particleWorkspaceZs,
+		target.previewParticleRadius
+	);
 }
