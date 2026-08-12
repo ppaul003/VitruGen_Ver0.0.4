@@ -76,7 +76,7 @@
  * VITRUGEN SIMCAD VERSION 0.0.4 WORKSPACE HIERARCHY
  * ---------------------------------------------------------------------------
  *
- * LAYER 0 — IDLE / GLOBAL SHELL
+ * LAYER 0 â€” IDLE / GLOBAL SHELL
  *
  *     Program configuration
  *     Workspace-domain selection
@@ -86,11 +86,11 @@
  *
  * ---------------------------------------------------------------------------
  *
- * LAYER 1 — GRID_2D
+ * LAYER 1 â€” GRID_2D
  *
- *     LAYER 2 — GRAPH_2D
+ *     LAYER 2 â€” GRAPH_2D
  *
- *         LAYER 3 — Active 2D graphing workspace
+ *         LAYER 3 â€” Active 2D graphing workspace
  *
  *         Initial version 0.0.4 scope:
  *
@@ -99,54 +99,54 @@
  *             Scale and domain controls
  *             Basic graph visualization
  *
- *     LAYER 2 — TEXTURE_MAP_2D                    [RESERVED]
+ *     LAYER 2 â€” TEXTURE_MAP_2D                    [RESERVED]
  *
  *         Texture and material-map authoring.
  *
- *     LAYER 2 — SPRITE_PROJECTION_2D              [FUTURE]
+ *     LAYER 2 â€” SPRITE_PROJECTION_2D              [FUTURE]
  *
  *         Sprite animation and state projection onto 3D particle anchors.
  *
  * ---------------------------------------------------------------------------
  *
- * LAYER 1 — GRID_3D
+ * LAYER 1 â€” GRID_3D
  *
- *     LAYER 2 — GRAPH_3D
+ *     LAYER 2 â€” GRAPH_3D
  *
- *         LAYER 3 — Active surface-authoring workspace
+ *         LAYER 3 â€” Active surface-authoring workspace
  *
  *             Mathematical surface generation
  *             Heightfield generation
  *             Terrain and map asset creation
  *             Future SANDBOX_SIM terrain export
  *
- *     LAYER 2 — SINGLE_PARTICLE_CAD
+ *     LAYER 2 â€” SINGLE_PARTICLE_CAD
  *
- *         LAYER 3 — Active mesh-CAD workspace
+ *         LAYER 3 â€” Active mesh-CAD workspace
  *
- *             SUB-LAYER 0 — Reference / runtime preview
+ *             SUB-LAYER 0 â€” Reference / runtime preview
  *
- *             SUB-LAYER 1 — Particle and workplane selection
+ *             SUB-LAYER 1 â€” Particle and workplane selection
  *
- *             SUB-LAYER 2 — Volume assembly
+ *             SUB-LAYER 2 â€” Volume assembly
  *
  *                 Primitive editing
  *                 Fuse and Cut operations
  *                 Injection voxels
  *                 Assembly-node workflow
  *
- *                 NODE 0 — Preview
- *                 NODE 1 — Edit Object
- *                 NODE 2 — Offset / Position Object
- *                 NODE 3 — Apply / Commit to Base
+ *                 NODE 0 â€” Preview
+ *                 NODE 1 â€” Edit Object
+ *                 NODE 2 â€” Offset / Position Object
+ *                 NODE 3 â€” Apply / Commit to Base
  *
- *             SUB-LAYER 3 — Marching Cubes and OBJ export
+ *             SUB-LAYER 3 â€” Marching Cubes and OBJ export
  *
  *             Workflow completion returns to SUB-LAYER 0.
  *
- *     LAYER 2 — LINK_PARTICLES
+ *     LAYER 2 â€” LINK_PARTICLES
  *
- *         LAYER 3 — Active linked-particle authoring workspace
+ *         LAYER 3 â€” Active linked-particle authoring workspace
  *
  *             Multiple particle anchors
  *             Parent and child relationships
@@ -163,32 +163,32 @@
  *
  * ---------------------------------------------------------------------------
  *
- * LAYER 1 — SIMCAD_4D
+ * LAYER 1 â€” SIMCAD_4D
  *
  *     SIMCAD_4D contains simulation workspaces whose state evolves through
  *     time or whose data crosses between dimensional representations.
  *
- *     LAYER 2 — PARTICLE_SIMULATION
+ *     LAYER 2 â€” PARTICLE_SIMULATION
  *
- *         LAYER 3 — Original CUDA particle simulation
+ *         LAYER 3 â€” Original CUDA particle simulation
  *
  *         Version 0.0.4 objective:
  *
  *             Migrate the existing particle simulation into SIMCAD_4D.
  *             Preserve its baseline behavior during architectural migration.
  *
- *     LAYER 2 — NBODY_SIM                         [FUTURE]
+ *     LAYER 2 â€” NBODY_SIM                         [FUTURE]
  *
- *     LAYER 2 — FLUID_SIM                         [FUTURE]
+ *     LAYER 2 â€” FLUID_SIM                         [FUTURE]
  *
- *     LAYER 2 — CUDA_CAD                          [FUTURE]
+ *     LAYER 2 â€” CUDA_CAD                          [FUTURE]
  *
- *     LAYER 2 — SANDBOX_SIM                       [FUTURE]
+ *     LAYER 2 â€” SANDBOX_SIM                       [FUTURE]
  *
  *         Future integration and validation environment for assets authored
  *         in GRAPH_3D, SINGLE_PARTICLE_CAD, and LINK_PARTICLES.
  *
- *     LAYER 2 — ADDITIONAL TIME-EVOLVING SIMULATIONS
+ *     LAYER 2 â€” ADDITIONAL TIME-EVOLVING SIMULATIONS
  *                                                  [FUTURE]
  *
  * ---------------------------------------------------------------------------

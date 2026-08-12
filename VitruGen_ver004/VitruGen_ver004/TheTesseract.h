@@ -217,6 +217,20 @@ public:
 		const std::filesystem::path& baseMaterialsRoot
 	);
 
+	vitru::TextureMapWorkspace* getTextureMapWorkspaceRuntime() {
+		if (!m_textureMapWorkspace.runtime.initialized()) 
+			return nullptr;
+
+		return &m_textureMapWorkspace.runtime;
+	}
+
+	const vitru::TextureMapWorkspace* getTextureMapWorkspaceRuntime() const {
+		if (!m_textureMapWorkspace.runtime.initialized())
+			return nullptr;
+
+		return &m_textureMapWorkspace.runtime;
+	}
+
 	// --- PARTICLE_SIM CONTROLS ---
 	const PSSimulationConfig& getPSConfig() const { return m_PSWorkspace.config; }
 	bool startPSWorkspace();
