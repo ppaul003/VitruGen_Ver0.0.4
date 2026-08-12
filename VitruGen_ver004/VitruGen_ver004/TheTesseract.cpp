@@ -3284,10 +3284,14 @@ void Tesseract::renderTextureMapWorkspace(
 		return;
 	}
 
-	m_renderer->setParticleHighlighted(
+	const bool showTargetSelectionHighlight =
 		layer3Active &&
 		ctx.arbiter->isTextureMapRuntimeMeshSelected() &&
-		!ctx.arbiter->isTextureMapRuntimeAuthoring());
+		!ctx.arbiter->isTextureMapRuntimeAuthoring();
+
+	m_renderer->setParticleHighlighted(
+		showTargetSelectionHighlight
+	);
 
 	vitru::TextureMapWorkspace& runtime =
 		m_textureMapWorkspace.runtime;
@@ -3333,6 +3337,6 @@ void Tesseract::renderTextureMapWorkspace(
 		target.previewParticleRadius,
 		showCollisionRadius,
 		layer2Active,
-		layer3Active && ctx.arbiter->isTextureMapRuntimeMeshSelected()
+		showTargetSelectionHighlight
 	);
 }
