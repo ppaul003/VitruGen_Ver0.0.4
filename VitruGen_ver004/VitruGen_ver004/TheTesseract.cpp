@@ -396,6 +396,17 @@ bool Tesseract::handleWorkspaceMouse(
 	int y,
 	int viewportW,
 	int viewportH) {
+	if (m_activeWorkspace == WorkspaceId::TEXTURE_MAP_2D) {
+		if (!arbiter.isTextureMapRuntimeFixedSelectionCamera()) return false;
+		if (button != GLUT_LEFT_BUTTON) return false;
+		if (state == GLUT_DOWN &&
+			arbiter.isTextureMapRuntimeSelectionGateActive() &&
+			m_renderer && m_renderer->hitTestTextureMapPreview(x, y)) {
+			arbiter.trySelectTextureMapRuntimeTarget();
+			m_renderer->setParticleHighlighted(true);
+		}
+		return true;
+	}
 
 	if (m_activeWorkspace != WorkspaceId::SINGLE_PARTICLE_MCAD)
 		return false;
@@ -421,6 +432,8 @@ bool Tesseract::handleWorkspaceMotion(
 	int y,
 	int viewportW,
 	int viewportH) {
+	if (m_activeWorkspace == WorkspaceId::TEXTURE_MAP_2D &&
+		arbiter.isTextureMapRuntimeFixedSelectionCamera()) return true;
 
 	if (m_activeWorkspace != WorkspaceId::SINGLE_PARTICLE_MCAD)
 		return false;
@@ -3271,12 +3284,16 @@ void Tesseract::renderTextureMapWorkspace(
 		return;
 	}
 
-	m_renderer->setParticleHighlighted(false);
+	m_renderer->setParticleHighlighted(
+		layer3Active &&
+		ctx.arbiter->isTextureMapRuntimeMeshSelected() &&
+		!ctx.arbiter->isTextureMapRuntimeAuthoring());
 
 	vitru::TextureMapWorkspace& runtime =
 		m_textureMapWorkspace.runtime;
 
 	if (layer3Active &&
+		ctx.arbiter->isTextureMapRuntimeAuthoring() &&
 		runtime.runtimeSubLayer() == vitru::TextureMapSubLayer::PixelEditor &&
 		runtime.viewMode() == vitru::TextureMapViewMode::Edit &&
 		runtime.session().workingImage.valid()) {

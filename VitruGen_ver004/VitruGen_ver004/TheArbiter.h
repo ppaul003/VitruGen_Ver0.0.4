@@ -101,9 +101,17 @@ public:
 		AdjustPrevious,
 		AdjustNext,
 		Activate,
+		BeginAuthoring,
 		TogglePanelOrView,
 		ToggleMeshSelection,
 		RequestStructuralExit
+	};
+
+	enum class TextureMapRuntimeGate {
+		ReferencePreview = 0,
+		SelectionArmed,
+		TargetSelected,
+		Authoring
 	};
 
 	enum class TextEntryTarget {
@@ -677,8 +685,10 @@ public:
 	ArbiterResult enterTextureMapLayer2FromMenu();
 	ArbiterResult enterTextureMapLayer3Runtime();
 	ArbiterResult returnTextureMapLayer2Runtime();
+	ArbiterResult beginTextureMapAuthoringRuntime();
 	ArbiterResult activateTextureMapRuntimeRowFromMenu(int row);
 	ArbiterResult toggleTextureMapRuntimeViewFromMenu();
+	ArbiterResult trySelectTextureMapRuntimeTarget();
 	ArbiterResult beginTextureMapSurfaceTargetNameEntry();
 	ArbiterResult beginTextureMapSaveAsNameEntry(
 		const std::string& initialName);
@@ -701,8 +711,31 @@ public:
 	TextureMapLayer2Item getTextureMapLayer2Selection() const { return m_textureMapLayer2Selection; }
 	int getTextureMapRuntimeSubLayer() const { return m_textureMapRuntimeSubLayer; }
 	int getTextureMapRuntimeRow() const { return m_textureMapRuntimeRow; }
+	TextureMapRuntimeGate getTextureMapRuntimeGate() const {
+		return m_textureMapRuntimeGate;
+	}
 	bool isTextureMapRuntimePanelVisible() const { return m_textureMapRuntimePanelVisible; }
-	bool isTextureMapRuntimeMeshSelected() const { return m_textureMapRuntimeMeshSelected; }
+	bool isTextureMapRuntimeAuthoring() const {
+		return isTextureMapLayer3RuntimeContext() &&
+			m_textureMapRuntimeGate == TextureMapRuntimeGate::Authoring;
+	}
+	bool isTextureMapRuntimeMeshSelected() const {
+		return isTextureMapLayer3RuntimeContext() &&
+			(m_textureMapRuntimeGate == TextureMapRuntimeGate::TargetSelected ||
+				m_textureMapRuntimeGate == TextureMapRuntimeGate::Authoring);
+	}
+	bool isTextureMapRuntimeSelectionArmed() const {
+		return isTextureMapLayer3RuntimeContext() &&
+			m_textureMapRuntimeGate == TextureMapRuntimeGate::SelectionArmed;
+	}
+	bool isTextureMapRuntimeFixedSelectionCamera() const {
+		return isTextureMapLayer3RuntimeContext() &&
+			(m_textureMapRuntimeGate == TextureMapRuntimeGate::SelectionArmed ||
+				m_textureMapRuntimeGate == TextureMapRuntimeGate::TargetSelected);
+	}
+	bool isTextureMapRuntimeSelectionGateActive() const {
+		return isTextureMapRuntimeSelectionArmed();
+	}
 	bool isTextureMapRuntimeNestedFocus() const { return m_textureMapRuntimeNestedFocus; }
 
 	SingleParticleLayer1Item getSingleParticleLayer1Selection() const { return m_singleParticleLayer1Selection; }
@@ -1075,8 +1108,9 @@ private:
 	int m_textureMapRuntimeSubLayer = 0;
 	int m_textureMapRuntimeRow = 0;
 	int m_textureMapRuntimeRowCount = 3;
-	bool m_textureMapRuntimePanelVisible = true;
-	bool m_textureMapRuntimeMeshSelected = false;
+	bool m_textureMapRuntimePanelVisible = false;
+	TextureMapRuntimeGate m_textureMapRuntimeGate =
+		TextureMapRuntimeGate::ReferencePreview;
 	bool m_textureMapRuntimeNestedFocus = false;
 
 	TextEntrySession m_textEntry;

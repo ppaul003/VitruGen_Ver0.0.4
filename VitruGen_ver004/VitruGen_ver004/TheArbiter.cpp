@@ -2058,14 +2058,49 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 	case ApplicationLayer::ACTIVE_WORKSPACE:
 		if (isTextureMapLayer3RuntimeContext()) {
 			result.textureMapRuntimeRow = m_textureMapRuntimeRow;
+
+			// Layer 3 exists before authoring. Reference preview, selection,
+			// and target confirmation form an explicit gate in front of the
+			// existing sub-layer runtime.
+			if (m_textureMapRuntimeGate != TextureMapRuntimeGate::Authoring) {
+				if (event.signal == KeyboardInput::KEY_E) {
+					switch (m_textureMapRuntimeGate) {
+					case TextureMapRuntimeGate::ReferencePreview:
+						m_textureMapRuntimeGate = TextureMapRuntimeGate::SelectionArmed;
+						break;
+					case TextureMapRuntimeGate::SelectionArmed:
+						m_textureMapRuntimeGate = TextureMapRuntimeGate::ReferencePreview;
+						break;
+					case TextureMapRuntimeGate::TargetSelected:
+						m_textureMapRuntimeGate = TextureMapRuntimeGate::SelectionArmed;
+						break;
+					default:
+						break;
+					}
+					m_textureMapRuntimePanelVisible = false;
+					result.textureMapRuntimeIntent =
+						TextureMapRuntimeIntent::ToggleMeshSelection;
+					result.requestRedraw = true;
+					result.rebuildMenu = true;
+				}
+				else if (event.signal == KeyboardInput::KEY_TAB &&
+					m_textureMapRuntimeGate == TextureMapRuntimeGate::TargetSelected) {
+					result.textureMapRuntimeIntent =
+						TextureMapRuntimeIntent::BeginAuthoring;
+					result.requestRedraw = true;
+					result.rebuildMenu = true;
+				}
+				break;
+			}
+
 			if (event.signal == KeyboardInput::KEY_TAB) {
-				if (m_textureMapRuntimeSubLayer == 0) {
-					m_textureMapRuntimePanelVisible =
-						!m_textureMapRuntimePanelVisible;
+				if (m_textureMapRuntimeSubLayer == 2) {
 					result.textureMapRuntimeIntent =
 						TextureMapRuntimeIntent::TogglePanelOrView;
 				}
-				else if (m_textureMapRuntimeSubLayer == 2) {
+				else {
+					m_textureMapRuntimePanelVisible =
+						!m_textureMapRuntimePanelVisible;
 					result.textureMapRuntimeIntent =
 						TextureMapRuntimeIntent::TogglePanelOrView;
 				}
@@ -2073,19 +2108,8 @@ TheArbiter::processKeyboard(const KeyboardInput::KeyEvent& event) {
 				result.rebuildMenu = true;
 				break;
 			}
-
-			if (m_textureMapRuntimeSubLayer == 0 &&
-				!m_textureMapRuntimePanelVisible) {
-				if (event.signal == KeyboardInput::KEY_E) {
-					m_textureMapRuntimeMeshSelected =
-						!m_textureMapRuntimeMeshSelected;
-					result.textureMapRuntimeIntent =
-						TextureMapRuntimeIntent::ToggleMeshSelection;
-					result.requestRedraw = true;
-					result.rebuildMenu = true;
-				}
-				break;
-			}
+			if (m_textureMapRuntimeSubLayer != 2 &&
+				!m_textureMapRuntimePanelVisible) break;
 
 			if (m_textureMapRuntimeNestedFocus) {
 				if (event.signal == KeyboardInput::KEY_A)
@@ -4013,8 +4037,8 @@ TheArbiter::enterTextureMapLayer3Runtime() {
 	m_textureMapRuntimeSubLayer = 0;
 	m_textureMapRuntimeRow = 0;
 	m_textureMapRuntimeRowCount = 3;
-	m_textureMapRuntimePanelVisible = true;
-	m_textureMapRuntimeMeshSelected = false;
+	m_textureMapRuntimePanelVisible = false;
+	m_textureMapRuntimeGate = TextureMapRuntimeGate::ReferencePreview;
 	m_textureMapRuntimeNestedFocus = false;
 
 	result.command = CMD_REDRAW;
@@ -4030,6 +4054,31 @@ TheArbiter::returnTextureMapLayer2Runtime() {
 	if (!isTextureMapLayer3RuntimeContext()) return result;
 	setApplicationLayer(ApplicationLayer::WORKSPACE_CONFIGURATION);
 	m_textureMapLayer2Selection = TextureMapLayer2Item::PreviewParticleRadius;
+	m_textureMapRuntimeSubLayer = 0;
+	m_textureMapRuntimeRow = 0;
+	m_textureMapRuntimeRowCount = 3;
+	m_textureMapRuntimePanelVisible = false;
+	m_textureMapRuntimeGate = TextureMapRuntimeGate::ReferencePreview;
+	m_textureMapRuntimeNestedFocus = false;
+	result.command = CMD_REDRAW;
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::beginTextureMapAuthoringRuntime() {
+	ArbiterResult result;
+	if (!isTextureMapLayer3RuntimeContext() ||
+		m_textureMapRuntimeGate != TextureMapRuntimeGate::TargetSelected) {
+		return result;
+	}
+	m_textureMapRuntimeGate = TextureMapRuntimeGate::Authoring;
+	m_textureMapRuntimeSubLayer = 0;
+	m_textureMapRuntimeRow = 0;
+	m_textureMapRuntimeRowCount = 3;
+	m_textureMapRuntimePanelVisible = true;
+	m_textureMapRuntimeNestedFocus = false;
 	result.command = CMD_REDRAW;
 	result.requestRedraw = true;
 	result.rebuildMenu = true;
@@ -4041,20 +4090,19 @@ void TheArbiter::syncTextureMapRuntimeNavigation(
 	int rowCount,
 	bool nestedFocus) {
 
+	if (!isTextureMapRuntimeAuthoring()) return;
 	m_textureMapRuntimeSubLayer = (std::max)(0, (std::min)(3, subLayer));
 	m_textureMapRuntimeRowCount = (std::max)(1, rowCount);
 	m_textureMapRuntimeRow = (std::max)(
 		0,
 		(std::min)(m_textureMapRuntimeRowCount - 1, m_textureMapRuntimeRow));
 	m_textureMapRuntimeNestedFocus = nestedFocus;
-	if (m_textureMapRuntimeSubLayer != 0)
-		m_textureMapRuntimePanelVisible = true;
 }
 
 TheArbiter::ArbiterResult
 TheArbiter::activateTextureMapRuntimeRowFromMenu(int row) {
 	ArbiterResult result;
-	if (!isTextureMapLayer3RuntimeContext()) return result;
+	if (!isTextureMapRuntimeAuthoring()) return result;
 	m_textureMapRuntimeRow = (std::max)(
 		0,
 		(std::min)(m_textureMapRuntimeRowCount - 1, row));
@@ -4070,9 +4118,26 @@ TheArbiter::toggleTextureMapRuntimeViewFromMenu() {
 	ArbiterResult result;
 	if (!isTextureMapLayer3RuntimeContext()) return result;
 	result.textureMapRuntimeRow = m_textureMapRuntimeRow;
-	result.textureMapRuntimeIntent = TextureMapRuntimeIntent::TogglePanelOrView;
-	if (m_textureMapRuntimeSubLayer == 0)
-		m_textureMapRuntimePanelVisible = !m_textureMapRuntimePanelVisible;
+	if (m_textureMapRuntimeGate == TextureMapRuntimeGate::TargetSelected) {
+		result.textureMapRuntimeIntent = TextureMapRuntimeIntent::BeginAuthoring;
+	}
+	else if (m_textureMapRuntimeGate == TextureMapRuntimeGate::Authoring) {
+		result.textureMapRuntimeIntent = TextureMapRuntimeIntent::TogglePanelOrView;
+		if (m_textureMapRuntimeSubLayer != 2)
+			m_textureMapRuntimePanelVisible = !m_textureMapRuntimePanelVisible;
+	}
+	result.requestRedraw = true;
+	result.rebuildMenu = true;
+	return result;
+}
+
+TheArbiter::ArbiterResult
+TheArbiter::trySelectTextureMapRuntimeTarget() {
+	ArbiterResult result;
+	if (!isTextureMapRuntimeSelectionGateActive()) return result;
+	m_textureMapRuntimeGate = TextureMapRuntimeGate::TargetSelected;
+	result.textureMapRuntimeIntent = TextureMapRuntimeIntent::ToggleMeshSelection;
+	result.command = CMD_REDRAW;
 	result.requestRedraw = true;
 	result.rebuildMenu = true;
 	return result;

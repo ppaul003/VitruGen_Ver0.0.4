@@ -71,12 +71,31 @@ public:
 		unsigned int pixelGridDivisions = 64;
 	};
 
+	struct TextureMapLayer3PanelLine {
+		std::string text;
+		bool selectable = false;
+		bool selected = false;
+		bool subordinate = false;
+		bool emphasized = false;
+	};
+
+	struct TextureMapLayer3PanelSection {
+		std::string heading;
+		std::vector<TextureMapLayer3PanelLine> lines;
+	};
+
 	struct TextureMapLayer3PanelData {
-		bool panelVisible = true;
+		bool panelVisible = false;
 		std::string subLayerLabel;
 		std::string targetName;
 		std::string authoringMode;
 		std::string status;
+		std::string runtimeStateLine;
+		std::string runtimeObjectLine;
+		std::string runtimeHelpLine;
+		std::vector<TextureMapLayer3PanelSection> sections;
+		// Legacy flat presentation buffers remain internal to EuclidEngine
+		// while it assembles the richer section hierarchy above.
 		std::vector<std::string> informationLines;
 		std::vector<std::string> rows;
 		std::string footerLine1;

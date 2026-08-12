@@ -195,6 +195,9 @@ namespace vitru {
 
         const StaticAssetCatalogEntry* selectedOutputAsset() const;
         const BaseMaterialCatalogEntry* selectedBaseMaterial() const;
+		bool hasSelectedBaseMaterialSource() const {
+			return m_baseMaterialSourceSelected;
+		}
 
         // ---------------------------------------------------------
         // OUTPUT Static Particle catalog presentation state.

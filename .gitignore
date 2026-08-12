@@ -51,6 +51,10 @@ VitruGen_ver004/VitruGen_ver004/INPUTS/MasterChief/**
 # Generated VitruGen asset bundles
 VitruGen_ver004/VitruGen_ver004/OUTPUT/**
 
+# Standalone compiler scratch objects emitted into the source directory
+/VitruGen_ver004/VitruGen_ver004/*.obj
+
 # Preserve the public output directory contract
 !VitruGen_ver004/VitruGen_ver004/OUTPUT/.gitkeep
 !VitruGen_ver004/VitruGen_ver004/OUTPUT/README.md
+.aider*

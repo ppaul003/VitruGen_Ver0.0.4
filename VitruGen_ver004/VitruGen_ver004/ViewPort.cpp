@@ -2594,65 +2594,125 @@ void ViewPort::drawTextureMapLayer3Runtime(
 		nullptr
 	);
 
-	glColor4f(
-		1.0f,
-		1.0f,
-		1.0f,
-		1.0f
-	);
+	if (!data) return;
 
-	if (!data || !data->panelVisible) {
-		drawText2D(42.0f, 48.0f,
-			"LAYER 3 -> TEXTURE_MAP_2D WORKSPACE RUNTIME",
-			GLUT_BITMAP_HELVETICA_18);
-		drawText2D(42.0f, 78.0f,
-			"TARGET MESH INSPECTION | TAB: RESTORE PANEL",
-			GLUT_BITMAP_HELVETICA_12);
-		drawText2D(42.0f, 100.0f,
-			"E: SELECT / DESELECT TARGET MESH | MOUSE: ORBIT / ZOOM",
-			GLUT_BITMAP_HELVETICA_12);
-		return;
-	}
+	// Match the SINGLE_PARTICLE separation between the persistent Layer 3
+	// runtime status and the selected-object Sub-Layer tool panel.
+	const float overlayLeft = 24.0f;
+	const float overlayTop = 24.0f;
+	const float overlayRight = (std::min)(1120.0f,
+		static_cast<float>(m_window_w) - 24.0f);
+	const float overlayBottom = 158.0f;
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_TEXTURE_2D);
+	glUseProgram(0);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glColor4f(0.02f, 0.04f, 0.06f, 0.55f);
+	glBegin(GL_QUADS);
+	glVertex2f(overlayLeft, overlayTop);
+	glVertex2f(overlayRight, overlayTop);
+	glVertex2f(overlayRight, overlayBottom);
+	glVertex2f(overlayLeft, overlayBottom);
+	glEnd();
+	glColor4f(0.85f, 0.95f, 1.0f, 1.0f);
+	drawText2D(40.0f, 52.0f,
+		"LAYER 3 -> TEXTURE_MAP_2D WORKSPACE RUNTIME",
+		GLUT_BITMAP_HELVETICA_18);
+	drawText2D(40.0f, 82.0f, data->runtimeStateLine.c_str(),
+		GLUT_BITMAP_HELVETICA_18);
+	drawText2D(40.0f, 108.0f, data->runtimeObjectLine.c_str(),
+		GLUT_BITMAP_HELVETICA_18);
+	drawText2D(40.0f, 134.0f, data->runtimeHelpLine.c_str(),
+		GLUT_BITMAP_HELVETICA_18);
 
-	drawPanelBackground();
-	const float x = panelX(95.0f);
-	float y = 150.0f;
-	drawText2D(x, y,
+	if (!data->panelVisible || m_panelSlide <= 0.0f) return;
+
+	const float alpha = m_panelSlide;
+	const float panelW = m_menuPanelW;
+	const float x0 = m_margin;
+	const float y0Visible = 170.0f;
+	const float panelH = static_cast<float>(m_window_h) - y0Visible - m_margin;
+	const float hiddenOffsetY = panelH + m_margin + 24.0f;
+	const float y0 = y0Visible + hiddenOffsetY * (1.0f - alpha);
+	const float x1 = x0 + panelW;
+	const float y1 = y0 + panelH;
+	const float sectionX = x0 + 54.0f;
+	const float labelX = x0 + 84.0f;
+	const float infoX = labelX + 28.0f;
+	const float dividerX0 = x0 + 42.0f;
+	const float dividerX1 = x1 - 42.0f;
+
+	glColor4f(0.02f, 0.04f, 0.06f, 0.80f * alpha);
+	glBegin(GL_QUADS);
+	glVertex2f(x0, y0);
+	glVertex2f(x1, y0);
+	glVertex2f(x1, y1);
+	glVertex2f(x0, y1);
+	glEnd();
+	glLineWidth(1.5f);
+	glColor4f(1.0f, 1.0f, 1.0f, 0.92f * alpha);
+	glBegin(GL_LINE_LOOP);
+	glVertex2f(x0, y0);
+	glVertex2f(x1, y0);
+	glVertex2f(x1, y1);
+	glVertex2f(x0, y1);
+	glEnd();
+
+	auto drawDivider = [&](float y) {
+		glLineWidth(1.0f);
+		glColor4f(0.85f, 0.95f, 1.0f, 0.72f * alpha);
+		glBegin(GL_LINES);
+		glVertex2f(dividerX0, y);
+		glVertex2f(dividerX1, y);
+		glEnd();
+	};
+
+	glColor4f(0.85f, 0.95f, 1.0f, alpha);
+	drawText2D(sectionX, y0 + 40.0f,
 		"TEXTURE_MAP_2D MODE", GLUT_BITMAP_HELVETICA_18);
-	y += 28.0f;
-	drawText2D(x, y, data->subLayerLabel.c_str(), GLUT_BITMAP_HELVETICA_18);
-	y += 34.0f;
-	drawText2D(x, y,
-		("TARGET { " + data->targetName + " }").c_str(),
-		GLUT_BITMAP_HELVETICA_12);
-	y += 22.0f;
-	drawText2D(x, y,
-		("AUTHORING { " + data->authoringMode + " } | STATUS { " +
-			data->status + " }").c_str(), GLUT_BITMAP_HELVETICA_12);
-	y += 28.0f;
+	drawText2D(sectionX, y0 + 70.0f,
+		data->subLayerLabel.c_str(), GLUT_BITMAP_HELVETICA_18);
+	drawDivider(y0 + 105.0f);
 
-	for (const std::string& line : data->informationLines) {
-		drawText2D(x, y, line.c_str(), GLUT_BITMAP_HELVETICA_12);
-		y += 20.0f;
+	float y = y0 + 145.0f;
+	for (const TextureMapLayer3PanelSection& section : data->sections) {
+		glColor4f(0.85f, 0.95f, 1.0f, alpha);
+		drawText2D(sectionX, y, section.heading.c_str(),
+			GLUT_BITMAP_HELVETICA_18);
+		y += 40.0f;
+		for (const TextureMapLayer3PanelLine& line : section.lines) {
+			const float lineX = line.subordinate ? infoX : labelX;
+			if (line.selectable) {
+				drawSubLayerPanelLine(lineX, y, line.selected,
+					line.text.c_str(), alpha);
+			}
+			else {
+				if (line.emphasized)
+					glColor4f(0.45f, 1.0f, 0.65f, alpha);
+				else
+					glColor4f(0.72f, 0.78f, 0.82f, alpha);
+				drawText2D(lineX, y, line.text.c_str(),
+					line.subordinate
+					? GLUT_BITMAP_HELVETICA_12
+					: GLUT_BITMAP_HELVETICA_18);
+			}
+			y += line.subordinate ? 24.0f : 34.0f;
+		}
+		drawDivider(y + 4.0f);
+		y += 28.0f;
 	}
-	y += 8.0f;
-	for (std::size_t i = 0; i < data->rows.size(); i++) {
-		drawSelectableLine(
-			x, y,
-			static_cast<int>(i) == arbiter.getTextureMapRuntimeRow(),
-			data->rows[i].c_str());
-		y += 27.0f;
+
+	drawDivider(y1 - 92.0f);
+	glColor4f(0.75f, 0.75f, 0.75f, alpha);
+	drawText2D(sectionX, y1 - 58.0f,
+		data->footerLine1.c_str(), GLUT_BITMAP_HELVETICA_12);
+	if (!data->footerLine2.empty()) {
+		glColor4f(0.85f, 0.95f, 1.0f, alpha);
+		drawText2D(sectionX, y1 - 34.0f,
+			data->footerLine2.c_str(), GLUT_BITMAP_HELVETICA_12);
 	}
-
-	glColor4f(
-		0.76f,
-		0.84f,
-		0.88f,
-		1.0f
-	);
-
-	drawHelpFooter(data->footerLine1.c_str(),
-		data->footerLine2.empty() ? nullptr : data->footerLine2.c_str());
+	glLineWidth(1.0f);
 }
 
 void ViewPort::drawSingleParticleLayer1Config(const TheArbiter& arbiter) {

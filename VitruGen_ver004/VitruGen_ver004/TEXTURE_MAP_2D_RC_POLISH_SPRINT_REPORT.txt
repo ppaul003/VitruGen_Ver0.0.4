@@ -1,0 +1,334 @@
+VITRUGEN SIMCAD VER 0.0.4
+TEXTURE_MAP_2D RELEASE-CANDIDATE POLISH SPRINT REPORT
+====================================================
+
+Report date: 2026-08-12
+Branch: feature/texture-map-mvp-workspace-a0
+Starting HEAD: 34ffcc4
+Result: IMPLEMENTATION COMPLETE / BUILD AND FOCUSED TESTS PASSING
+Commit/push status: NOT COMMITTED / NOT PUSHED
+
+
+1. SPRINT OBJECTIVE
+-------------------
+
+Bring the existing TEXTURE_MAP_2D MVP implementation to release-candidate
+quality while preserving its established workspace architecture and authoring
+behavior.
+
+The primary target was visual and interaction parity with the production
+SINGLE_PARTICLE Layer 3 sub-layer experience:
+
+  - persistent Layer 3 runtime status strip;
+  - compact authoring panel beneath the status strip;
+  - consistent section hierarchy, spacing, dividers, footer, selection arrow,
+    and active green treatment;
+  - gated reference-preview selection before the Sub-Layer 0 panel opens;
+  - clear nested focus for COLORING source/intensity controls;
+  - a mesh-derived selected-face UV guide in the pixel editor;
+  - presentation parity across COLORING, CONTOUR, PANEL_LINES, and the common
+    apply/save Sub-Layer 3 flow.
+
+
+2. COMPLETED RELEASE-CANDIDATE CHANGES
+--------------------------------------
+
+2.1 LAYER 3 REFERENCE-PREVIEW SELECTION GATE
+
+The TEXTURE_MAP_2D Layer 2 -> Layer 3 transition now enters a clean reference
+preview state:
+
+  - the authoring panel begins hidden;
+  - the mesh begins unselected;
+  - the camera remains available for preview inspection;
+  - E arms target selection;
+  - while armed, left-click performs mesh hit testing;
+  - a successful hit selects and highlights the actual preview mesh;
+  - TAB opens Sub-Layer 0 only after a target has been selected;
+  - TAB before selection reports SELECT A TARGET FIRST;
+  - E can cancel the armed state or deselect the current target;
+  - Q remains structural backward navigation.
+
+Target selection is not based on a hardcoded screen rectangle. The renderer
+projects the currently loaded flattened mesh with the same model/view,
+projection, and preview scale used to draw it. The click is then tested against
+those projected triangles.
+
+Camera motion is consumed while selection is armed, which keeps the pick state
+stable. Empty clicks do not fabricate a selection or alter workspace content.
+
+
+2.2 SINGLE_PARTICLE-STYLE LAYER 3 PRESENTATION
+
+The previous monolithic TEXTURE_MAP_2D debug-style panel was replaced with the
+same visual language used by SINGLE_PARTICLE:
+
+  - persistent top-left runtime status strip;
+  - separate, smaller framed sub-layer panel below it;
+  - clear panel title and sub-layer title;
+  - horizontal section dividers;
+  - section labels and indented controls;
+  - green "> [n]" active-row treatment;
+  - compact subordinate information treatment;
+  - consolidated control footer;
+  - existing panel slide animation retained.
+
+The runtime strip reports the current reference-preview state, selection-armed
+state, selected-target state, blocked TAB warning, or active sub-layer state.
+It remains visible when the authoring panel is hidden.
+
+TAB now consistently hides/restores non-editor authoring panels in Sub-Layers
+1 and 3. Sub-Layer 2 retains its existing edit/preview TAB contract.
+
+
+2.3 CANONICAL PANEL SECTION MODELS
+
+Presentation data is now assembled into a shared section/line model and drawn
+through one TEXTURE_MAP_2D Layer 3 panel renderer. The following hierarchy was
+implemented:
+
+  Sub-Layer 0
+    - Target Object
+    - Authoring Pass
+    - Working Session
+    - Next Sub-Layer
+
+  COLORING Sub-Layer 1
+    - Target Object
+    - Edit Surface Texture
+    - material slot
+    - texture channel
+    - subordinate texture-map or intensity control
+    - texture resolution
+    - UV map
+    - texture source
+    - Next / Previous Sub-Layer
+
+  CONTOUR Sub-Layer 1
+    - Target Object
+    - Surface Target Authoring
+    - Next / Previous Sub-Layer
+
+  PANEL_LINES Sub-Layer 1
+    - Target Object
+    - Panel Line Surface
+    - material and base-map information
+    - Next / Previous Sub-Layer
+
+  COLORING Sub-Layer 2
+    - Target Object
+    - Editing Face
+    - Edit Pixel Color
+    - Next / Previous Sub-Layer
+
+  CONTOUR Sub-Layer 2
+    - Target Object
+    - Editing Face
+    - Contour Edit
+    - Working Contour
+    - Next / Previous Sub-Layer
+
+  PANEL_LINES Sub-Layer 2
+    - Target Object
+    - Editing Face
+    - Panel Line Tool
+    - Working Panel Lines
+    - Next / Previous Sub-Layer
+
+  Common Sub-Layer 3
+    - Working Output
+    - Apply Working Edit
+    - Asset Output
+    - Previous Sub-Layer
+    - Next Cycle
+
+This presentation upgrade does not move workspace ownership or persistence
+responsibilities into ViewPort or TheArbiter.
+
+
+2.4 COLORING SUB-LAYER 1 NESTED FOCUS
+
+Nested editing now has explicit visual focus:
+
+  - when a parent texture-channel row owns ordinary focus, the parent receives
+    the active green treatment;
+  - when the row enters nested focus, the parent no longer appears selected;
+  - the subordinate TEXTURE MAP { filename } or INTENSITY { value } line gains
+    the selection arrow and active green treatment;
+  - W/S remain trapped while nested focus is active;
+  - only the intended A/D/E nested actions are routed.
+
+Displayed source, resolution, material, and UV information continues to come
+from canonical workspace/repository state rather than duplicated UI state.
+
+
+2.5 COLORING SUB-LAYER 2 SELECTED-FACE UV GUIDE
+
+The pixel editor now overlays a faint guide for the selected mesh face:
+
+  - guide geometry is derived from the current loaded mesh TEXCOORD_0 data;
+  - triangles are associated with the selected 3x2 atlas cell using their
+    actual UV centroids;
+  - triangle edges are transformed into face-local pixel-canvas coordinates;
+  - the guide is drawn as a subtle dark under-stroke plus pale cyan stroke;
+  - the existing pixel grid and paint cursor remain legible above it.
+
+This is a renderer-only editor overlay. It does not alter the CPU texture,
+dirty tracking, preview staging, save logic, or bundle persistence.
+
+
+2.6 CONTEXT-MENU AND HIDDEN-PANEL PARITY
+
+The Layer 3 context menu now follows current TEXTURE_MAP_2D state:
+
+  - Arm Target Selection / Cancel Target Selection / Deselect Target;
+  - Show Authoring Panel only when Sub-Layer 0 has a selected target;
+  - Hide Panel for visible non-editor authoring panels;
+  - Show Authoring Panel for hidden Sub-Layer 1 and Sub-Layer 3 panels;
+  - hidden-panel row actions remain suppressed.
+
+Actions continue to route through the existing Arbiter/workspace pathways.
+
+
+3. ARCHITECTURE PRESERVATION
+----------------------------
+
+The sprint preserves the established VitruGen ownership model:
+
+  - EuclidEngine: orchestration, menu construction, and panel-data assembly;
+  - TheTesseract: runtime dispatch and input routing;
+  - TextureMapWorkspace: canonical authoring/runtime configuration state;
+  - ProjectAssetRepository: shared canonical StaticParticleAsset resources;
+  - EuclidRenderer: mesh, texture, hit-test, and UV-overlay rendering data;
+  - TheArbiter: navigation, selection state, and lightweight input intent;
+  - ViewPort: presentation only.
+
+No duplicate asset repository was introduced. No texture persistence was moved
+into ViewPort, TheArbiter, or EuclidRenderer. The existing MVP coloring,
+contour, panel-line, commit, save, save-as, and cycle behavior was retained.
+
+SINGLE_PARTICLE behavior was not intentionally changed. Shared-file additions
+are guarded by TEXTURE_MAP_2D runtime context.
+
+
+4. SOURCE FILES CHANGED
+-----------------------
+
+  EuclidEngine.cpp
+  TextureMapWorkspace.h
+  TheArbiter.cpp
+  TheArbiter.h
+  TheTesseract.cpp
+  ViewPort.cpp
+  ViewPort.h
+  renderer_Euclid.cpp
+  renderer_Euclid.h
+
+Implementation delta at final audit:
+
+  9 source files changed
+  607 insertions
+  71 deletions
+
+No unrelated pre-existing worktree changes were modified.
+
+
+5. VERIFICATION RESULTS
+-----------------------
+
+5.1 RELEASE BUILD
+
+Configuration: Release
+Platform: x64
+Result: PASS
+
+  0 errors
+  1 pre-existing linker warning:
+    LNK4098: defaultlib 'LIBCMT' conflicts with use of other libs
+
+Release executable:
+
+  C:\Users\richa\Anaheim Systems Dynamics - Software Product Dev\
+  VitruGen_ver004\x64\Release\VitruGen_ver004.exe
+
+
+5.2 FOCUSED TESTS
+
+StaticParticleAssetTests: PASS
+
+  validation=YES
+  repository=YES
+  json=YES
+  objMtl=YES
+  legacyPaths=YES
+  uv=YES
+  png=YES
+  atomicSave=YES
+  bundleRoundTrip=YES
+  textureMapRuntime=YES
+  p0=YES
+
+MeshProcessorTests: PASS
+
+  malformedRawT=5
+  malformedFinalT=2
+  cubeV=8
+  cubeI=36
+
+
+5.3 STATIC QUALITY CHECKS
+
+  - final git diff whitespace/error check: PASS
+  - new prefix-increment scan: PASS; no new ++i-style increments found
+  - generated test OBJ cleanup verification: PASS; no generated root-level
+    OBJ files remain
+  - all new implementation loops use the requested postfix increment style
+    where applicable
+
+
+5.4 LIVE SMOKE-TEST STATUS
+
+The Release executable launched successfully for a final visual smoke test.
+The Windows capture helper could not capture the OpenGL window and returned:
+
+  SetIsBorderRequired failed: No such interface supported (0x80004002)
+
+The capture was retried once with a fresh window binding and returned the same
+helper error. Therefore, the post-change screenshots and full keyboard/mouse
+walkthrough are intentionally reported as NOT AUTOMATION-VERIFIED. This helper
+limitation did not affect the Release build or focused test results.
+
+
+6. RECOMMENDED ONE-MINUTE MANUAL ACCEPTANCE WALKTHROUGH
+------------------------------------------------------
+
+  1. Enter TEXTURE_MAP_2D Layer 3 from Layer 2.
+  2. Confirm only the persistent runtime strip is shown and the mesh can be
+     inspected with the camera.
+  3. Press TAB before selection and confirm SELECT A TARGET FIRST appears.
+  4. Press E, left-click the mesh, and confirm the mesh highlight appears.
+  5. Press TAB and confirm the compact Sub-Layer 0 panel opens beneath the
+     persistent runtime strip.
+  6. Enter COLORING Sub-Layer 1 and confirm section/divider/footer parity with
+     SINGLE_PARTICLE.
+  7. Enter nested source/intensity focus and confirm the subordinate line, not
+     the parent row, receives the green selection arrow.
+  8. Enter COLORING Sub-Layer 2 and confirm the selected-face UV triangle guide
+     appears faintly beneath the pixel grid without obscuring paint input.
+  9. Toggle TAB through the supported hide/restore and edit/preview states.
+ 10. Spot-check CONTOUR, PANEL_LINES, and Sub-Layer 3 for the same compact panel
+     language and unchanged authoring behavior.
+ 11. Confirm Q returns structurally and still blocks dirty exits where required.
+
+
+7. FINAL HANDOFF
+----------------
+
+The requested release-candidate cleanup is implemented and verified at the
+source, focused-test, and Release-build levels. The specific panel-parity gap
+shown in the supplied comparison images has been addressed with the
+SINGLE_PARTICLE presentation format as the template.
+
+The working tree remains deliberately uncommitted and unpushed for review.
+
+END OF REPORT

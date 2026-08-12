@@ -1055,13 +1055,6 @@ bool EuclidEngine::enterTextureMapLayer3Runtime() {
 	}
 
 	refreshTextureMapBaseMaterialCatalog();
-	if (!textureWorkspace->beginAuthoringRuntime()) {
-		printf(
-			"[TEXTURE_MAP_2D] RUN WORKSPACE EDIT rejected: "
-			"authoring runtime initialization failed.\n"
-		);
-		return false;
-	}
 
 	// Navigation changes only after every engine-owned validation and
 	// resource refresh has succeeded.
@@ -1089,13 +1082,8 @@ bool EuclidEngine::enterTextureMapLayer3Runtime() {
 		CameraProcessor::CAM_SINGLE_PARTICLE_ORBIT_CLOSE
 	);
 
-	m_arbiter.syncTextureMapRuntimeNavigation(
-		static_cast<int>(textureWorkspace->runtimeSubLayer()),
-		textureWorkspace->runtimeRowCount(),
-		textureWorkspace->nestedFocus());
-
 	printf(
-		"[TEXTURE_MAP_2D] Entered Layer 3 authoring runtime: %s\n",
+		"[TEXTURE_MAP_2D] Entered Layer 3 reference preview: %s\n",
 		active->name.c_str()
 	);
 
@@ -1217,12 +1205,27 @@ void EuclidEngine::handleTextureMapRuntimeResult(
 		if (workspace->runtimeSubLayer() == vitru::TextureMapSubLayer::PixelEditor)
 			workspace->toggleRuntimeView();
 		break;
+	case Intent::BeginAuthoring:
+		if (workspace->beginAuthoringRuntime()) {
+			m_arbiter.beginTextureMapAuthoringRuntime();
+			printf("[TEXTURE_MAP_2D] Target confirmed; authoring runtime initialized.\n");
+		}
+		else {
+			printf("[TEXTURE_MAP_2D] Authoring gate rejected: %s\n",
+				workspace->runtimeStatusMessage().c_str());
+		}
+		break;
 	case Intent::RequestStructuralExit: {
-		std::string diagnostic;
-		if (workspace->canExitLayer3(&diagnostic))
+		if (!m_arbiter.isTextureMapRuntimeAuthoring()) {
 			m_arbiter.returnTextureMapLayer2Runtime();
-		else
-			printf("[TEXTURE_MAP_2D] %s\n", diagnostic.c_str());
+		}
+		else {
+			std::string diagnostic;
+			if (workspace->canExitLayer3(&diagnostic))
+				m_arbiter.returnTextureMapLayer2Runtime();
+			else
+				printf("[TEXTURE_MAP_2D] %s\n", diagnostic.c_str());
+		}
 		break;
 	}
 	case Intent::Activate: {
@@ -1257,15 +1260,21 @@ void EuclidEngine::handleTextureMapRuntimeResult(
 		break;
 	}
 
-	m_arbiter.syncTextureMapRuntimeNavigation(
-		static_cast<int>(workspace->runtimeSubLayer()),
-		workspace->runtimeRowCount(),
-		workspace->nestedFocus());
+	if (m_arbiter.isTextureMapRuntimeAuthoring()) {
+		m_arbiter.syncTextureMapRuntimeNavigation(
+			static_cast<int>(workspace->runtimeSubLayer()),
+			workspace->runtimeRowCount(),
+			workspace->nestedFocus());
 
-	if (m_renderer && m_arbiter.isTextureMapLayer3RuntimeContext()) {
-		vitru::StaticParticleAsset preview = workspace->buildPreviewAsset();
-		if (!preview.mesh.empty()) m_renderer->loadParticleStaticAsset(preview);
+		if (m_renderer) {
+			vitru::StaticParticleAsset preview = workspace->buildPreviewAsset();
+			if (!preview.mesh.empty()) m_renderer->loadParticleStaticAsset(preview);
+		}
 	}
+	if (m_renderer)
+		m_renderer->setParticleHighlighted(
+			m_arbiter.isTextureMapRuntimeMeshSelected() &&
+			!m_arbiter.isTextureMapRuntimeAuthoring());
 }
 
 void EuclidEngine::initMenus() {
@@ -1369,12 +1378,41 @@ void EuclidEngine::rebuildMenus() {
 	if (m_arbiter.isTextureMapLayer3RuntimeContext()) {
 		vitru::TextureMapWorkspace* workspace =
 			m_tesseract.getTextureMapWorkspaceRuntime();
-		if (workspace) workspace->endAuthoringStroke();
-		glutAddMenuEntry("- TEXTURE_MAP_2D Layer 3 Authoring -", MENU_NOP);
+		if (workspace && m_arbiter.isTextureMapRuntimeAuthoring())
+			workspace->endAuthoringStroke();
+		glutAddMenuEntry(
+			m_arbiter.isTextureMapRuntimeAuthoring()
+			? "- TEXTURE_MAP_2D Layer 3 Authoring -"
+			: "- TEXTURE_MAP_2D Layer 3 Reference Preview -",
+			MENU_NOP);
 		glutAddMenuEntry("=========================================", MENU_NOP);
 
+		const bool referenceGate =
+			!m_arbiter.isTextureMapRuntimeAuthoring();
+		const bool hiddenAuthoringPanel = workspace &&
+			m_arbiter.isTextureMapRuntimeAuthoring() &&
+			workspace->runtimeSubLayer() != vitru::TextureMapSubLayer::PixelEditor &&
+			!m_arbiter.isTextureMapRuntimePanelVisible();
+		if (referenceGate) {
+			const char* primaryAction =
+				m_arbiter.isTextureMapRuntimeMeshSelected()
+				? "* Deselect Target Mesh"
+				: m_arbiter.isTextureMapRuntimeSelectionArmed()
+				? "* Cancel Target Selection"
+				: "* Arm Target Selection";
+			glutAddMenuEntry(primaryAction, MENU_TM_RUNTIME_TOGGLE_MESH);
+			if (m_arbiter.isTextureMapRuntimeMeshSelected())
+				glutAddMenuEntry("* Show Authoring Panel", MENU_TM_RUNTIME_TOGGLE_VIEW);
+			glutAddMenuEntry("=========================================", MENU_NOP);
+		}
+		else if (hiddenAuthoringPanel) {
+			glutAddMenuEntry("* Show Authoring Panel", MENU_TM_RUNTIME_TOGGLE_VIEW);
+			glutAddMenuEntry("=========================================", MENU_NOP);
+		}
+
 		std::vector<std::string> labels;
-		if (!workspace) labels = { "Runtime unavailable" };
+		if (referenceGate || hiddenAuthoringPanel) labels.clear();
+		else if (!workspace) labels = { "Runtime unavailable" };
 		else if (workspace->runtimeSubLayer() == vitru::TextureMapSubLayer::CycleSetup)
 			labels = { "Authoring Mode", "Preview Source", "Configure Authoring Pass" };
 		else if (workspace->runtimeSubLayer() == vitru::TextureMapSubLayer::BranchSetup) {
@@ -1401,14 +1439,15 @@ void EuclidEngine::rebuildMenus() {
 			glutAddMenuEntry(label.c_str(), MENU_TM_RUNTIME_ROW_0 + static_cast<int>(i));
 		}
 		glutAddMenuEntry("=========================================", MENU_NOP);
-		if (workspace && workspace->runtimeSubLayer() == vitru::TextureMapSubLayer::PixelEditor)
+		if (m_arbiter.isTextureMapRuntimeAuthoring() && workspace &&
+			workspace->runtimeSubLayer() == vitru::TextureMapSubLayer::PixelEditor)
 			glutAddMenuEntry("* Toggle Edit / Preview", MENU_TM_RUNTIME_TOGGLE_VIEW);
-		else if (workspace && workspace->runtimeSubLayer() == vitru::TextureMapSubLayer::CycleSetup) {
+		else if (m_arbiter.isTextureMapRuntimeAuthoring() && workspace &&
+			workspace->runtimeSubLayer() != vitru::TextureMapSubLayer::PixelEditor &&
+			!hiddenAuthoringPanel) {
 			glutAddMenuEntry(
-				m_arbiter.isTextureMapRuntimePanelVisible() ? "* Hide Panel" : "* Show Panel",
+				"* Hide Panel",
 				MENU_TM_RUNTIME_TOGGLE_VIEW);
-			if (!m_arbiter.isTextureMapRuntimePanelVisible())
-				glutAddMenuEntry("* Select / Deselect Target Mesh", MENU_TM_RUNTIME_TOGGLE_MESH);
 		}
 	}
 	else if (m_arbiter.isSingleParticleReferenceSubLayer()) {
@@ -3145,13 +3184,21 @@ void EuclidEngine::syncCameraBehaviorFromArbiter() {
 		return;
 	}
 
-	if (m_arbiter.isTextureMapLayer2PanelContext() ||
-		m_arbiter.isTextureMapLayer3RuntimeContext()) {
+	if (m_arbiter.isTextureMapLayer2PanelContext()) {
 
 		m_camera.setBehaviorMode(
 			CameraProcessor::CAM_SINGLE_PARTICLE_ORBIT_CLOSE
 		);
 
+		return;
+	}
+
+	if (m_arbiter.isTextureMapLayer3RuntimeContext()) {
+		m_camera.setBehaviorMode(
+			m_arbiter.isTextureMapRuntimeFixedSelectionCamera()
+			? CameraProcessor::CAM_SINGLE_PARTICLE_WORKPLANE_LOCKED
+			: CameraProcessor::CAM_SINGLE_PARTICLE_ORBIT_CLOSE
+		);
 		return;
 	}
 
@@ -4216,6 +4263,266 @@ void EuclidEngine::onDisplay() {
 				};
 				textureMapLayer3PanelData.footerLine1 = "W/S: SELECT | E: ACTIVATE";
 			}
+
+			using PanelLine = ViewPort::TextureMapLayer3PanelLine;
+			using PanelSection = ViewPort::TextureMapLayer3PanelSection;
+			auto selectableLine = [&](const std::string& text, int row,
+				bool subordinate, bool nestedEntry) {
+				PanelLine line;
+				line.text = text;
+				line.selectable = true;
+				line.subordinate = subordinate;
+				line.selected = m_arbiter.getTextureMapRuntimeRow() == row &&
+					(workspace->nestedFocus() == nestedEntry);
+				return line;
+			};
+			auto informationLine = [](const std::string& text,
+				bool subordinate, bool emphasized) {
+				PanelLine line;
+				line.text = text;
+				line.subordinate = subordinate;
+				line.emphasized = emphasized;
+				return line;
+			};
+			auto addSection = [&](const std::string& heading,
+				std::vector<PanelLine> lines) {
+				PanelSection section;
+				section.heading = heading;
+				section.lines = std::move(lines);
+				textureMapLayer3PanelData.sections.push_back(std::move(section));
+			};
+
+			if (!m_arbiter.isTextureMapRuntimeAuthoring()) {
+				const char* gateName = m_arbiter.isTextureMapRuntimeMeshSelected()
+					? "TARGET SELECTED"
+					: m_arbiter.isTextureMapRuntimeSelectionArmed()
+					? "SELECTION ARMED"
+					: "REFERENCE PREVIEW";
+				textureMapLayer3PanelData.runtimeObjectLine =
+					"TARGET: SP { " + textureMapLayer3PanelData.targetName +
+					" } | RUNTIME GATE { " + gateName + " }";
+			}
+			else {
+				textureMapLayer3PanelData.runtimeObjectLine =
+					"TARGET: SP { " + textureMapLayer3PanelData.targetName +
+					" } | AUTHORING { " + modeName() + " } | STATUS { " +
+					textureMapLayer3PanelData.status + " }";
+			}
+			if (!m_arbiter.isTextureMapRuntimeAuthoring()) {
+				if (m_arbiter.isTextureMapRuntimeMeshSelected()) {
+					textureMapLayer3PanelData.runtimeStateLine =
+						"TEXTURE_MAP_2D: TARGET SELECTED";
+					textureMapLayer3PanelData.runtimeHelpLine =
+						"E: Deselect target    TAB: Authoring cycle panel    Q: Back";
+				}
+				else if (m_arbiter.isTextureMapRuntimeSelectionArmed()) {
+					textureMapLayer3PanelData.runtimeStateLine =
+						"TEXTURE_MAP_2D: SELECTION ARMED";
+					textureMapLayer3PanelData.runtimeHelpLine =
+						"LMB: Select target mesh    E: Cancel selection mode    Q: Back";
+				}
+				else {
+					textureMapLayer3PanelData.runtimeStateLine =
+						"TEXTURE_MAP_2D: REFERENCE PREVIEW";
+					textureMapLayer3PanelData.runtimeHelpLine =
+						"E: Arm target selection    MOUSE: Orbit / Zoom    Q: Back";
+				}
+			}
+			else {
+				textureMapLayer3PanelData.runtimeStateLine =
+					"TEXTURE_MAP_2D: " + textureMapLayer3PanelData.subLayerLabel;
+				textureMapLayer3PanelData.runtimeHelpLine =
+					!textureMapLayer3PanelData.panelVisible
+					? "TAB: Restore authoring panel    MOUSE: Orbit / Zoom    Q: Back"
+					: workspace->runtimeSubLayer() == vitru::TextureMapSubLayer::PixelEditor
+					? "TAB: Edit / Preview    W/S: Select item    A/D: Change value    E: Activate    Q: Back"
+					: "TAB: Hide panel    W/S: Select item    A/D: Change value    E: Activate    Q: Back";
+			}
+
+			const std::string targetObject =
+				"SP { " + textureMapLayer3PanelData.targetName + " }";
+			const vitru::MaterialSlot* material = asset &&
+				workspace->target().materialIndex < asset->materials.size()
+				? &asset->materials[workspace->target().materialIndex]
+				: nullptr;
+			const std::string materialName = material
+				? material->name : "Default Material";
+			const vitru::TextureMapChannel presentationChannel =
+				workspace->authoringMode() == vitru::TextureMapAuthoringMode::PanelLines
+				? vitru::TextureMapChannel::BaseColor
+				: workspace->selectedChannel();
+			const vitru::TextureResource* channelTexture = nullptr;
+			if (asset && material) {
+				const std::string& textureId =
+					presentationChannel == vitru::TextureMapChannel::EmissiveColor
+					? material->emissiveTextureId : material->baseColorTextureId;
+				channelTexture = asset->findTexture(textureId);
+			}
+			std::string textureName = channelTexture
+				? fs::path(channelTexture->relativePath).filename().string()
+				: presentationChannel == vitru::TextureMapChannel::EmissiveColor
+				? "blank_working_emissive" : "UNAVAILABLE";
+			std::uint32_t textureWidth = channelTexture ? channelTexture->width : 0u;
+			std::uint32_t textureHeight = channelTexture ? channelTexture->height : 0u;
+			if (presentationChannel == vitru::TextureMapChannel::BaseColor &&
+				workspace->hasSelectedBaseMaterialSource()) {
+				const vitru::BaseMaterialCatalogEntry* source =
+					workspace->selectedBaseMaterial();
+				if (source) {
+					textureName = source->baseColorPath.filename().string();
+					textureWidth = source->width;
+					textureHeight = source->height;
+				}
+			}
+			const std::string resolution = textureWidth > 0u && textureHeight > 0u
+				? std::to_string(textureWidth) + " x " + std::to_string(textureHeight)
+				: "PENDING";
+
+			if (workspace->runtimeSubLayer() == vitru::TextureMapSubLayer::CycleSetup) {
+				addSection("Target Object:", {
+					informationLine(targetObject, true, false)
+				});
+				addSection("Authoring Pass:", {
+					selectableLine(textureMapLayer3PanelData.rows[0], 0, false, false),
+					selectableLine(textureMapLayer3PanelData.rows[1], 1, false, false)
+				});
+				addSection("Working Session:", {
+					informationLine("STATUS { " + textureMapLayer3PanelData.status + " }", true, false),
+					informationLine("PIXEL GRID { " + grid + " x " + grid + " }", true, false)
+				});
+				addSection("Next Sub-Layer:", {
+					selectableLine(textureMapLayer3PanelData.rows[2], 2, false, false),
+					informationLine("-> SUB-LAYER 1", true, false)
+				});
+			}
+			else if (workspace->runtimeSubLayer() == vitru::TextureMapSubLayer::BranchSetup) {
+				addSection("Target Object:", {
+					informationLine(targetObject, true, false)
+				});
+				if (workspace->authoringMode() == vitru::TextureMapAuthoringMode::Contour) {
+					addSection("Surface Target Authoring:", {
+						selectableLine(textureMapLayer3PanelData.rows[0], 0, false, false),
+						selectableLine(textureMapLayer3PanelData.rows[1], 1, false, false)
+					});
+				}
+				else {
+					std::vector<PanelLine> editLines;
+					editLines.push_back(selectableLine(
+						textureMapLayer3PanelData.rows[0], 0, false, false));
+					editLines.push_back(informationLine(
+						"MATERIAL SLOT { " + materialName + " }", true, false));
+					editLines.push_back(selectableLine(
+						textureMapLayer3PanelData.rows[1], 1, false, false));
+					if (workspace->authoringMode() == vitru::TextureMapAuthoringMode::Coloring &&
+						vitru::TextureMapWorkspace::channelActive(workspace->selectedChannel())) {
+						if (workspace->selectedChannel() == vitru::TextureMapChannel::EmissiveColor) {
+							std::ostringstream intensity;
+							intensity << "INTENSITY { " << std::fixed << std::setprecision(2)
+								<< workspace->emissiveIntensity() << " }";
+							editLines.push_back(selectableLine(
+								intensity.str(), 1, true, true));
+						}
+						else {
+							editLines.push_back(selectableLine(
+								"TEXTURE MAP { " + textureName + " }", 1, true, true));
+						}
+					}
+					else if (workspace->authoringMode() == vitru::TextureMapAuthoringMode::Coloring) {
+						editLines.push_back(informationLine(
+							"SELECTED CHANNEL IS RESERVED / INACTIVE", true, false));
+					}
+					else {
+						editLines.push_back(informationLine(
+							"TEXTURE MAP { " + textureName + " }", true, false));
+					}
+					editLines.push_back(informationLine(
+						"RESOLUTION { " + resolution + " } [ READY ]", true, true));
+					editLines.push_back(informationLine(
+						"UV MAP { TEXCOORD_0 }", true, false));
+					editLines.push_back(informationLine(
+						"SOURCE { BOX_ATLAS_6_DIRECTION } [ READY ]", true, true));
+					addSection(workspace->authoringMode() == vitru::TextureMapAuthoringMode::PanelLines
+						? "Panel Line Surface:" : "Edit Surface Texture:",
+						std::move(editLines));
+				}
+				addSection("Next / Prev Sub-Layers:", {
+					selectableLine(textureMapLayer3PanelData.rows[2], 2, false, false),
+					informationLine("-> SUB-LAYER 2", true, false),
+					selectableLine(textureMapLayer3PanelData.rows[3], 3, false, false),
+					informationLine("-> SUB-LAYER 0", true, false)
+				});
+			}
+			else if (workspace->runtimeSubLayer() == vitru::TextureMapSubLayer::PixelEditor) {
+				addSection("Target Object:", {
+					informationLine(targetObject, true, false)
+				});
+				addSection("Editing Face:", {
+					selectableLine(textureMapLayer3PanelData.rows[0], 0, false, false)
+				});
+				if (workspace->authoringMode() == vitru::TextureMapAuthoringMode::Coloring) {
+					addSection("Edit Pixel Color:", {
+						selectableLine(textureMapLayer3PanelData.rows[1], 1, false, false),
+						selectableLine(textureMapLayer3PanelData.rows[2], 2, false, false),
+						selectableLine(textureMapLayer3PanelData.rows[3], 3, false, false),
+						selectableLine(textureMapLayer3PanelData.rows[4], 4, false, false)
+					});
+				}
+				else if (workspace->authoringMode() == vitru::TextureMapAuthoringMode::Contour) {
+					addSection("Contour Edit:", {
+						selectableLine(textureMapLayer3PanelData.rows[1], 1, false, false),
+						selectableLine(textureMapLayer3PanelData.rows[2], 2, false, false)
+					});
+					addSection("Working Contour:", {
+						informationLine("STATUS { " + std::string(
+							workspace->contourClosed() ? "CLOSED | READY" : "OPEN") + " }", true, false),
+						informationLine("POINTS { " + std::to_string(
+							workspace->contourPointCount()) + " }", true, false)
+					});
+				}
+				else {
+					addSection("Panel Line Tool:", {
+						selectableLine(textureMapLayer3PanelData.rows[1], 1, false, false),
+						selectableLine(textureMapLayer3PanelData.rows[2], 2, false, false)
+					});
+					addSection("Working Panel Lines:", {
+						informationLine("STATUS { " + textureMapLayer3PanelData.status + " }", true, false)
+					});
+				}
+				const int reviewRow = workspace->authoringMode() ==
+					vitru::TextureMapAuthoringMode::Coloring ? 5 : 3;
+				const int setupRow = reviewRow + 1;
+				addSection("Next / Prev Sub-Layers:", {
+					selectableLine(textureMapLayer3PanelData.rows[reviewRow], reviewRow, false, false),
+					informationLine("-> SUB-LAYER 3", true, false),
+					selectableLine(textureMapLayer3PanelData.rows[setupRow], setupRow, false, false),
+					informationLine("-> SUB-LAYER 1", true, false)
+				});
+			}
+			else {
+				addSection("Working Output:", {
+					informationLine("TARGET { " + textureMapLayer3PanelData.targetName + " }", true, false),
+					informationLine("AUTHORING { " + modeName() + " }", true, false),
+					informationLine("STATUS { " + textureMapLayer3PanelData.status + " }", true, false)
+				});
+				addSection("Apply Working Edit:", {
+					selectableLine(textureMapLayer3PanelData.rows[0], 0, false, false)
+				});
+				addSection("Asset Output:", {
+					selectableLine(textureMapLayer3PanelData.rows[1], 1, false, false),
+					selectableLine(textureMapLayer3PanelData.rows[2], 2, false, false)
+				});
+				addSection("Previous Sub-Layer:", {
+					selectableLine(textureMapLayer3PanelData.rows[3], 3, false, false)
+				});
+				addSection("Next Cycle:", {
+					selectableLine(textureMapLayer3PanelData.rows[4], 4, false, false)
+				});
+			}
+
+			textureMapLayer3PanelData.footerLine1 =
+				workspace->runtimeSubLayer() == vitru::TextureMapSubLayer::CommitSave
+				? "W/S: Select    E: Activate    Q: Structural layer navigation"
+				: "W/S: Select    A/D: Change value    E: Activate    TAB: Hide / Preview    Q: Back";
 			textureMapLayer3PanelData.footerLine2 =
 				workspace->runtimeStatusMessage().empty()
 				? "Q: STRUCTURAL LAYER NAVIGATION | DIRTY EXIT IS BLOCKED"
@@ -4284,7 +4591,7 @@ void EuclidEngine::onMouse(int button, int state, int x, int y) {
 			return;
 		}
 
-		if (m_arbiter.isTextureMapLayer3RuntimeContext()) {
+		if (m_arbiter.isTextureMapRuntimeAuthoring()) {
 			vitru::TextureMapWorkspace* workspace =
 				m_tesseract.getTextureMapWorkspaceRuntime();
 			if (workspace &&
@@ -4314,7 +4621,7 @@ void EuclidEngine::onMouse(int button, int state, int x, int y) {
 		return;
 	}
 
-	if (m_arbiter.isTextureMapLayer3RuntimeContext()) {
+	if (m_arbiter.isTextureMapRuntimeAuthoring()) {
 		vitru::TextureMapWorkspace* workspace =
 			m_tesseract.getTextureMapWorkspaceRuntime();
 		if (workspace &&
@@ -4375,7 +4682,7 @@ void EuclidEngine::onMotion(int x, int y) {
 		isStaticParticleAssetModalActive() ||
 		m_arbiter.isTextEntryActive()) return;
 
-	if (m_arbiter.isTextureMapLayer3RuntimeContext()) {
+	if (m_arbiter.isTextureMapRuntimeAuthoring()) {
 		vitru::TextureMapWorkspace* workspace =
 			m_tesseract.getTextureMapWorkspaceRuntime();
 		if (workspace &&
@@ -4425,7 +4732,7 @@ void EuclidEngine::onPassiveMotion(int x, int y) {
 		isStaticParticleAssetModalActive() ||
 		m_arbiter.isTextEntryActive()) return;
 
-	if (m_arbiter.isTextureMapLayer3RuntimeContext()) {
+	if (m_arbiter.isTextureMapRuntimeAuthoring()) {
 		vitru::TextureMapWorkspace* workspace =
 			m_tesseract.getTextureMapWorkspaceRuntime();
 		if (workspace &&

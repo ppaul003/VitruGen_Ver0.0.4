@@ -2143,6 +2143,7 @@ void EuclidRenderer::displayTextureMapStaticParticlePreview(
     bool showConfigurationGuides,
     bool selectedTarget) {
 
+    m_textureMapPreviewScreenVertices.clear();
     if (!hasParticleMeshOBJ() ||
         previewRadius <= 0.0f) {
 
@@ -2257,6 +2258,45 @@ void EuclidRenderer::displayTextureMapStaticParticlePreview(
         false
     );
 
+    // Cache the actual projected mesh triangles for the Layer 3
+    // reference-selection gate. Picking follows the rendered target rather
+    // than a hard-coded screen rectangle.
+    if (m_particleMeshMaxExtent > 0.0f &&
+        (m_particleMeshVerts.size() % 3u) == 0u) {
+        GLdouble modelView[16]{};
+        GLdouble projection[16]{};
+        GLint viewport[4]{};
+        glGetDoublev(GL_MODELVIEW_MATRIX, modelView);
+        glGetDoublev(GL_PROJECTION_MATRIX, projection);
+        glGetIntegerv(GL_VIEWPORT, viewport);
+        const double scale = static_cast<double>(2.0f * previewRadius /
+            m_particleMeshMaxExtent);
+        m_textureMapPreviewScreenVertices.reserve(m_particleMeshVerts.size());
+        for (const glm::vec3& vertex : m_particleMeshVerts) {
+            const double localX = static_cast<double>(
+                vertex.x - m_particleMeshCenter.x) * scale;
+            const double localY = static_cast<double>(
+                vertex.y - m_particleMeshCenter.y) * scale;
+            const double localZ = static_cast<double>(
+                vertex.z - m_particleMeshCenter.z) * scale;
+            GLdouble windowX = 0.0;
+            GLdouble windowY = 0.0;
+            GLdouble windowZ = 0.0;
+            if (gluProject(localX, localY, localZ,
+                modelView, projection, viewport,
+                &windowX, &windowY, &windowZ) == GL_TRUE) {
+                m_textureMapPreviewScreenVertices.emplace_back(
+                    static_cast<float>(windowX),
+                    static_cast<float>(m_window_h) -
+                        static_cast<float>(windowY));
+            }
+            else {
+                m_textureMapPreviewScreenVertices.clear();
+                break;
+            }
+        }
+    }
+
     glUseProgram(0);
 
     if (showCollisionRadius) {
@@ -2280,6 +2320,28 @@ void EuclidRenderer::displayTextureMapStaticParticlePreview(
     glPopMatrix();
 
     glMatrixMode(GL_MODELVIEW);
+}
+
+bool EuclidRenderer::hitTestTextureMapPreview(int x, int y) const {
+    const glm::vec2 point(static_cast<float>(x), static_cast<float>(y));
+    auto edge = [](const glm::vec2& a, const glm::vec2& b,
+        const glm::vec2& p) {
+        return (p.x - a.x) * (b.y - a.y) -
+            (p.y - a.y) * (b.x - a.x);
+    };
+    for (std::size_t i = 0u;
+        i + 2u < m_textureMapPreviewScreenVertices.size(); i += 3u) {
+        const glm::vec2& a = m_textureMapPreviewScreenVertices[i];
+        const glm::vec2& b = m_textureMapPreviewScreenVertices[i + 1u];
+        const glm::vec2& c = m_textureMapPreviewScreenVertices[i + 2u];
+        const float ab = edge(a, b, point);
+        const float bc = edge(b, c, point);
+        const float ca = edge(c, a, point);
+        const bool negative = ab < 0.0f || bc < 0.0f || ca < 0.0f;
+        const bool positive = ab > 0.0f || bc > 0.0f || ca > 0.0f;
+        if (!(negative && positive)) return true;
+    }
+    return false;
 }
 
 void EuclidRenderer::displayTextureMapPixelEditor(
@@ -2349,6 +2411,45 @@ void EuclidRenderer::displayTextureMapPixelEditor(
     glDisable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
     glDeleteTextures(1, &texture);
+
+    // Faint selected-face UV geometry derived from the currently loaded
+    // StaticParticle mesh. This is an editor-only guide and never touches
+    // the CPU texture buffer or saved output.
+    if (m_particleMeshUVs.size() == m_particleMeshVerts.size() &&
+        (m_particleMeshUVs.size() % 3u) == 0u) {
+        auto drawUvGeometry = [&](float width, float r, float g,
+            float b, float alpha) {
+            glLineWidth(width);
+            glColor4f(r, g, b, alpha);
+            glBegin(GL_LINES);
+            for (std::size_t i = 0u; i + 2u < m_particleMeshUVs.size(); i += 3u) {
+                const glm::vec2 centroid =
+                    (m_particleMeshUVs[i] + m_particleMeshUVs[i + 1u] +
+                        m_particleMeshUVs[i + 2u]) / 3.0f;
+                const int triangleColumn = (std::min)(2,
+                    (std::max)(0, static_cast<int>(std::floor(centroid.x * 3.0f))));
+                const int triangleRow = (std::min)(1,
+                    (std::max)(0, static_cast<int>(std::floor(centroid.y * 2.0f))));
+                if (triangleColumn != static_cast<int>(faceIndex % 3u) ||
+                    triangleRow != static_cast<int>(faceIndex / 3u)) continue;
+                for (int edgeIndex = 0; edgeIndex < 3; edgeIndex++) {
+                    const glm::vec2& a = m_particleMeshUVs[
+                        i + static_cast<std::size_t>(edgeIndex)];
+                    const glm::vec2& bPoint = m_particleMeshUVs[
+                        i + static_cast<std::size_t>((edgeIndex + 1) % 3)];
+                    const float ax = (a.x - u0) / (u1 - u0);
+                    const float ay = (a.y - v0) / (v1 - v0);
+                    const float bx = (bPoint.x - u0) / (u1 - u0);
+                    const float by = (bPoint.y - v0) / (v1 - v0);
+                    glVertex2f(left + ax * canvas, bottom + ay * canvas);
+                    glVertex2f(left + bx * canvas, bottom + by * canvas);
+                }
+            }
+            glEnd();
+        };
+        drawUvGeometry(2.4f, 0.0f, 0.0f, 0.0f, 0.28f);
+        drawUvGeometry(1.0f, 0.82f, 0.96f, 1.0f, 0.45f);
+    }
 
     glLineWidth(1.0f);
     glBegin(GL_LINES);

@@ -166,6 +166,7 @@ public:
 		const std::vector<vitru::Vec2>& contourPoints,
 		bool contourClosed,
 		float editorZoom);
+	bool hitTestTextureMapPreview(int x, int y) const;
 
 	// Displays the currently loaded StaticParticleAsset inside the
 	// SINGLE_PARTICLE volumetric-editor coordinate frame.
@@ -477,6 +478,7 @@ private:
 	std::vector<glm::vec3> m_particleMeshVerts;
 	std::vector<glm::vec3> m_particleMeshNorms;
 	std::vector<glm::vec2> m_particleMeshUVs;
+	std::vector<glm::vec2> m_textureMapPreviewScreenVertices;
 	std::vector<ParticleMeshDrawRange> m_particleMeshDrawRanges;
 	std::vector<vitru::MaterialSlot> m_particleMeshMaterials;
 	std::vector<ParticleMeshTexture> m_particleMeshTextures;
