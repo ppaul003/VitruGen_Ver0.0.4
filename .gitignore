@@ -5,6 +5,7 @@
 *.suo
 *.VC.db
 *.VC.opendb
+*.opendb
 
 # Visual Studio and CUDA build directories
 x64/
@@ -13,6 +14,18 @@ Debug/
 Release/
 **/Debug/
 **/Release/
+
+# C/C++ build artifacts
+*.obj
+*.pdb
+*.ilk
+*.idb
+*.iobj
+*.ipdb
+*.tlog
+*.lastbuildstate
+*.exp
+
 
 # Compiler/linker intermediates
 *.pdb
@@ -23,6 +36,14 @@ Release/
 *.tlog
 *.lastbuildstate
 *.cache
+*.log
+
+# Executables / generated binaries
+*.exe
+*.dll
+
+# Temporary files
+*.tmp
 *.log
 
 # Generated application assets
